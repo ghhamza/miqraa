@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   getAllJuz,
   getAllSurahs,
+  getJuzForAyah,
   getPageForJuzStart,
   getPageForSurahStart,
+  getSurahAyahAtPageStart,
   getSurahNameWithArabic,
 } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
+
+const LAST_SURAH_STORAGE_KEY = "miqraa.mushaf.lastSurah";
 
 interface MushafNavigationProps {
   page: number;
@@ -26,89 +30,99 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
   const surahs = getAllSurahs();
   const juzMeta = getAllJuz();
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          className="rounded-xl border border-gray-200 p-2 text-[var(--color-text)] hover:bg-gray-50 disabled:opacity-40"
-          aria-label={t("mushaf.prevPage")}
-          onClick={() => onPageChange(Math.max(1, page - 1))}
-          disabled={page <= 1}
-        >
-          <ChevronLeft className={`h-6 w-6 ${isRtl ? "" : "rotate-180"}`} />
-        </button>
-        <button
-          type="button"
-          className="rounded-xl border border-gray-200 p-2 text-[var(--color-text)] hover:bg-gray-50 disabled:opacity-40"
-          aria-label={t("mushaf.nextPage")}
-          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-        >
-          <ChevronRight className={`h-6 w-6 ${isRtl ? "" : "rotate-180"}`} />
-        </button>
-      </div>
+  const [surahStart, ayahStart] = getSurahAyahAtPageStart(page, riwaya);
+  const juz = getJuzForAyah(surahStart, ayahStart, riwaya);
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("mushaf.goToSurah")}</label>
-          <select
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-            style={{ fontFamily: "var(--font-quran)" }}
-            defaultValue=""
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (n >= 1 && n <= 114) {
-                onPageChange(getPageForSurahStart(n, riwaya));
-              }
-              e.target.value = "";
-            }}
-          >
-            <option value="">{t("mushaf.goToSurah")}</option>
-            {surahs.map((s) => (
-              <option key={s.number} value={s.number}>
-                {s.number}. {getSurahNameWithArabic(s.number, loc)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("mushaf.goToJuz")}</label>
-          <select
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-            defaultValue=""
-            onChange={(e) => {
-              const j = Number(e.target.value);
-              if (j >= 1 && j <= 30) {
-                onPageChange(getPageForJuzStart(j, riwaya));
-              }
-              e.target.value = "";
-            }}
-          >
-            <option value="">{t("mushaf.goToJuz")}</option>
-            {juzMeta.map((j) => (
-              <option key={j.number} value={j.number}>
-                {j.number}. {j.nameAr}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("mushaf.goToPage")}</label>
-          <input
-            type="number"
-            min={1}
-            max={totalPages}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-            placeholder={String(page)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const v = Number((e.target as HTMLInputElement).value);
-                if (v >= 1 && v <= totalPages) onPageChange(v);
-              }
-            }}
-          />
-        </div>
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAST_SURAH_STORAGE_KEY, String(surahStart));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [surahStart]);
+
+  const surahField = (
+    <div>
+      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToSurah")}</label>
+      <select
+        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        style={{ fontFamily: "var(--font-quran)" }}
+        value={String(surahStart)}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (n >= 1 && n <= 114) {
+            onPageChange(getPageForSurahStart(n, riwaya));
+          }
+        }}
+      >
+        {surahs.map((s) => (
+          <option key={s.number} value={s.number}>
+            {s.number}. {getSurahNameWithArabic(s.number, loc)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const juzField = (
+    <div>
+      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToJuz")}</label>
+      <select
+        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        value={String(juz)}
+        onChange={(e) => {
+          const jn = Number(e.target.value);
+          if (jn >= 1 && jn <= 30) {
+            onPageChange(getPageForJuzStart(jn, riwaya));
+          }
+        }}
+      >
+        {juzMeta.map((j) => (
+          <option key={j.number} value={j.number}>
+            {j.number}. {j.nameAr}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const pageField = (
+    <div>
+      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToPage")}</label>
+      <input
+        id="mushaf-go-to-page"
+        key={page}
+        type="number"
+        min={1}
+        max={totalPages}
+        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        defaultValue={page}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const v = Number((e.target as HTMLInputElement).value);
+            if (v >= 1 && v <= totalPages) onPageChange(v);
+          }
+        }}
+      />
+    </div>
+  );
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <div className="grid gap-2 sm:grid-cols-3" dir={isRtl ? "rtl" : "ltr"}>
+        {isRtl ? (
+          <>
+            {pageField}
+            {juzField}
+            {surahField}
+          </>
+        ) : (
+          <>
+            {surahField}
+            {juzField}
+            {pageField}
+          </>
+        )}
       </div>
     </div>
   );

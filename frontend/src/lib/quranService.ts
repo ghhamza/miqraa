@@ -249,10 +249,35 @@ export function getSurahAyahAtPageStart(page: number, riwaya: Riwaya = "hafs"): 
   return m.findSurahAyahByAyahId(id);
 }
 
+/**
+ * Surahs that appear on this Mushaf page (first ayah → last ayah). On boundary pages
+ * (e.g. Hafs p. 106) this spans two surahs — use for headers so the title matches what
+ * the reader sees on the page, not only the first ayah.
+ */
+export function getSurahRangeOnPage(page: number, riwaya: Riwaya = "hafs"): { startSurah: number; endSurah: number } {
+  const m = riwayaModule(riwaya);
+  const total = m.meta.numPages;
+  const p = Math.min(Math.max(1, Math.floor(page)), total);
+  const meta = m.getPageMeta(p as Parameters<typeof m.getPageMeta>[0]);
+  return { startSurah: meta.first[0], endSurah: meta.last[0] };
+}
+
 /** Page where the given surah begins (first ayah). */
 export function getPageForSurahStart(surah: number, riwaya: Riwaya = "hafs"): number {
   const m = riwayaModule(riwaya);
   return m.findPage(surah as SurahN, 1 as AyahNo);
+}
+
+/** Juz whose first ayah matches the first ayah on this Mushaf page (Madani marginal “juz begins” marker). */
+export function findJuzStartingAtPage(page: number, riwaya: Riwaya = "hafs"): JuzInfo | null {
+  const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+  return getAllJuz().find((j) => j.startSurah === s && j.startAyah === a) ?? null;
+}
+
+/** Rubʿ al-hizb (quarter) whose first ayah matches the first ayah on this page (Madani marginal hizb marker). */
+export function findHizbStartingAtPage(page: number, riwaya: Riwaya = "hafs"): HizbInfo | null {
+  const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+  return getAllHizb().find((h) => h.startSurah === s && h.startAyah === a) ?? null;
 }
 
 /** Page where the given juz begins. */

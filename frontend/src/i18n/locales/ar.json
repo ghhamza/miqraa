@@ -211,13 +211,20 @@
     "prevPage": "الصفحة السابقة",
     "nextPage": "الصفحة التالية",
     "digitalKhattPlaceholder": "سيتم عرض المصحف هنا باستخدام DigitalKhatt",
+    "loading": "جارٍ تحميل المصحف...",
+    "loadError": "تعذّر تحميل المصحف. يرجى إعادة المحاولة.",
+    "comingSoon": "قريبًا",
+    "comingSoonDesc": "عرض رواية {{riwaya}} قيد التطوير",
+    "retryLoad": "إعادة المحاولة",
     "meccan": "مكية",
     "medinan": "مدنية",
     "revelationOrder": "ترتيب النزول",
     "ayahs": "آيات",
     "pageOf": "صفحة {{n}}",
+    "boundaryPageHint": "في المصحف قد تجتمع في صفحة واحدة أواخر سورة مع أوائل السورة التالية — وهذا أمر طبيعي.",
     "juzOf": "الجزء {{n}}",
-    "totalPages": "{{n}} صفحة"
+    "totalPages": "{{n}} صفحة",
+    "bookPageNumberAria": "صفحة {{n}} — الانتقال إلى حقل الصفحة"
   },
   "enrollment": {
     "title": "التسجيل",

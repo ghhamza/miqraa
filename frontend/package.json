@@ -20,6 +20,7 @@
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource/amiri": "^5.2.8",
     "@fontsource/ibm-plex-sans-arabic": "^5.2.9",
+    "@fontsource/scheherazade-new": "^5.2.8",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.14.0",
     "class-variance-authority": "^0.7.1",

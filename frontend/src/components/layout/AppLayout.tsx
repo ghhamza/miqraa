@@ -333,7 +333,14 @@ export function AppLayout() {
         </div>
       </header>
 
-      <main className={`flex-1 ${isMushafRoute ? "p-3 md:p-4" : "p-4 md:p-8"}`}>
+      <main
+        className={cn(
+          "flex-1",
+          isMushafRoute
+            ? "flex min-h-0 flex-col overflow-hidden p-1 sm:p-2 md:p-3"
+            : "p-4 md:p-8",
+        )}
+      >
         <Outlet />
       </main>
     </div>

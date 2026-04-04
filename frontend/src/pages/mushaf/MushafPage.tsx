@@ -4,25 +4,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { MushafBookLayout } from "../../components/mushaf/MushafBookLayout";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigation } from "../../components/mushaf/MushafNavigation";
+import { MushafPageTurnButtons } from "../../components/mushaf/MushafPageTurnButtons";
 import {
-  getAvailableRiwayat,
-  getHizbForAyah,
+  findHizbStartingAtPage,
+  findJuzStartingAtPage,
+  getJuz,
   getJuzForAyah,
-  getSurahNameWithArabic,
   getSurahAyahAtPageStart,
+  getSurahNameWithArabic,
+  getSurahRangeOnPage,
   getTotalPages,
 } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 
+const LEGACY_MUSHAF_ZOOM_STORAGE_KEY = "miqraa.mushaf.zoomPercent";
+
 export function MushafPage() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const navigate = useNavigate();
   const { page: pageParam } = useParams<{ page?: string }>();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
+  const isRtl = i18n.language === "ar";
 
-  const [riwaya, setRiwaya] = useState<Riwaya>("hafs");
+  const riwaya: Riwaya = "hafs";
   const totalPages = getTotalPages(riwaya);
 
   const [page, setPage] = useState(() => {
@@ -30,6 +37,14 @@ export function MushafPage() {
     const parsed = pageParam ? Number(pageParam) : 1;
     return Number.isFinite(parsed) && parsed >= 1 && parsed <= tp ? Math.floor(parsed) : 1;
   });
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem(LEGACY_MUSHAF_ZOOM_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     const p = pageParam ? Number(pageParam) : 1;
@@ -70,69 +85,39 @@ export function MushafPage() {
   }, [goPage, page]);
 
   const [surahStart, ayahStart] = getSurahAyahAtPageStart(page, riwaya);
+  const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
   const juz = getJuzForAyah(surahStart, ayahStart, riwaya);
-  const hizb = getHizbForAyah(surahStart, ayahStart, riwaya);
+  const juzStart = findJuzStartingAtPage(page, riwaya);
+  const hizbStart = findHizbStartingAtPage(page, riwaya);
+  const juzMeta = getJuz(juz);
+  const runningJuzNameAr = juzMeta?.nameAr ?? "";
 
-  const progress = totalPages > 0 ? (page / totalPages) * 100 : 0;
+  const runningSurahTitle =
+    startSurah === endSurah
+      ? getSurahNameWithArabic(startSurah, loc)
+      : `${getSurahNameWithArabic(startSurah, loc)} · ${getSurahNameWithArabic(endSurah, loc)}`;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-6">
-      <header className="flex flex-col items-center gap-2 border-b border-gray-100 pb-4 text-center">
-        <h1
-          className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {getSurahNameWithArabic(surahStart, loc)}
-        </h1>
-        <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--color-text-muted)]">
-          <span>
-            {t("mushaf.pageOf", { n: page })} / {totalPages}
-          </span>
-          <span>·</span>
-          <span>{t("mushaf.juzOf", { n: juz })}</span>
-          <span>·</span>
-          <span className="inline-flex items-center gap-2">
-            <select
-              className="rounded-lg border border-gray-200 bg-[var(--color-surface)] px-2 py-1 text-xs font-medium text-[var(--color-text)]"
-              value={riwaya}
-              onChange={(e) => {
-                const r = e.target.value as Riwaya;
-                const tp = getTotalPages(r);
-                const next = Math.min(page, tp);
-                setRiwaya(r);
-                setPage(next);
-                void navigate(`/mushaf/${next}`, { replace: true });
-              }}
-            >
-              {getAvailableRiwayat().map((r) => (
-                <option key={r.id} value={r.id}>
-                  {t(`mushaf.${r.id}`)}
-                </option>
-              ))}
-            </select>
-          </span>
+    <div className="relative flex min-h-0 w-full flex-1 flex-col gap-2">
+      <div className="w-full shrink-0 border-b border-gray-100 pb-2">
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+          <MushafNavigation page={page} totalPages={totalPages} riwaya={riwaya} onPageChange={goPage} />
         </div>
-      </header>
-
-      <div className="flex flex-1 flex-col items-center gap-6">
-        <MushafCanvas page={page} riwaya={riwaya} />
-        <MushafNavigation page={page} totalPages={totalPages} riwaya={riwaya} onPageChange={goPage} />
       </div>
 
-      <footer className="border-t border-gray-100 pt-4">
-        <div className="mb-1 flex justify-between text-xs text-[var(--color-text-muted)]">
-          <span>
-            {t("mushaf.hizb")} · {hizb}
-          </span>
-          <span>{t("mushaf.totalPages", { n: totalPages })}</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-          <div
-            className="h-full rounded-full bg-[var(--color-primary)] transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </footer>
+      <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4 sm:px-6">
+        <MushafBookLayout
+          page={page}
+          runningSurahTitle={runningSurahTitle}
+          runningJuzNameAr={runningJuzNameAr}
+          juzStart={juzStart}
+          hizbStart={hizbStart}
+        >
+          <MushafCanvas page={page} riwaya={riwaya} embedInBook />
+        </MushafBookLayout>
+      </div>
+
+      <MushafPageTurnButtons page={page} totalPages={totalPages} isRtl={isRtl} onPageChange={goPage} />
     </div>
   );
 }

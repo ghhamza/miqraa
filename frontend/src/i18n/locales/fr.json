@@ -211,13 +211,20 @@
     "prevPage": "Page précédente",
     "nextPage": "Page suivante",
     "digitalKhattPlaceholder": "Le Mushaf sera affiché ici avec DigitalKhatt",
+    "loading": "Chargement du Mushaf...",
+    "loadError": "Impossible de charger le Mushaf. Veuillez réessayer.",
+    "comingSoon": "Bientôt disponible",
+    "comingSoonDesc": "L'affichage de la récitation {{riwaya}} est en cours de développement",
+    "retryLoad": "Réessayer",
     "meccan": "Mecquoise",
     "medinan": "Médinoise",
     "revelationOrder": "Ordre de révélation",
     "ayahs": "Versets",
     "pageOf": "Page {{n}}",
+    "boundaryPageHint": "Sur une même page du Mushaf, on trouve souvent la fin d’une sourate et le début de la suivante — c’est normal.",
     "juzOf": "Juz {{n}}",
-    "totalPages": "{{n}} pages"
+    "totalPages": "{{n}} pages",
+    "bookPageNumberAria": "Page {{n}} — aller au champ page"
   },
   "enrollment": {
     "title": "Inscription",

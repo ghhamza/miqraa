@@ -211,13 +211,20 @@
     "prevPage": "Previous page",
     "nextPage": "Next page",
     "digitalKhattPlaceholder": "Mushaf will be rendered here using DigitalKhatt",
+    "loading": "Loading the Mushaf...",
+    "loadError": "Failed to load the Mushaf. Please try again.",
+    "comingSoon": "Coming Soon",
+    "comingSoonDesc": "The {{riwaya}} recitation display is under development",
+    "retryLoad": "Retry",
     "meccan": "Meccan",
     "medinan": "Medinan",
     "revelationOrder": "Revelation order",
     "ayahs": "Ayahs",
     "pageOf": "Page {{n}}",
+    "boundaryPageHint": "On many Mushaf pages, the last verses of one surah and the first verses of the next appear together — this is normal.",
     "juzOf": "Juz {{n}}",
-    "totalPages": "{{n}} pages"
+    "totalPages": "{{n}} pages",
+    "bookPageNumberAria": "Page {{n}} — jump to page field"
   },
   "enrollment": {
     "title": "Enrollment",

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@fontsource/amiri/400.css";
 @import "@fontsource/amiri/700.css";
+/* Mushaf-style Naskh for surah titles (closest open license to printed Madinah typography) */
+@import "@fontsource/scheherazade-new/arabic-400.css";
+@import "@fontsource/scheherazade-new/arabic-700.css";
 @import "@fontsource/ibm-plex-sans-arabic/400.css";
 @import "@fontsource/ibm-plex-sans-arabic/600.css";
 @import "tw-animate-css";
@@ -11,10 +14,16 @@
 
 :root {
   --font-quran: "Amiri", serif;
+  /* Scheherazade New: SIL OFL, traditional Quranic Naskh — use for headings; body ayāt stay on DigitalKhatt */
+  --font-mushaf-title: "Scheherazade New", "Amiri", "Times New Roman", serif;
   --font-ui: "IBM Plex Sans Arabic", sans-serif;
   --color-primary: #1B5E20;
   --color-primary-light: #4CAF50;
   --color-gold: #D4A843;
+  /* Mushaf reader (King Fahd–style frame / parchment) */
+  --mushaf-madinah-parchment: #fdf6e3;
+  --mushaf-frame-teal: #2c5f7c;
+  --mushaf-frame-teal-deep: #1a5276;
   --color-bg: #FAFAF5;
   --color-surface: #FFFFFF;
   --color-text: #1A1A1A;
