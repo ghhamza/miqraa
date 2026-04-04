@@ -20,7 +20,22 @@ export interface UserStats {
   admins: number;
 }
 
-export type QuranRiwaya = "hafs" | "warsh" | "qalun";
+/** Quran reading (rawī); structural mushaf data in-app uses quran-meta for hafs/warsh/qalun only — others use Hafs layout as fallback. */
+export type QuranRiwaya =
+  | "hafs"
+  | "warsh"
+  | "qalun"
+  | "shubah"
+  | "qunbul"
+  | "bazzi"
+  | "doori"
+  | "susi"
+  | "hisham"
+  | "ibn_dhakwan"
+  | "khalaf"
+  | "khallad"
+  | "doori_kisai"
+  | "abu_harith";
 
 /** Room row from API (includes teacher display name). */
 export interface Room {

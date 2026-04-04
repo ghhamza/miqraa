@@ -51,7 +51,7 @@ export function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { full } = useLocaleDate();
+  const { full, mediumTime } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
 
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -360,7 +360,9 @@ export function SessionDetailPage() {
         mode="create"
         recitation={null}
         defaultRoomId={detail.room_id}
+        defaultRoomName={detail.room_name}
         defaultSessionId={detail.id}
+        defaultSessionSummary={`${detail.title?.trim() || detail.room_name} · ${mediumTime(detail.scheduled_at)}`}
         onClose={() => setRecitationFormOpen(false)}
         onSaved={() => void load()}
       />

@@ -396,6 +396,7 @@ export function RoomDetailPage() {
         mode="create"
         recitation={null}
         defaultRoomId={room.id}
+        defaultRoomName={room.name}
         onClose={() => setRecitationFormOpen(false)}
         onSaved={() => void loadRoomRecitations()}
       />

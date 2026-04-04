@@ -9,6 +9,7 @@ mod auth;
 mod config;
 mod db;
 mod models;
+mod riwaya;
 mod rooms;
 mod services;
 mod sfu;

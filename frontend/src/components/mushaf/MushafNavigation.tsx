@@ -3,7 +3,13 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { getAllJuz, getAllSurahs, getPageForJuzStart, getPageForSurahStart } from "../../lib/quranService";
+import {
+  getAllJuz,
+  getAllSurahs,
+  getPageForJuzStart,
+  getPageForSurahStart,
+  getSurahNameWithArabic,
+} from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 
 interface MushafNavigationProps {
@@ -61,7 +67,7 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
             <option value="">{t("mushaf.goToSurah")}</option>
             {surahs.map((s) => (
               <option key={s.number} value={s.number}>
-                {s.number}. {loc === "ar" ? s.nameAr : loc === "fr" ? s.nameFr : s.nameEn}
+                {s.number}. {getSurahNameWithArabic(s.number, loc)}
               </option>
             ))}
           </select>

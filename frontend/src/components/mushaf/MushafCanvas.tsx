@@ -3,7 +3,7 @@
 
 import { forwardRef } from "react";
 import { useTranslation } from "react-i18next";
-import { getJuzForAyah, getSurahAyahAtPageStart, getSurahName } from "../../lib/quranService";
+import { getJuzForAyah, getSurahAyahAtPageStart, getSurahNameWithArabic } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 
 interface MushafCanvasProps {
@@ -33,7 +33,7 @@ export const MushafCanvas = forwardRef<HTMLCanvasElement, MushafCanvasProps>(fun
           {t("mushaf.digitalKhattPlaceholder")}
         </p>
         <p className="text-xs text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-quran)" }}>
-          {getSurahName(surah, loc)} · {t("mushaf.pageOf", { n: page })} · {t("mushaf.juzOf", { n: juz })}
+          {getSurahNameWithArabic(surah, loc)} · {t("mushaf.pageOf", { n: page })} · {t("mushaf.juzOf", { n: juz })}
         </p>
         <canvas ref={ref} className="max-h-[55%] w-full max-w-md opacity-0" aria-hidden />
       </div>

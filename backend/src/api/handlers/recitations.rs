@@ -12,6 +12,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+use crate::riwaya::parse_riwaya;
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{
     GradeCounts, RecitationPublic, RecitationStatsResponse, StudentProgressResponse, SurahBestGrade,
@@ -137,15 +138,6 @@ async fn can_access_student(
         return Ok(ok);
     }
     Ok(false)
-}
-
-fn parse_riwaya(s: &str) -> Option<&'static str> {
-    match s.trim() {
-        "hafs" => Some("hafs"),
-        "warsh" => Some("warsh"),
-        "qalun" => Some("qalun"),
-        _ => None,
-    }
 }
 
 fn parse_grade(s: &str) -> Option<&'static str> {

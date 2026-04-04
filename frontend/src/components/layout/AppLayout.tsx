@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Menu, ScrollText, X } from "lucide-react";
+import { BookOpen, LogOut, Menu, ScrollText } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
@@ -12,11 +12,58 @@ import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
 import { roleTranslationKey } from "../../lib/roleLabels";
+import { cn } from "@/lib/utils";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+} from "../ui/navigation-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "../ui/sheet";
+import { Avatar, AvatarFallback } from "../ui/avatar";
+
+/** Up to two letters: first + last word, or first two chars of a single name. */
+function nameToInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0]?.[0] ?? "";
+    const b = parts[parts.length - 1]?.[0] ?? "";
+    return (a + b).toUpperCase();
+  }
+  const w = parts[0] ?? trimmed;
+  if (w.length <= 2) return w.toUpperCase();
+  return w.slice(0, 2).toUpperCase();
+}
 
 function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
   if (role === "teacher") return "blue";
   if (role === "admin") return "gold";
   return "green";
+}
+
+function navLinkClass({ isActive }: { isActive: boolean }) {
+  return cn(
+    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors outline-none",
+    isActive
+      ? "bg-primary/10 text-primary"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+  );
 }
 
 export function AppLayout() {
@@ -26,15 +73,21 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMushafRoute = location.pathname.startsWith("/mushaf");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [roomCount, setRoomCount] = useState<number | null>(null);
 
-  const isRtl = i18n.language === "ar";
+  const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
+  const isRtl = localeBase === "ar";
   const isAdmin = user?.role === "admin";
+  const roomsBadgeCount = user ? roomCount : null;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change (incl. back/forward)
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!user) {
-      setRoomCount(null);
       return;
     }
     let cancelled = false;
@@ -49,137 +102,227 @@ export function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.role]);
+  }, [user]);
 
-  const navClass = ({ isActive }: { isActive: boolean }) =>
-    `block rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-      isActive
-        ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
-        : "text-[var(--color-text-muted)] hover:bg-gray-100 hover:text-[var(--color-text)]"
-    }`;
+  const sheetSide = isRtl ? "right" : "left";
 
-  const sidebarPosition = isRtl ? "right-0 border-l" : "left-0 border-r";
-  const sidebarTranslate = sidebarOpen
-    ? "translate-x-0"
-    : isRtl
-      ? "translate-x-full md:translate-x-0"
-      : "-translate-x-full md:translate-x-0";
+  const roomsLabel = (
+    <span className="inline-flex items-center gap-2">
+      <span>{t("nav.rooms")}</span>
+      {roomsBadgeCount !== null ? (
+        <span
+          className="min-w-[1.25rem] rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-xs font-semibold text-primary"
+          aria-label={`${t("nav.rooms")}: ${roomsBadgeCount}`}
+        >
+          {roomsBadgeCount > 99 ? "99+" : roomsBadgeCount}
+        </span>
+      ) : null}
+    </span>
+  );
+
+  function renderNavLinks(orientation: "row" | "column") {
+    const stack = orientation === "column" ? "flex flex-col gap-1" : "";
+    const linkWrap = orientation === "column" ? "w-full" : "";
+
+    return (
+      <div className={cn(stack)}>
+        <NavLink to="/" end className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          {t("nav.home")}
+        </NavLink>
+        {isAdmin ? (
+          <NavLink to="/users" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+            {t("nav.users")}
+          </NavLink>
+        ) : null}
+        <NavLink to="/rooms" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          {roomsLabel}
+        </NavLink>
+        <NavLink to="/calendar" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          {t("nav.calendar")}
+        </NavLink>
+        <NavLink to="/mushaf" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          <span className="inline-flex items-center gap-2">
+            <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.mushaf")}
+          </span>
+        </NavLink>
+        <NavLink to="/recitations" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          <span className="inline-flex items-center gap-2">
+            <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.recitations")}
+          </span>
+        </NavLink>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`flex min-h-screen bg-[var(--color-bg)] ${isRtl ? "flex-row-reverse" : "flex-row"}`}
-    >
-      <aside
-        className={`fixed inset-y-0 z-40 flex w-64 flex-col border-gray-200 bg-[var(--color-surface)] shadow-sm transition-transform duration-200 md:static md:translate-x-0 ${sidebarPosition} ${sidebarTranslate}`}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-4">
-          <h1
-            className="text-xl font-bold text-[var(--color-text)]"
-            style={{ fontFamily: "var(--font-quran)" }}
-          >
-            {t("common.appName")}
-          </h1>
-          <button
-            type="button"
-            className="rounded-lg p-2 text-[var(--color-text-muted)] md:hidden"
-            onClick={() => setSidebarOpen(false)}
-            aria-label={t("common.closeMenu")}
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <nav className="flex flex-1 flex-col gap-1 p-3">
-          <NavLink to="/" end className={navClass} onClick={() => setSidebarOpen(false)}>
-            {t("nav.home")}
-          </NavLink>
-          {isAdmin ? (
-            <NavLink to="/users" className={navClass} onClick={() => setSidebarOpen(false)}>
-              {t("nav.users")}
-            </NavLink>
-          ) : null}
-          <NavLink to="/rooms" className={navClass} onClick={() => setSidebarOpen(false)}>
-            <span className="flex items-center justify-between gap-2">
-              <span>{t("nav.rooms")}</span>
-              {roomCount !== null ? (
-                <span
-                  className="min-w-[1.25rem] rounded-full bg-[var(--color-primary)]/15 px-1.5 py-0.5 text-center text-xs font-semibold text-[var(--color-primary)]"
-                  aria-label={`${t("nav.rooms")}: ${roomCount}`}
+    <div className="flex min-h-screen flex-col bg-[var(--color-bg)]">
+      <header className="sticky top-0 z-40 border-b border-border bg-[var(--color-surface)] shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none md:items-stretch">
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 md:hidden"
+                  aria-label={t("common.openMenu")}
                 >
-                  {roomCount > 99 ? "99+" : roomCount}
-                </span>
-              ) : null}
-            </span>
-          </NavLink>
-          <NavLink to="/calendar" className={navClass} onClick={() => setSidebarOpen(false)}>
-            {t("nav.calendar")}
-          </NavLink>
-          <NavLink to="/mushaf" className={navClass} onClick={() => setSidebarOpen(false)}>
-            <span className="flex items-center gap-2">
-              <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-              {t("nav.mushaf")}
-            </span>
-          </NavLink>
-          <NavLink to="/recitations" className={navClass} onClick={() => setSidebarOpen(false)}>
-            <span className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-              {t("nav.recitations")}
-            </span>
-          </NavLink>
-        </nav>
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side={sheetSide} className="flex w-[min(100%,20rem)] flex-col gap-0 bg-[var(--color-surface)] p-0">
+                <SheetHeader className="border-b border-border px-4 py-4 text-start">
+                  <SheetTitle style={{ fontFamily: "var(--font-quran)" }} className="text-xl font-bold">
+                    {t("common.appName")}
+                  </SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-1 flex-col gap-1 p-4" role="navigation">
+                  {renderNavLinks("column")}
+                </nav>
+                <div className="mt-auto border-t border-border p-4">
+                  <LanguageSwitcher fullWidth className="mb-4" />
+                  <div className="mb-3 flex flex-col gap-1">
+                    <span className="text-sm font-semibold text-foreground">{user?.name}</span>
+                    {user ? (
+                      <Badge variant={roleBadgeVariant(user.role)} className="w-fit">
+                        {t(roleTranslationKey(user.role))}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => {
+                      logout();
+                      navigate("/login", { replace: true });
+                      setMobileNavOpen(false);
+                    }}
+                  >
+                    {t("auth.logout")}
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
 
-        <div className="border-t border-gray-100 p-4">
-          <LanguageSwitcher className="mb-4 w-full justify-center" />
-          <div className="mb-3 flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[var(--color-text)]">{user?.name}</span>
-            {user ? (
-              <Badge variant={roleBadgeVariant(user.role)}>{t(roleTranslationKey(user.role))}</Badge>
-            ) : null}
+            <h1
+              className="min-w-0 truncate text-lg font-bold text-foreground sm:text-xl"
+              style={{ fontFamily: "var(--font-quran)" }}
+            >
+              {t("common.appName")}
+            </h1>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            fullWidth
-            onClick={() => {
-              logout();
-              navigate("/login", { replace: true });
-            }}
-          >
-            {t("auth.logout")}
-          </Button>
+
+          <NavigationMenu viewport={false} className="hidden max-w-none flex-1 justify-center md:flex">
+            <NavigationMenuList className="flex flex-wrap items-center justify-center gap-0.5">
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <NavLink to="/" end className={navLinkClass}>
+                    {t("nav.home")}
+                  </NavLink>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              {isAdmin ? (
+                <NavigationMenuItem>
+                  <NavigationMenuLink asChild>
+                    <NavLink to="/users" className={navLinkClass}>
+                      {t("nav.users")}
+                    </NavLink>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              ) : null}
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <NavLink to="/rooms" className={navLinkClass}>
+                    {roomsLabel}
+                  </NavLink>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <NavLink to="/calendar" className={navLinkClass}>
+                    {t("nav.calendar")}
+                  </NavLink>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <NavLink to="/mushaf" className={navLinkClass}>
+                    <span className="inline-flex items-center gap-2">
+                      <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      {t("nav.mushaf")}
+                    </span>
+                  </NavLink>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <NavLink to="/recitations" className={navLinkClass}>
+                    <span className="inline-flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      {t("nav.recitations")}
+                    </span>
+                  </NavLink>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <LanguageSwitcher className="shrink-0" />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-full outline-none ring-offset-background transition-opacity hover:opacity-95",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  )}
+                  aria-label={user?.name ?? t("common.appName")}
+                >
+                  <Avatar className="size-9 border border-border">
+                    <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+                      {user?.name ? nameToInitials(user.name) : "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-56" sideOffset={6}>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col gap-1.5 py-0.5">
+                    <span className="text-sm font-semibold text-foreground">{user?.name}</span>
+                    {user ? (
+                      <Badge variant={roleBadgeVariant(user.role)} className="w-fit">
+                        {t(roleTranslationKey(user.role))}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  className="cursor-pointer gap-2"
+                  onClick={() => {
+                    logout();
+                    navigate("/login", { replace: true });
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  {t("auth.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </aside>
+      </header>
 
-      {sidebarOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
-          aria-label={t("common.close")}
-          onClick={() => setSidebarOpen(false)}
-        />
-      ) : null}
-
-      <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-gray-100 bg-[var(--color-surface)] px-4 py-3 md:hidden">
-          <button
-            type="button"
-            className="rounded-lg p-2 text-[var(--color-text)]"
-            onClick={() => setSidebarOpen(true)}
-            aria-label={t("common.openMenu")}
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          <span className="font-semibold" style={{ fontFamily: "var(--font-quran)" }}>
-            {t("common.appName")}
-          </span>
-        </header>
-
-        <main
-          className={`flex-1 ${isMushafRoute ? "p-3 md:p-4" : "p-4 md:p-8"}`}
-        >
-          <Outlet />
-        </main>
-      </div>
+      <main className={`flex-1 ${isMushafRoute ? "p-3 md:p-4" : "p-4 md:p-8"}`}>
+        <Outlet />
+      </main>
     </div>
   );
 }

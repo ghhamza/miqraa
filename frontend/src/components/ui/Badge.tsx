@@ -1,29 +1,47 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import type { ReactNode } from "react";
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Slot } from "radix-ui";
 
-type Variant = "green" | "blue" | "gold" | "gray";
+import { cn } from "@/lib/utils";
 
-const styles: Record<Variant, string> = {
-  green: "bg-emerald-100 text-emerald-900 border-emerald-200",
-  blue: "bg-blue-100 text-blue-900 border-blue-200",
-  gold: "bg-amber-100 text-amber-900 border-amber-300",
-  gray: "bg-gray-100 text-gray-700 border-gray-200",
-};
+const badgeVariants = cva(
+  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-all [&>svg]:pointer-events-none [&>svg]:size-3",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground",
+        secondary: "bg-secondary text-secondary-foreground",
+        destructive: "bg-destructive/10 text-destructive",
+        outline: "border-border text-foreground",
+        ghost: "hover:bg-muted",
+        link: "text-primary underline-offset-4 hover:underline",
+        green: "border-[#1B5E20]/30 bg-[#1B5E20] text-white",
+        blue: "border-blue-700/30 bg-blue-600 text-white",
+        gold: "border-amber-700/30 bg-[var(--color-gold)] text-[#1A1A1A]",
+        gray: "border-gray-200 bg-gray-200 text-gray-700",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-interface BadgeProps {
-  variant: Variant;
-  children: ReactNode;
-  className?: string;
-}
+function Badge({
+  className,
+  variant = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot.Root : "span";
 
-export function Badge({ variant, children, className = "" }: BadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 text-xs font-medium ${styles[variant]} ${className}`}
-    >
-      {children}
-    </span>
+    <Comp data-slot="badge" data-variant={variant} className={cn(badgeVariants({ variant }), className)} {...props} />
   );
 }
+
+export { Badge };

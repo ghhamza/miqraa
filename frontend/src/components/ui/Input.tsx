@@ -1,9 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import type { InputHTMLAttributes } from "react";
+import * as React from "react";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+import { cn } from "@/lib/utils";
+
+function InputControl({ className, type, ...props }: React.ComponentProps<"input">) {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        "flex h-10 w-full min-w-0 rounded-xl border border-input bg-[var(--color-surface)] px-3 py-2 text-right text-base text-foreground shadow-sm transition-colors outline-none file:inline-flex file:h-8 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
+        className,
+      )}
+      dir="rtl"
+      {...props}
+    />
+  );
+}
+
+interface InputProps extends React.ComponentProps<"input"> {
   label: string;
   error?: string;
 }
@@ -18,14 +35,7 @@ export function Input({ label, error, id, className = "", ...rest }: InputProps)
       >
         {label}
       </label>
-      <input
-        id={inputId}
-        className={`w-full rounded-xl border bg-[var(--color-surface)] px-3 py-2.5 text-right text-[var(--color-text)] shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-1 ${
-          error ? "border-red-500" : "border-gray-200"
-        } ${className}`}
-        dir="rtl"
-        {...rest}
-      />
+      <InputControl id={inputId} className={className} aria-invalid={Boolean(error)} {...rest} />
       {error ? (
         <p className="mt-1 text-right text-sm text-red-600" role="alert">
           {error}
@@ -34,3 +44,5 @@ export function Input({ label, error, id, className = "", ...rest }: InputProps)
     </div>
   );
 }
+
+export { InputControl };

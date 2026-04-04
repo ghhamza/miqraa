@@ -12,7 +12,22 @@ import * as warsh from "quran-meta/warsh";
 import * as qalun from "quran-meta/qalun";
 import type { AyahNo, Surah as SurahN } from "quran-meta/hafs";
 
-export type Riwaya = "hafs" | "warsh" | "qalun";
+/** Must match backend `riwaya` CHECK and `QuranRiwaya` in types. */
+export type Riwaya =
+  | "hafs"
+  | "warsh"
+  | "qalun"
+  | "shubah"
+  | "qunbul"
+  | "bazzi"
+  | "doori"
+  | "susi"
+  | "hisham"
+  | "ibn_dhakwan"
+  | "khalaf"
+  | "khallad"
+  | "doori_kisai"
+  | "abu_harith";
 
 export interface SurahInfo {
   number: number;
@@ -45,10 +60,9 @@ export interface HizbInfo {
   startAyah: number;
 }
 
+/** Mushaf layout / ayah-index data: only Warsh and Qalun differ in quran-meta; all others use Hafs until more datasets ship. */
 function riwayaModule(r: Riwaya): typeof hafs {
   switch (r) {
-    case "hafs":
-      return hafs;
     case "warsh":
       return warsh as unknown as typeof hafs;
     case "qalun":
@@ -80,6 +94,14 @@ export function getSurahName(number: number, locale: string): string {
   if (locale === "ar") return s.nameAr;
   if (locale === "fr") return s.nameFr;
   return s.nameEn;
+}
+
+/** Arabic plus localized name when UI is not Arabic; Arabic only when `locale` is `ar`. */
+export function getSurahNameWithArabic(number: number, locale: string): string {
+  const s = getSurah(number);
+  if (!s) return String(number);
+  if (locale === "ar") return s.nameAr;
+  return `${s.nameAr} · ${getSurahName(number, locale)}`;
 }
 
 export function getSurahAyahCount(number: number, riwaya: Riwaya = "hafs"): number {
@@ -125,22 +147,48 @@ export function getHizbForAyah(surah: number, ayah: number, riwaya: Riwaya = "ha
   return m.getRubAlHizbByAyahId(id).hizbId;
 }
 
+const RIWAYA_LABELS: Record<Riwaya, { name: string; nameAr: string }> = {
+  hafs: { name: "Hafs (ʿan ʿĀṣim)", nameAr: "حفص عن عاصم" },
+  shubah: { name: "Shuʿbah (ʿan ʿĀṣim)", nameAr: "شعبة عن عاصم" },
+  warsh: { name: "Warsh (ʿan Nāfiʿ)", nameAr: "ورش عن نافع" },
+  qalun: { name: "Qālūn (ʿan Nāfiʿ)", nameAr: "قالون عن نافع" },
+  qunbul: { name: "Qunbul (ʿan Ibn Kathīr)", nameAr: "قنبل عن ابن كثير" },
+  bazzi: { name: "al-Bazzī (ʿan Ibn Kathīr)", nameAr: "البزي عن ابن كثير" },
+  doori: { name: "al-Dūrī (ʿan Abī ʿAmr)", nameAr: "الدوري عن أبي عمرو" },
+  susi: { name: "al-Sūsī (ʿan Abī ʿAmr)", nameAr: "السوسي عن أبي عمرو" },
+  hisham: { name: "Hishām (ʿan Ibn ʿĀmir)", nameAr: "هشام عن ابن عامر" },
+  ibn_dhakwan: { name: "Ibn Dhakwān (ʿan Ibn ʿĀmir)", nameAr: "ابن ذكوان عن ابن عامر" },
+  khalaf: { name: "Khalaf (ʿan Ḥamzah)", nameAr: "خلف عن حمزة" },
+  khallad: { name: "Khallād (ʿan Ḥamzah)", nameAr: "خلاد عن حمزة" },
+  doori_kisai: { name: "al-Dūrī (ʿan al-Kisāʾī)", nameAr: "الدوري عن الكسائي" },
+  abu_harith: { name: "Abū al-Ḥārith (ʿan al-Kisāʾī)", nameAr: "أبو الحارث عن الكسائي" },
+};
+
 export function getRiwayaInfo(riwaya: Riwaya): { name: string; nameAr: string; totalAyahs: number } {
   const meta = riwayaModule(riwaya).meta;
-  const names: Record<Riwaya, { name: string; nameAr: string }> = {
-    hafs: { name: "Hafs", nameAr: "حفص" },
-    warsh: { name: "Warsh", nameAr: "ورش" },
-    qalun: { name: "Qalun", nameAr: "قالون" },
-  };
-  return { ...names[riwaya], totalAyahs: meta.numAyahs };
+  return { ...RIWAYA_LABELS[riwaya], totalAyahs: meta.numAyahs };
 }
 
+/** Display order: most widespread → least (classical teaching order). All selects use `getAvailableRiwayat()`. */
+export const RIWAYA_ORDER: readonly Riwaya[] = [
+  "hafs",
+  "warsh",
+  "qalun",
+  "doori",
+  "shubah",
+  "qunbul",
+  "bazzi",
+  "hisham",
+  "ibn_dhakwan",
+  "susi",
+  "khalaf",
+  "khallad",
+  "doori_kisai",
+  "abu_harith",
+] as const;
+
 export function getAvailableRiwayat(): { id: Riwaya; name: string; nameAr: string }[] {
-  return [
-    { id: "hafs", name: "Hafs", nameAr: "حفص" },
-    { id: "warsh", name: "Warsh", nameAr: "ورش" },
-    { id: "qalun", name: "Qalun", nameAr: "قالون" },
-  ];
+  return RIWAYA_ORDER.map((id) => ({ id, ...RIWAYA_LABELS[id] }));
 }
 
 export function isValidSurah(number: number): boolean {

@@ -14,7 +14,7 @@ import { GradeBadge } from "../../components/recitations/GradeBadge";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { SurahPicker } from "../../components/recitations/SurahPicker";
 import { DeleteRecitationModal } from "../../components/recitations/DeleteRecitationModal";
-import { getAvailableRiwayat, getSurahName } from "../../lib/quranService";
+import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 
@@ -154,7 +154,7 @@ export function RecitationsPage() {
         header: t("recitations.surah"),
         render: (r: RecitationPublic) => (
           <span style={{ fontFamily: "var(--font-quran)" }}>
-            {r.surah}. {getSurahName(r.surah, loc)}
+            {r.surah}. {getSurahNameWithArabic(r.surah, loc)}
           </span>
         ),
       },
@@ -188,6 +188,7 @@ export function RecitationsPage() {
         header: t("recitations.teacherNotes"),
         render: (r: RecitationPublic) => (
           <span
+            dir="auto"
             className="line-clamp-2 max-w-[12rem] text-xs text-[var(--color-text-muted)]"
             title={r.teacher_notes ?? undefined}
           >
@@ -205,7 +206,7 @@ export function RecitationsPage() {
         header: t("common.actions"),
         render: (r: RecitationPublic) =>
           canEditRow(r) ? (
-            <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap justify-end gap-2" onClick={(e) => e.stopPropagation()}>
               <Button
                 type="button"
                 variant="secondary"
@@ -412,9 +413,11 @@ export function RecitationsPage() {
           onRowClick={(r) => setExpandedRowId((prev) => (prev === r.id ? null : r.id))}
           isRowExpanded={(r) => expandedRowId === r.id}
           renderExpandedRow={(r) => (
-            <div>
+            <div className="text-start">
               <p className="text-xs font-semibold text-[var(--color-text-muted)]">{t("recitations.expandNotes")}</p>
-              <p className="mt-1 whitespace-pre-wrap text-[var(--color-text)]">{r.teacher_notes?.trim() || "—"}</p>
+              <p dir="auto" className="mt-1 whitespace-pre-wrap text-[var(--color-text)]">
+                {r.teacher_notes?.trim() || "—"}
+              </p>
             </div>
           )}
         />

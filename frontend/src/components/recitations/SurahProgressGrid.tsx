@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getSurahDisplayMeta, getSurahName, QURAN_SURAHS } from "../../lib/quranService";
+import { getSurahDisplayMeta, getSurahNameWithArabic, QURAN_SURAHS } from "../../lib/quranService";
 import type { RecitationGrade } from "../../types";
 
 interface SurahProgressGridProps {
@@ -54,11 +54,11 @@ export function SurahProgressGrid({ surahBestGrades }: SurahProgressGridProps) {
                 ? "bg-emerald-200 border-emerald-300 text-emerald-900"
                 : "bg-gray-200 border-gray-300 text-gray-600";
           const meta = getSurahDisplayMeta(s.number);
-          const locName = getSurahName(s.number, loc);
+          const nameLine = getSurahNameWithArabic(s.number, loc);
           const revLabel =
             meta?.revelationType === "meccan" ? t("mushaf.meccan") : t("mushaf.medinan");
           const title = meta
-            ? `${meta.number}. ${locName} · ${meta.totalAyahs} ${t("mushaf.ayahs")} · ${revLabel} · ${t("mushaf.revelationOrder")}: ${meta.revelationOrder}${
+            ? `${meta.number}. ${nameLine} · ${meta.totalAyahs} ${t("mushaf.ayahs")} · ${revLabel} · ${t("mushaf.revelationOrder")}: ${meta.revelationOrder}${
                 g ? ` — ${t(`recitations.${g === "needs_work" ? "needsWork" : g}`)}` : ""
               }`
             : String(s.number);

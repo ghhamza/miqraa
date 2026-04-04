@@ -7,7 +7,7 @@ import { Check, ChevronDown } from "lucide-react";
 import {
   getSurah,
   getSurahAyahCount,
-  getSurahName,
+  getSurahNameWithArabic,
   searchSurahs,
 } from "../../lib/quranService";
 import type { SurahInfo } from "../../lib/quranService";
@@ -24,7 +24,7 @@ export interface SurahPickerProps {
 }
 
 function surahRowLabel(s: SurahInfo, loc: string, riwaya: QuranRiwaya, ayahsWord: string): string {
-  return `${s.number}. ${getSurahName(s.number, loc)} · ${getSurahAyahCount(s.number, riwaya)} ${ayahsWord}`;
+  return `${s.number}. ${getSurahNameWithArabic(s.number, loc)} · ${getSurahAyahCount(s.number, riwaya)} ${ayahsWord}`;
 }
 
 export function SurahPicker({ value, onChange, riwaya, allowClear = false, disabled = false }: SurahPickerProps) {

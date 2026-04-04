@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{RoomPublic, RoomStatsResponse, TeacherOption};
 use crate::api::AppState;
+use crate::riwaya::parse_riwaya;
 
 #[derive(Deserialize)]
 pub struct ListRoomsQuery {
@@ -47,15 +48,6 @@ fn require_teacher_or_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> 
     match auth.role.as_str() {
         "teacher" | "admin" => Ok(()),
         _ => Err(StatusCode::FORBIDDEN),
-    }
-}
-
-fn parse_riwaya(s: &str) -> Option<&'static str> {
-    match s.trim() {
-        "hafs" => Some("hafs"),
-        "warsh" => Some("warsh"),
-        "qalun" => Some("qalun"),
-        _ => None,
     }
 }
 

@@ -42,7 +42,7 @@ export function Table<T>({
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-[var(--color-surface)] shadow-sm">
-      <table className="w-full min-w-[640px] border-collapse text-right text-sm">
+      <table className="w-full min-w-[640px] border-collapse text-start text-sm">
         <thead>
           <tr className="border-b border-gray-100 bg-gray-50/80">
             {columns.map((col) => (

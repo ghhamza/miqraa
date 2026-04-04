@@ -10,7 +10,7 @@ import {
   getAvailableRiwayat,
   getHizbForAyah,
   getJuzForAyah,
-  getSurahName,
+  getSurahNameWithArabic,
   getSurahAyahAtPageStart,
   getTotalPages,
 } from "../../lib/quranService";
@@ -82,7 +82,7 @@ export function MushafPage() {
           className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
           style={{ fontFamily: "var(--font-quran)" }}
         >
-          {getSurahName(surahStart, loc)}
+          {getSurahNameWithArabic(surahStart, loc)}
         </h1>
         <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--color-text-muted)]">
           <span>

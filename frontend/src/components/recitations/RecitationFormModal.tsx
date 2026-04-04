@@ -21,7 +21,11 @@ interface RecitationFormModalProps {
   recitation: RecitationPublic | null;
   defaultStudentId?: string;
   defaultRoomId?: string;
+  /** Shown immediately for readonly room row (lists load async). */
+  defaultRoomName?: string;
   defaultSessionId?: string;
+  /** Shown for readonly session row when list may omit this session (e.g. cancelled). */
+  defaultSessionSummary?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -38,7 +42,9 @@ export function RecitationFormModal({
   recitation,
   defaultStudentId,
   defaultRoomId,
+  defaultRoomName,
   defaultSessionId,
+  defaultSessionSummary,
   onClose,
   onSaved,
 }: RecitationFormModalProps) {
@@ -174,7 +180,13 @@ export function RecitationFormModal({
     void (async () => {
       try {
         const { data } = await api.get<SessionPublic[]>(`rooms/${roomId}/sessions`);
-        const ok = data.filter((s) => s.status === "scheduled" || s.status === "in_progress" || s.status === "completed");
+        const ok = data.filter(
+          (s) =>
+            s.status === "scheduled" ||
+            s.status === "in_progress" ||
+            s.status === "completed" ||
+            (defaultSessionId && s.id === defaultSessionId),
+        );
         if (!cancelled) setSessions(ok);
       } catch {
         if (!cancelled) setSessions([]);
@@ -183,7 +195,7 @@ export function RecitationFormModal({
     return () => {
       cancelled = true;
     };
-  }, [open, roomId]);
+  }, [open, roomId, defaultSessionId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -203,8 +215,8 @@ export function RecitationFormModal({
           surah,
           ayah_start: ayahStart,
           ayah_end: ayahEnd,
-          grade: grade || null,
-          teacher_notes: notes.trim() || null,
+          grade: null,
+          teacher_notes: null,
           riwaya,
         });
       } else if (recitation) {
@@ -227,6 +239,19 @@ export function RecitationFormModal({
 
   const studentLocked = mode === "edit" || !!defaultStudentId;
 
+  const roomReadOnly = mode === "create" && !!defaultRoomId;
+  const sessionReadOnly = mode === "create" && !!defaultSessionId;
+
+  const selectedRoomName = rooms.find((r) => r.id === roomId)?.name ?? defaultRoomName ?? "—";
+  const selectedSession = sessions.find((s) => s.id === sessionId);
+  const selectedSessionLabel = selectedSession
+    ? `${selectedSession.title?.trim() || selectedSession.room_name} · ${new Date(selectedSession.scheduled_at).toLocaleString()}`
+    : sessionReadOnly && defaultSessionSummary
+      ? defaultSessionSummary
+      : sessionId
+        ? t("common.loading")
+        : "—";
+
   return (
     <Modal
       open={open}
@@ -246,7 +271,7 @@ export function RecitationFormModal({
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
           >
-            <option value="">{t("common.loading")}</option>
+            <option value="">{students.length === 0 ? t("common.loading") : t("recitations.selectStudent")}</option>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -330,71 +355,87 @@ export function RecitationFormModal({
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">{t("recitations.grade")}</label>
-          <select
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            value={grade}
-            onChange={(e) => setGrade((e.target.value || "") as RecitationGrade | "")}
-          >
-            <option value="">{t("recitations.allGrades")}</option>
-            {GRADES.map((g) => (
-              <option key={g} value={g}>
-                {t(`recitations.${gradeLabelKey(g)}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium" htmlFor="rec-notes">
-            {t("recitations.teacherNotes")}
-          </label>
-          <textarea
-            id="rec-notes"
-            className="min-h-[88px] w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-            placeholder={t("recitations.notesPlaceholder")}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-          />
-        </div>
-
         {mode === "create" ? (
           <>
             <div>
-              <label className="mb-1 block text-sm font-medium">{t("recitations.room")}</label>
+              <span className="mb-1 block text-sm font-medium text-[var(--color-text)]">{t("recitations.room")}</span>
+              {roomReadOnly ? (
+                <div className="rounded-xl border border-gray-200 bg-muted/50 px-3 py-2 text-sm text-[var(--color-text)]">
+                  {selectedRoomName}
+                </div>
+              ) : (
+                <select
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={roomId}
+                  onChange={(e) => {
+                    setRoomId(e.target.value);
+                    setSessionId("");
+                  }}
+                >
+                  <option value="">—</option>
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div>
+              <span className="mb-1 block text-sm font-medium text-[var(--color-text)]">{t("recitations.session")}</span>
+              {sessionReadOnly ? (
+                <div className="rounded-xl border border-gray-200 bg-muted/50 px-3 py-2 text-sm text-[var(--color-text)]">
+                  {selectedSessionLabel}
+                </div>
+              ) : (
+                <select
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value)}
+                  disabled={!roomId}
+                >
+                  <option value="">—</option>
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title?.trim() || s.room_name} · {new Date(s.scheduled_at).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </>
+        ) : null}
+
+        {mode === "edit" ? (
+          <>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t("recitations.grade")}</label>
               <select
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={roomId}
-                onChange={(e) => {
-                  setRoomId(e.target.value);
-                  setSessionId("");
-                }}
+                value={grade}
+                onChange={(e) => setGrade((e.target.value || "") as RecitationGrade | "")}
               >
-                <option value="">—</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
+                <option value="">{t("recitations.allGrades")}</option>
+                {GRADES.map((g) => (
+                  <option key={g} value={g}>
+                    {t(`recitations.${gradeLabelKey(g)}`)}
                   </option>
                 ))}
               </select>
             </div>
+
             <div>
-              <label className="mb-1 block text-sm font-medium">{t("recitations.session")}</label>
-              <select
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                disabled={!roomId}
-              >
-                <option value="">—</option>
-                {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title?.trim() || s.room_name} · {new Date(s.scheduled_at).toLocaleString()}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm font-medium" htmlFor="rec-notes">
+                {t("recitations.teacherNotes")}
+              </label>
+              <textarea
+                id="rec-notes"
+                className="min-h-[88px] w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                placeholder={t("recitations.notesPlaceholder")}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
             </div>
           </>
         ) : null}

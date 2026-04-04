@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { RecitationPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
-import { getSurahName } from "../../lib/quranService";
+import { getSurahNameWithArabic } from "../../lib/quranService";
 
 interface DeleteRecitationModalProps {
   open: boolean;
@@ -33,7 +33,7 @@ export function DeleteRecitationModal({
         <div className="rounded-xl border border-gray-100 bg-[var(--color-bg)] p-3 text-sm">
           <p className="font-semibold text-[var(--color-text)]">{recitation.student_name}</p>
           <p className="mt-1" style={{ fontFamily: "var(--font-quran)" }}>
-            {getSurahName(recitation.surah, loc)} · {recitation.ayah_start}–{recitation.ayah_end}
+            {getSurahNameWithArabic(recitation.surah, loc)} · {recitation.ayah_start}–{recitation.ayah_end}
           </p>
         </div>
         <div className="flex justify-end gap-2">
