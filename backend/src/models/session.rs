@@ -16,5 +16,8 @@ pub struct Session {
     pub duration_minutes: i32,
     pub status: String,
     pub notes: Option<String>,
+    pub schedule_id: Option<Uuid>,
+    pub recurrence_group_id: Option<Uuid>,
+    pub recurrence_rule: Option<String>,
     pub created_at: DateTime<Utc>,
 }

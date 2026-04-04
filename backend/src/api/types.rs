@@ -31,6 +31,25 @@ pub struct UserStatsResponse {
     pub admins: i64,
 }
 
+/// Generic paginated response wrapper.
+#[derive(Serialize)]
+#[serde(bound = "T: Serialize")]
+pub struct Paginated<T> {
+    pub items: Vec<T>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Serialize)]
+pub struct SessionStatsResponse {
+    pub total: i64,
+    pub completed: i64,
+    pub scheduled: i64,
+    pub cancelled: i64,
+    pub avg_attendance_pct: f64,
+}
+
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct RoomPublic {
     pub id: Uuid,

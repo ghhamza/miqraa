@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Plus, DoorOpen } from "lucide-react";
 import { api, userFacingApiError } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import type { JoinResult, Room, RoomStats } from "../../types";
+import type { JoinResult, Paginated, Room, RoomStats } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -52,7 +52,7 @@ export function RoomsPage() {
   const fetchRoomsPage = useCallback(async () => {
     return Promise.all([
       api.get<RoomStats>("rooms/stats"),
-      api.get<Room[]>("rooms", {
+      api.get<Paginated<Room>>("rooms", {
         params: {
           ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
           ...(activeFilter === "all" ? {} : { active: activeFilter === "active" }),
@@ -64,7 +64,7 @@ export function RoomsPage() {
   const refreshAll = useCallback(async () => {
     const [statsRes, roomsRes] = await fetchRoomsPage();
     setStats(statsRes.data);
-    setRooms(roomsRes.data);
+    setRooms(roomsRes.data.items);
   }, [fetchRoomsPage]);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function RoomsPage() {
         const [statsRes, roomsRes] = await fetchRoomsPage();
         if (cancelled) return;
         setStats(statsRes.data);
-        setRooms(roomsRes.data);
+        setRooms(roomsRes.data.items);
       } finally {
         if (!cancelled) setLoading(false);
       }

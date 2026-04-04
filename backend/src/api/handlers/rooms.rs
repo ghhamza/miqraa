@@ -11,7 +11,7 @@ use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::{RoomPublic, RoomStatsResponse, TeacherOption};
+use crate::api::types::{Paginated, RoomPublic, RoomStatsResponse, TeacherOption};
 use crate::api::AppState;
 use crate::riwaya::parse_riwaya;
 
@@ -19,6 +19,8 @@ use crate::riwaya::parse_riwaya;
 pub struct ListRoomsQuery {
     pub search: Option<String>,
     pub active: Option<bool>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -141,41 +143,11 @@ pub async fn list_teachers(
     Ok(Json(teachers))
 }
 
-pub async fn list_rooms(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Query(params): Query<ListRoomsQuery>,
-) -> Result<Json<Vec<RoomPublic>>, StatusCode> {
-    let mut qb = match auth.role.as_str() {
-        "student" => {
-            let mut b = QueryBuilder::new(
-                "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-                 r.riwaya::text AS riwaya, \
-                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
-                 r.is_public, r.enrollment_open, r.requires_approval, \
-                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-                 e_my.status AS my_status \
-                 FROM rooms r \
-                 INNER JOIN users u ON u.id = r.teacher_id \
-                 LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
-            );
-            b.push_bind(auth.id);
-            b.push(" WHERE 1=1");
-            b
-        }
-        _ => QueryBuilder::new(
-            "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-             r.riwaya::text AS riwaya, \
-             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
-             r.is_public, r.enrollment_open, r.requires_approval, \
-             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-             CAST(NULL AS TEXT) AS my_status \
-             FROM rooms r \
-             INNER JOIN users u ON u.id = r.teacher_id \
-             WHERE 1=1",
-        ),
-    };
-
+fn push_room_list_filters(
+    qb: &mut QueryBuilder<'_, sqlx::Postgres>,
+    auth: &AuthenticatedUser,
+    params: &ListRoomsQuery,
+) -> Result<(), StatusCode> {
     match auth.role.as_str() {
         "admin" => {}
         "teacher" => {
@@ -206,8 +178,76 @@ pub async fn list_rooms(
         qb.push(" AND r.is_active = ");
         qb.push_bind(active);
     }
+    Ok(())
+}
 
+pub async fn list_rooms(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(params): Query<ListRoomsQuery>,
+) -> Result<Json<Paginated<RoomPublic>>, StatusCode> {
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let offset = params.offset.unwrap_or(0).max(0);
+
+    let mut qb_count = match auth.role.as_str() {
+        "student" => {
+            let mut b = QueryBuilder::new(
+                "SELECT COUNT(r.id)::bigint \
+                 FROM rooms r \
+                 INNER JOIN users u ON u.id = r.teacher_id \
+                 LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
+            );
+            b.push_bind(auth.id);
+            b.push(" WHERE 1=1");
+            b
+        }
+        _ => QueryBuilder::new(
+            "SELECT COUNT(r.id)::bigint FROM rooms r INNER JOIN users u ON u.id = r.teacher_id WHERE 1=1",
+        ),
+    };
+    push_room_list_filters(&mut qb_count, &auth, &params)?;
+    let total: i64 = qb_count
+        .build_query_scalar()
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut qb = match auth.role.as_str() {
+        "student" => {
+            let mut b = QueryBuilder::new(
+                "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+                 r.riwaya::text AS riwaya, \
+                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+                 r.is_public, r.enrollment_open, r.requires_approval, \
+                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+                 e_my.status AS my_status \
+                 FROM rooms r \
+                 INNER JOIN users u ON u.id = r.teacher_id \
+                 LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
+            );
+            b.push_bind(auth.id);
+            b.push(" WHERE 1=1");
+            b
+        }
+        _ => QueryBuilder::new(
+            "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+             r.riwaya::text AS riwaya, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             r.is_public, r.enrollment_open, r.requires_approval, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+             CAST(NULL AS TEXT) AS my_status \
+             FROM rooms r \
+             INNER JOIN users u ON u.id = r.teacher_id \
+             WHERE 1=1",
+        ),
+    };
+
+    push_room_list_filters(&mut qb, &auth, &params)?;
     qb.push(" ORDER BY r.created_at DESC");
+    qb.push(" LIMIT ");
+    qb.push_bind(limit);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset);
 
     let rooms = qb
         .build_query_as::<RoomPublic>()
@@ -215,7 +255,12 @@ pub async fn list_rooms(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(rooms))
+    Ok(Json(Paginated {
+        items: rooms,
+        total,
+        limit,
+        offset,
+    }))
 }
 
 pub async fn get_room(

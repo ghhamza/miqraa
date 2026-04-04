@@ -426,17 +426,42 @@ pub async fn cancel_my_enrollment(
     auth: AuthenticatedUser,
     Path(room_id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let result = sqlx::query(
-        "DELETE FROM enrollments WHERE room_id = $1 AND student_id = $2 AND status = 'pending'",
+    let enrollment: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, status::text FROM enrollments WHERE room_id = $1 AND student_id = $2",
     )
     .bind(room_id)
     .bind(auth.id)
-    .execute(&state.db)
+    .fetch_optional(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if result.rows_affected() == 0 {
+    let Some((enrollment_id, status)) = enrollment else {
         return Err(StatusCode::NOT_FOUND);
+    };
+
+    if status != "pending" && status != "approved" {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    sqlx::query("DELETE FROM enrollments WHERE id = $1")
+        .bind(enrollment_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if status == "approved" {
+        let _ = sqlx::query(
+            "DELETE FROM session_attendance sa \
+             USING sessions s \
+             WHERE sa.session_id = s.id \
+             AND sa.student_id = $1 \
+             AND s.room_id = $2 \
+             AND s.status::text = 'scheduled'",
+        )
+        .bind(auth.id)
+        .bind(room_id)
+        .execute(&state.db)
+        .await;
     }
 
     Ok(StatusCode::NO_CONTENT)

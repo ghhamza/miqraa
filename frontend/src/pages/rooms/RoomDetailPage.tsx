@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { Enrollment, RecitationPublic, Room, SessionPublic } from "../../types";
+import type { Enrollment, Paginated, RecitationPublic, Room, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -120,26 +120,28 @@ export function RoomDetailPage() {
     if (sessionsViewMode === "calendar") {
       const from = calendarGridStart(calendarCursor);
       const to = calendarGridEnd(calendarCursor);
-      const { data } = await api.get<SessionPublic[]>("sessions", {
+      const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
         params: {
           room_id: id,
           from: from.toISOString(),
           to: to.toISOString(),
+          limit: "500",
         },
       });
-      setSessions(data);
+      setSessions(data.items);
       return;
     }
     const from = startOfMonth(listMonthCursor);
     const to = endOfMonth(listMonthCursor);
-    const { data } = await api.get<SessionPublic[]>("sessions", {
+    const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
       params: {
         room_id: id,
         from: from.toISOString(),
         to: to.toISOString(),
+        limit: "500",
       },
     });
-    const sorted = [...data].sort(
+    const sorted = [...data.items].sort(
       (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
     );
     setSessions(sorted);
@@ -147,10 +149,10 @@ export function RoomDetailPage() {
 
   const loadRoomRecitations = useCallback(async () => {
     if (!id) return;
-    const { data } = await api.get<RecitationPublic[]>("recitations", {
+    const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
       params: { room_id: id },
     });
-    setRoomRecitations(data.slice(0, 15));
+    setRoomRecitations(data.items.slice(0, 15));
   }, [id]);
 
   const refreshAfterMutation = useCallback(async () => {
@@ -350,6 +352,20 @@ export function RoomDetailPage() {
     }
   }
 
+  async function handleLeaveRoom() {
+    if (!room || !id || studentActionLoading) return;
+    if (!window.confirm(t("enrollment.leaveConfirm"))) return;
+    setStudentActionLoading(true);
+    try {
+      await api.delete(`rooms/${room.id}/my-enrollment`);
+      await refreshAfterMutation();
+    } catch (err) {
+      window.alert(userFacingApiError(err));
+    } finally {
+      setStudentActionLoading(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <BackLink to="/rooms">{t("rooms.backToRooms")}</BackLink>
@@ -432,9 +448,19 @@ export function RoomDetailPage() {
       {user?.role === "student" && !isArchived ? (
         <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
           {room.my_status === "approved" ? (
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-6 w-6 shrink-0 text-[var(--color-primary)]" aria-hidden />
-              <p className="font-medium text-[var(--color-text)]">{t("enrollment.youAreEnrolled")}</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="h-6 w-6 shrink-0 text-[var(--color-primary)]" aria-hidden />
+                <p className="font-medium text-[var(--color-text)]">{t("enrollment.youAreEnrolled")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={studentActionLoading}
+                onClick={() => void handleLeaveRoom()}
+              >
+                {t("enrollment.leaveRoom")}
+              </Button>
             </div>
           ) : room.my_status === "pending" ? (
             <div className="space-y-3">

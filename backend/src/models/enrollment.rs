@@ -12,5 +12,6 @@ pub struct Enrollment {
     pub id: Uuid,
     pub room_id: Uuid,
     pub student_id: Uuid,
+    pub status: String,
     pub enrolled_at: DateTime<Utc>,
 }

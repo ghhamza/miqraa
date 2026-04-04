@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
+import type { Paginated, RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -73,10 +73,10 @@ export function SessionDetailPage() {
     if (!id) return;
     const [{ data }, recRes] = await Promise.all([
       api.get<SessionDetail>(`sessions/${id}`),
-      api.get<RecitationPublic[]>("recitations", { params: { session_id: id } }),
+      api.get<Paginated<RecitationPublic>>("recitations", { params: { session_id: id } }),
     ]);
     setDetail(data);
-    setSessionRecitations(recRes.data);
+    setSessionRecitations(recRes.data.items);
     const next: Record<string, boolean> = {};
     for (const a of data.attendance) {
       next[a.student_id] = a.attended;

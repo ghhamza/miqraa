@@ -15,5 +15,8 @@ pub struct Room {
     pub max_students: i32,
     pub is_active: bool,
     pub riwaya: String,
+    pub is_public: bool,
+    pub enrollment_open: bool,
+    pub requires_approval: bool,
     pub created_at: DateTime<Utc>,
 }

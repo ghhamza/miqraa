@@ -6,7 +6,15 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, TrendingUp } from "lucide-react";
 import { api } from "../../lib/api";
-import type { QuranRiwaya, RecitationGrade, RecitationPublic, RecitationStats, StudentOption } from "../../types";
+import type {
+  Paginated,
+  QuranRiwaya,
+  RecitationGrade,
+  RecitationPublic,
+  RecitationStats,
+  Room,
+  StudentOption,
+} from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { Table } from "../../components/ui/Table";
@@ -59,10 +67,10 @@ export function RecitationsPage() {
       if (riwayaFilter) params.riwaya = riwayaFilter;
       const [statsRes, listRes] = await Promise.all([
         api.get<RecitationStats>("recitations/stats"),
-        api.get<RecitationPublic[]>("recitations", { params }),
+        api.get<Paginated<RecitationPublic>>("recitations", { params }),
       ]);
       setStats(statsRes.data);
-      setRows(listRes.data);
+      setRows(listRes.data.items);
     } catch {
       setStats(null);
       setRows([]);
@@ -84,8 +92,8 @@ export function RecitationsPage() {
           const { data } = await api.get<StudentOption[]>("students");
           if (!cancelled) setStudents(data);
         } else {
-          const { data: roomList } = await api.get<{ id: string; teacher_id: string }[]>("rooms");
-          const mine = roomList.filter((r) => r.teacher_id === user.id);
+          const { data: roomsPage } = await api.get<Paginated<Room>>("rooms");
+          const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
           const map = new Map<string, StudentOption>();
           for (const r of mine) {
             try {

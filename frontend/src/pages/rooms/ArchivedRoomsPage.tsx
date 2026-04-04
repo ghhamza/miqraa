@@ -7,7 +7,7 @@ import { DoorOpen, RotateCcw } from "lucide-react";
 import { BackLink } from "../../components/navigation/BackLink";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { Room } from "../../types";
+import type { Paginated, Room } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -25,8 +25,8 @@ export function ArchivedRoomsPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get<Room[]>("rooms", { params: { active: false } });
-      setRooms(data);
+      const { data } = await api.get<Paginated<Room>>("rooms", { params: { active: false } });
+      setRooms(data.items);
     } catch (err) {
       setError(userFacingApiError(err));
       setRooms([]);

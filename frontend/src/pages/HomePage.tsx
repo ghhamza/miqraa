@@ -8,11 +8,13 @@ import { Flame } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import type {
+  Paginated,
   RecitationPublic,
   RecitationStats,
   Room,
   RoomStats,
   SessionPublic,
+  SessionStats,
   StudentProgress,
   User,
   UserStats,
@@ -156,6 +158,7 @@ function TeacherDashboard({ user }: { user: User }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
   const [recStats, setRecStats] = useState<RecitationStats | null>(null);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [recentRecs, setRecentRecs] = useState<RecitationPublic[]>([]);
   const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,18 +168,21 @@ function TeacherDashboard({ user }: { user: User }) {
     setLoading(true);
     void (async () => {
       try {
-        const [roomsRes, roomStatsRes, recStatsRes, recentRecsRes, upcomingRes] = await Promise.all([
-          api.get<Room[]>("rooms"),
-          api.get<RoomStats>("rooms/stats"),
-          api.get<RecitationStats>("recitations/stats"),
-          api.get<RecitationPublic[]>("recitations", { params: { limit: 5 } }),
-          api.get<SessionPublic[]>("sessions/upcoming"),
-        ]);
+        const [roomsRes, roomStatsRes, recStatsRes, recentRecsRes, upcomingRes, sessionStatsRes] =
+          await Promise.all([
+            api.get<Paginated<Room>>("rooms"),
+            api.get<RoomStats>("rooms/stats"),
+            api.get<RecitationStats>("recitations/stats"),
+            api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 5 } }),
+            api.get<SessionPublic[]>("sessions/upcoming"),
+            api.get<SessionStats>("sessions/stats"),
+          ]);
         if (!cancelled) {
-          setRooms(roomsRes.data);
+          setRooms(roomsRes.data.items.filter((r) => r.teacher_id === user.id));
           setRoomStats(roomStatsRes.data);
           setRecStats(recStatsRes.data);
-          setRecentRecs(recentRecsRes.data);
+          setSessionStats(sessionStatsRes.data);
+          setRecentRecs(recentRecsRes.data.items);
           setUpcoming(upcomingRes.data);
         }
       } catch {
@@ -184,6 +190,7 @@ function TeacherDashboard({ user }: { user: User }) {
           setRooms([]);
           setRoomStats(null);
           setRecStats(null);
+          setSessionStats(null);
           setRecentRecs([]);
           setUpcoming([]);
         }
@@ -194,7 +201,7 @@ function TeacherDashboard({ user }: { user: User }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user.id]);
 
   const myStudents = useMemo(() => rooms.reduce((a, r) => a + r.enrolled_count, 0), [rooms]);
   const todaySession = useMemo(() => findFirstSessionToday(upcoming), [upcoming]);
@@ -221,7 +228,7 @@ function TeacherDashboard({ user }: { user: User }) {
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("home.teacherDashboard")}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <button
           type="button"
           onClick={() => void navigate("/rooms")}
@@ -260,6 +267,26 @@ function TeacherDashboard({ user }: { user: User }) {
           <p className="text-xs text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
           <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
             {recStats?.total ?? 0}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigate("/calendar")}
+          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+        >
+          <p className="text-xs text-[var(--color-text-muted)]">{t("home.completedSessions")}</p>
+          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+            {sessionStats?.completed ?? 0}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigate("/calendar")}
+          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+        >
+          <p className="text-xs text-[var(--color-text-muted)]">{t("home.attendanceRate")}</p>
+          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+            {sessionStats != null ? `${sessionStats.avg_attendance_pct.toFixed(1)}%` : "—"}
           </p>
         </button>
       </div>
@@ -337,14 +364,14 @@ function StudentDashboard({ user }: { user: User }) {
       try {
         const [progressRes, roomsRes, recentRecsRes, upcomingRes] = await Promise.all([
           api.get<StudentProgress>(`students/${user.id}/progress`),
-          api.get<Room[]>("rooms"),
-          api.get<RecitationPublic[]>("recitations", { params: { limit: 3 } }),
+          api.get<Paginated<Room>>("rooms"),
+          api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 3 } }),
           api.get<SessionPublic[]>("sessions/upcoming"),
         ]);
         if (!cancelled) {
           setProgress(progressRes.data);
-          setRooms(roomsRes.data);
-          setRecentRecs(recentRecsRes.data);
+          setRooms(roomsRes.data.items);
+          setRecentRecs(recentRecsRes.data.items);
           setUpcoming(upcomingRes.data);
         }
       } catch {

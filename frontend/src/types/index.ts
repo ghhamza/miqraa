@@ -20,6 +20,22 @@ export interface UserStats {
   admins: number;
 }
 
+/** Paginated list API (users, rooms, sessions, recitations). */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SessionStats {
+  total: number;
+  completed: number;
+  scheduled: number;
+  cancelled: number;
+  avg_attendance_pct: number;
+}
+
 /** Quran reading (rawī); structural mushaf data in-app uses quran-meta for hafs/warsh/qalun only — others use Hafs layout as fallback. */
 export type QuranRiwaya =
   | "hafs"

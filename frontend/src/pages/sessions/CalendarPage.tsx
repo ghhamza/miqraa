@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
-import type { Room, SessionPublic } from "../../types";
+import type { Paginated, Room, SessionPublic } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
@@ -91,10 +91,11 @@ export function CalendarPage() {
       const params: Record<string, string> = {
         from: range.from.toISOString(),
         to: range.to.toISOString(),
+        limit: "500",
       };
       if (roomFilter) params.room_id = roomFilter;
-      const { data } = await api.get<SessionPublic[]>("sessions", { params });
-      setSessions(data);
+      const { data } = await api.get<Paginated<SessionPublic>>("sessions", { params });
+      setSessions(data.items);
     } catch {
       setSessions([]);
     } finally {
@@ -110,8 +111,8 @@ export function CalendarPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const { data } = await api.get<Room[]>("rooms");
-        if (!cancelled) setRooms(data);
+        const { data } = await api.get<Paginated<Room>>("rooms");
+        if (!cancelled) setRooms(data.items);
       } catch {
         if (!cancelled) setRooms([]);
       }

@@ -7,11 +7,11 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::QueryBuilder;
+use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::{UserPublic, UserStatsResponse};
+use crate::api::types::{Paginated, UserPublic, UserStatsResponse};
 use crate::api::AppState;
 use crate::auth::password;
 
@@ -19,6 +19,30 @@ use crate::auth::password;
 pub struct ListUsersQuery {
     pub role: Option<String>,
     pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+fn push_user_filters<'a>(qb: &mut QueryBuilder<'a, Postgres>, params: &'a ListUsersQuery) {
+    if let Some(r) = &params.role {
+        let r = r.trim();
+        if r == "student" || r == "teacher" || r == "admin" {
+            qb.push(" AND role::text = ");
+            qb.push_bind(r);
+        }
+    }
+
+    if let Some(s) = &params.search {
+        let t = s.trim();
+        if !t.is_empty() {
+            let pattern = format!("%{}%", t);
+            qb.push(" AND (name ILIKE ");
+            qb.push_bind(pattern.clone());
+            qb.push(" OR email ILIKE ");
+            qb.push_bind(pattern);
+            qb.push(")");
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -100,35 +124,29 @@ pub async fn list_users(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Query(params): Query<ListUsersQuery>,
-) -> Result<Json<Vec<UserPublic>>, StatusCode> {
+) -> Result<Json<Paginated<UserPublic>>, StatusCode> {
     require_admin(&auth)?;
+
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let offset = params.offset.unwrap_or(0).max(0);
+
+    let mut qb_count = QueryBuilder::new("SELECT COUNT(*)::bigint FROM users WHERE 1=1");
+    push_user_filters(&mut qb_count, &params);
+    let total: i64 = qb_count
+        .build_query_scalar()
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut qb = QueryBuilder::new(
         "SELECT id, name, email, role::text AS role, created_at FROM users WHERE 1=1",
     );
-
-    if let Some(r) = &params.role {
-        let r = r.trim();
-        if r == "student" || r == "teacher" || r == "admin" {
-            // Compare as text: binding &str to `role = $1` fails (user_role vs text).
-            qb.push(" AND role::text = ");
-            qb.push_bind(r);
-        }
-    }
-
-    if let Some(s) = &params.search {
-        let t = s.trim();
-        if !t.is_empty() {
-            let pattern = format!("%{}%", t);
-            qb.push(" AND (name ILIKE ");
-            qb.push_bind(pattern.clone());
-            qb.push(" OR email ILIKE ");
-            qb.push_bind(pattern);
-            qb.push(")");
-        }
-    }
-
+    push_user_filters(&mut qb, &params);
     qb.push(" ORDER BY created_at DESC");
+    qb.push(" LIMIT ");
+    qb.push_bind(limit);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset);
 
     let users = qb
         .build_query_as::<UserPublic>()
@@ -136,7 +154,12 @@ pub async fn list_users(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(users))
+    Ok(Json(Paginated {
+        items: users,
+        total,
+        limit,
+        offset,
+    }))
 }
 
 pub async fn get_user(

@@ -117,6 +117,10 @@ pub fn build_router(state: AppState) -> Router {
             put(handlers::schedules::update_schedule).delete(handlers::schedules::delete_schedule),
         )
         .route(
+            "/api/sessions/stats",
+            get(handlers::sessions::session_stats),
+        )
+        .route(
             "/api/sessions/upcoming",
             get(handlers::sessions::upcoming),
         )

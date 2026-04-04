@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::riwaya::parse_riwaya;
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{
-    GradeCounts, RecitationPublic, RecitationStatsResponse, StudentProgressResponse, SurahBestGrade,
+    GradeCounts, Paginated, RecitationPublic, RecitationStatsResponse, StudentProgressResponse, SurahBestGrade,
     SurahCount,
 };
 use crate::api::AppState;
@@ -31,6 +31,7 @@ pub struct ListRecitationsQuery {
     pub to: Option<DateTime<Utc>>,
     /// Optional max rows (1–100), applied after ordering by `created_at DESC`.
     pub limit: Option<i64>,
+    pub offset: Option<i64>,
     pub riwaya: Option<String>,
 }
 
@@ -180,28 +181,12 @@ fn compute_streak(dates: &HashSet<NaiveDate>, today: NaiveDate) -> i32 {
     streak
 }
 
-pub async fn list_recitations(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Query(params): Query<ListRecitationsQuery>,
-) -> Result<Json<Vec<RecitationPublic>>, StatusCode> {
-    if let Some(sid) = params.student_id {
-        if auth.role == "student" && sid != auth.id {
-            return Err(StatusCode::FORBIDDEN);
-        }
-    }
-    let mut qb = QueryBuilder::new(
-        "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
-         rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
-         rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya \
-         FROM recitations rec \
-         LEFT JOIN users u ON u.id = rec.student_id \
-         LEFT JOIN rooms rm ON rm.id = rec.room_id \
-         LEFT JOIN users t ON t.id = rec.teacher_id \
-         WHERE 1=1",
-    );
-    apply_list_role_scope(&mut qb, &auth)?;
+fn push_recitation_list_filters<'a>(
+    qb: &mut QueryBuilder<'a, Postgres>,
+    auth: &'a AuthenticatedUser,
+    params: &'a ListRecitationsQuery,
+) -> Result<(), StatusCode> {
+    apply_list_role_scope(qb, auth)?;
     if let Some(filter_sid) = params.student_id {
         qb.push(" AND rec.student_id = ");
         qb.push_bind(filter_sid);
@@ -239,18 +224,59 @@ pub async fn list_recitations(
             qb.push_bind(r);
         }
     }
-    qb.push(" ORDER BY rec.created_at DESC");
-    if let Some(lim) = params.limit {
-        let lim = lim.clamp(1, 100);
-        qb.push(" LIMIT ");
-        qb.push_bind(lim);
+    Ok(())
+}
+
+pub async fn list_recitations(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(params): Query<ListRecitationsQuery>,
+) -> Result<Json<Paginated<RecitationPublic>>, StatusCode> {
+    if let Some(sid) = params.student_id {
+        if auth.role == "student" && sid != auth.id {
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
+
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let offset = params.offset.unwrap_or(0).max(0);
+
+    let mut qb_count = QueryBuilder::new("SELECT COUNT(*)::bigint FROM recitations rec WHERE 1=1");
+    push_recitation_list_filters(&mut qb_count, &auth, &params)?;
+    let total: i64 = qb_count
+        .build_query_scalar()
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut qb = QueryBuilder::new(
+        "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
+         rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
+         rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
+         rec.riwaya \
+         FROM recitations rec \
+         LEFT JOIN users u ON u.id = rec.student_id \
+         LEFT JOIN rooms rm ON rm.id = rec.room_id \
+         LEFT JOIN users t ON t.id = rec.teacher_id \
+         WHERE 1=1",
+    );
+    push_recitation_list_filters(&mut qb, &auth, &params)?;
+    qb.push(" ORDER BY rec.created_at DESC");
+    qb.push(" LIMIT ");
+    qb.push_bind(limit);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset);
     let rows = qb
         .build_query_as::<RecitationPublic>()
         .fetch_all(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
+    Ok(Json(Paginated {
+        items: rows,
+        total,
+        limit,
+        offset,
+    }))
 }
 
 pub async fn get_recitation(

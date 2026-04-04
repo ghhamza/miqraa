@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { CreateSessionsResponse, Room, SessionPublic } from "../../types";
+import type { CreateSessionsResponse, Paginated, Room, SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
@@ -89,13 +89,14 @@ export function SessionFormModal({
     setLoadingRooms(true);
     void (async () => {
       try {
-        const { data } = await api.get<Room[]>("rooms");
+        const { data } = await api.get<Paginated<Room>>("rooms");
+        const items = data.items;
         if (!cancelled) {
-          setRooms(data);
+          setRooms(items);
           setRoomId((prev) => {
-            if (prev && data.some((r) => r.id === prev)) return prev;
-            if (defaultRoomId && data.some((r) => r.id === defaultRoomId)) return defaultRoomId;
-            return data[0]?.id ?? "";
+            if (prev && items.some((r) => r.id === prev)) return prev;
+            if (defaultRoomId && items.some((r) => r.id === defaultRoomId)) return defaultRoomId;
+            return items[0]?.id ?? "";
           });
         }
       } catch {

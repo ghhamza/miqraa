@@ -9,7 +9,15 @@ import {
   getSurahAyahCount,
   isValidAyahRange,
 } from "../../lib/quranService";
-import type { QuranRiwaya, RecitationGrade, RecitationPublic, Room, SessionPublic, StudentOption } from "../../types";
+import type {
+  Paginated,
+  QuranRiwaya,
+  RecitationGrade,
+  RecitationPublic,
+  Room,
+  SessionPublic,
+  StudentOption,
+} from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
@@ -124,7 +132,8 @@ export function RecitationFormModal({
     let cancelled = false;
     void (async () => {
       try {
-        const { data: roomList } = await api.get<Room[]>("rooms");
+        const { data: roomsPage } = await api.get<Paginated<Room>>("rooms");
+        const roomList = roomsPage.items;
         if (!cancelled) {
           const mine =
             user.role === "admin"
@@ -136,7 +145,6 @@ export function RecitationFormModal({
           const { data: studs } = await api.get<StudentOption[]>("students");
           if (!cancelled) setStudents(studs);
         } else if (user.role === "teacher") {
-          const { data: roomList } = await api.get<Room[]>("rooms");
           const mine = roomList.filter((r) => r.teacher_id === user.id);
           const map = new Map<string, StudentOption>();
           for (const r of mine) {

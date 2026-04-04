@@ -17,7 +17,8 @@ use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{
-    CreateSessionsResponse, DeleteGroupResult, SessionAttendanceRow, SessionDetailResponse, SessionPublic,
+    CreateSessionsResponse, DeleteGroupResult, Paginated, SessionAttendanceRow, SessionDetailResponse,
+    SessionPublic, SessionStatsResponse,
 };
 use crate::api::AppState;
 
@@ -27,6 +28,33 @@ pub struct ListSessionsQuery {
     pub status: Option<String>,
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+fn push_session_list_filters<'a>(
+    qb: &mut QueryBuilder<'a, sqlx::Postgres>,
+    params: &'a ListSessionsQuery,
+) {
+    if let Some(rid) = params.room_id {
+        qb.push(" AND s.room_id = ");
+        qb.push_bind(rid);
+    }
+    if let Some(st) = &params.status {
+        let t = st.trim();
+        if matches!(t, "scheduled" | "in_progress" | "completed" | "cancelled") {
+            qb.push(" AND s.status::text = ");
+            qb.push_bind(t);
+        }
+    }
+    if let Some(from) = params.from {
+        qb.push(" AND s.scheduled_at >= ");
+        qb.push_bind(from);
+    }
+    if let Some(to) = params.to {
+        qb.push(" AND s.scheduled_at <= ");
+        qb.push_bind(to);
+    }
 }
 
 #[derive(Deserialize)]
@@ -222,7 +250,21 @@ pub async fn list_sessions(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Query(params): Query<ListSessionsQuery>,
-) -> Result<Json<Vec<SessionPublic>>, StatusCode> {
+) -> Result<Json<Paginated<SessionPublic>>, StatusCode> {
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let offset = params.offset.unwrap_or(0).max(0);
+
+    let mut qb_count = QueryBuilder::new(
+        "SELECT COUNT(s.id)::bigint FROM sessions s INNER JOIN rooms r ON r.id = s.room_id WHERE 1=1",
+    );
+    apply_role_scope(&mut qb_count, &auth)?;
+    push_session_list_filters(&mut qb_count, &params);
+    let total: i64 = qb_count
+        .build_query_scalar()
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
          s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
@@ -231,32 +273,112 @@ pub async fn list_sessions(
          WHERE 1=1",
     );
     apply_role_scope(&mut qb, &auth)?;
-    if let Some(rid) = params.room_id {
-        qb.push(" AND s.room_id = ");
-        qb.push_bind(rid);
-    }
-    if let Some(st) = &params.status {
-        let t = st.trim();
-        if matches!(t, "scheduled" | "in_progress" | "completed" | "cancelled") {
-            qb.push(" AND s.status::text = ");
-            qb.push_bind(t);
-        }
-    }
-    if let Some(from) = params.from {
-        qb.push(" AND s.scheduled_at >= ");
-        qb.push_bind(from);
-    }
-    if let Some(to) = params.to {
-        qb.push(" AND s.scheduled_at <= ");
-        qb.push_bind(to);
-    }
+    push_session_list_filters(&mut qb, &params);
     qb.push(" ORDER BY s.scheduled_at ASC");
+    qb.push(" LIMIT ");
+    qb.push_bind(limit);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset);
     let rows = qb
         .build_query_as::<SessionPublic>()
         .fetch_all(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(rows))
+    Ok(Json(Paginated {
+        items: rows,
+        total,
+        limit,
+        offset,
+    }))
+}
+
+pub async fn session_stats(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<Json<SessionStatsResponse>, StatusCode> {
+    let (total, completed, scheduled, cancelled): (i64, i64, i64, i64) = match auth.role.as_str() {
+        "admin" => sqlx::query_as(
+            "SELECT COUNT(*)::bigint, \
+             COUNT(*) FILTER (WHERE status::text = 'completed')::bigint, \
+             COUNT(*) FILTER (WHERE status::text = 'scheduled')::bigint, \
+             COUNT(*) FILTER (WHERE status::text = 'cancelled')::bigint \
+             FROM sessions",
+        )
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        "teacher" => sqlx::query_as(
+            "SELECT COUNT(*)::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'completed')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'scheduled')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'cancelled')::bigint \
+             FROM sessions s \
+             INNER JOIN rooms r ON r.id = s.room_id \
+             WHERE r.teacher_id = $1",
+        )
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        "student" => sqlx::query_as(
+            "SELECT COUNT(*)::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'completed')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'scheduled')::bigint, \
+             COUNT(*) FILTER (WHERE s.status::text = 'cancelled')::bigint \
+             FROM sessions s \
+             WHERE EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = $1 AND e.status = 'approved')",
+        )
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        _ => return Err(StatusCode::FORBIDDEN),
+    };
+
+    let avg_attendance_pct: f64 = if completed == 0 {
+        0.0
+    } else {
+        let avg: Option<f64> = match auth.role.as_str() {
+            "admin" => sqlx::query_scalar(
+                "SELECT AVG(sub.pct)::float8 FROM ( \
+                    SELECT CASE WHEN COUNT(*) = 0 THEN 0 ELSE \
+                    (COUNT(*) FILTER (WHERE sa.attended))::float8 / COUNT(*)::float8 * 100 END AS pct \
+                    FROM session_attendance sa \
+                    INNER JOIN sessions s ON s.id = sa.session_id \
+                    WHERE s.status::text = 'completed' \
+                    GROUP BY sa.session_id \
+                ) sub",
+            )
+            .fetch_one(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            "teacher" => sqlx::query_scalar(
+                "SELECT AVG(sub.pct)::float8 FROM ( \
+                    SELECT CASE WHEN COUNT(*) = 0 THEN 0 ELSE \
+                    (COUNT(*) FILTER (WHERE sa.attended))::float8 / COUNT(*)::float8 * 100 END AS pct \
+                    FROM session_attendance sa \
+                    INNER JOIN sessions s ON s.id = sa.session_id \
+                    INNER JOIN rooms r ON r.id = s.room_id \
+                    WHERE s.status::text = 'completed' AND r.teacher_id = $1 \
+                    GROUP BY sa.session_id \
+                ) sub",
+            )
+            .bind(auth.id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            _ => Some(0.0),
+        };
+        avg.unwrap_or(0.0)
+    };
+
+    Ok(Json(SessionStatsResponse {
+        total,
+        completed,
+        scheduled,
+        cancelled,
+        avg_attendance_pct: (avg_attendance_pct * 10.0).round() / 10.0,
+    }))
 }
 
 pub async fn list_for_room(

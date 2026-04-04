@@ -8,7 +8,7 @@ import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { api } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import type { UserPublic, UserStats } from "../../types";
+import type { Paginated, UserPublic, UserStats } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -47,7 +47,7 @@ export function UsersPage() {
   const fetchUsersPage = useCallback(async () => {
     return Promise.all([
       api.get<UserStats>("users/stats"),
-      api.get<UserPublic[]>("users", {
+      api.get<Paginated<UserPublic>>("users", {
         params: {
           ...(roleFilter ? { role: roleFilter } : {}),
           ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
@@ -59,7 +59,7 @@ export function UsersPage() {
   const refreshAll = useCallback(async () => {
     const [statsRes, usersRes] = await fetchUsersPage();
     setStats(statsRes.data);
-    setUsers(usersRes.data);
+    setUsers(usersRes.data.items);
   }, [fetchUsersPage]);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function UsersPage() {
         const [statsRes, usersRes] = await fetchUsersPage();
         if (cancelled) return;
         setStats(statsRes.data);
-        setUsers(usersRes.data);
+        setUsers(usersRes.data.items);
       } finally {
         if (!cancelled) setLoading(false);
       }
