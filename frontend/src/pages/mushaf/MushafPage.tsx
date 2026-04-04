@@ -4,20 +4,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { MushafBookLayout } from "../../components/mushaf/MushafBookLayout";
-import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigation } from "../../components/mushaf/MushafNavigation";
 import { MushafPageTurnButtons } from "../../components/mushaf/MushafPageTurnButtons";
-import {
-  findHizbStartingAtPage,
-  findJuzStartingAtPage,
-  getJuz,
-  getJuzForAyah,
-  getSurahAyahAtPageStart,
-  getSurahNameWithArabic,
-  getSurahRangeOnPage,
-  getTotalPages,
-} from "../../lib/quranService";
+import { getTotalPages } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 
 const LEGACY_MUSHAF_ZOOM_STORAGE_KEY = "miqraa.mushaf.zoomPercent";
@@ -26,8 +15,7 @@ export function MushafPage() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const { page: pageParam } = useParams<{ page?: string }>();
-  const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
-  const isRtl = i18n.language === "ar";
+  const isRtl = (i18n.language || "ar").split("-")[0] === "ar";
 
   const riwaya: Riwaya = "hafs";
   const totalPages = getTotalPages(riwaya);
@@ -84,19 +72,6 @@ export function MushafPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [goPage, page]);
 
-  const [surahStart, ayahStart] = getSurahAyahAtPageStart(page, riwaya);
-  const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
-  const juz = getJuzForAyah(surahStart, ayahStart, riwaya);
-  const juzStart = findJuzStartingAtPage(page, riwaya);
-  const hizbStart = findHizbStartingAtPage(page, riwaya);
-  const juzMeta = getJuz(juz);
-  const runningJuzNameAr = juzMeta?.nameAr ?? "";
-
-  const runningSurahTitle =
-    startSurah === endSurah
-      ? getSurahNameWithArabic(startSurah, loc)
-      : `${getSurahNameWithArabic(startSurah, loc)} · ${getSurahNameWithArabic(endSurah, loc)}`;
-
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col gap-2">
       <div className="w-full shrink-0 border-b border-gray-100 pb-2">
@@ -105,17 +80,10 @@ export function MushafPage() {
         </div>
       </div>
 
-      <div className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4 sm:px-6">
-        <MushafBookLayout
-          page={page}
-          runningSurahTitle={runningSurahTitle}
-          runningJuzNameAr={runningJuzNameAr}
-          juzStart={juzStart}
-          hizbStart={hizbStart}
-        >
-          <MushafCanvas page={page} riwaya={riwaya} embedInBook />
-        </MushafBookLayout>
-      </div>
+      <div
+        className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4 sm:px-6"
+        aria-label="Mushaf content"
+      />
 
       <MushafPageTurnButtons page={page} totalPages={totalPages} isRtl={isRtl} onPageChange={goPage} />
     </div>

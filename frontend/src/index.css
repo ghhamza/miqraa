@@ -14,7 +14,7 @@
 
 :root {
   --font-quran: "Amiri", serif;
-  /* Scheherazade New: SIL OFL, traditional Quranic Naskh — use for headings; body ayāt stay on DigitalKhatt */
+  /* Scheherazade New: SIL OFL, traditional Quranic Naskh — headings / Mushaf UI */
   --font-mushaf-title: "Scheherazade New", "Amiri", "Times New Roman", serif;
   --font-ui: "IBM Plex Sans Arabic", sans-serif;
   --color-primary: #1B5E20;
