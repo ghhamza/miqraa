@@ -21,9 +21,17 @@ interface MushafNavigationProps {
   totalPages: number;
   riwaya: Riwaya;
   onPageChange: (p: number) => void;
+  /** Read-only: show surah/juz/page but do not allow changes (e.g. live session students). */
+  disabled?: boolean;
 }
 
-export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: MushafNavigationProps) {
+export function MushafNavigation({
+  page,
+  totalPages,
+  riwaya,
+  onPageChange,
+  disabled = false,
+}: MushafNavigationProps) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
   const isRtl = i18n.language === "ar";
@@ -51,6 +59,7 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
         className={fieldClass}
         style={{ fontFamily: "var(--font-quran)" }}
         value={String(surahStart)}
+        disabled={disabled}
         onChange={(e) => {
           const n = Number(e.target.value);
           if (n >= 1 && n <= 114) {
@@ -74,6 +83,7 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
         className={fieldClass}
         style={{ fontFamily: "var(--font-quran)" }}
         value={String(juz)}
+        disabled={disabled}
         onChange={(e) => {
           const jn = Number(e.target.value);
           if (jn >= 1 && jn <= 30) {
@@ -101,6 +111,7 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
         max={totalPages}
         className={`${fieldClass} tabular-nums`}
         defaultValue={page}
+        disabled={disabled}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             const v = Number((e.target as HTMLInputElement).value);

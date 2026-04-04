@@ -152,7 +152,10 @@ pub fn build_router(state: AppState) -> Router {
                 .put(handlers::rooms::update_room)
                 .delete(handlers::rooms::delete_room),
         )
-        .route("/ws/signaling/{room_id}", get(ws::signaling::ws_handler))
+        .route(
+            "/api/ws/session/{session_id}",
+            get(ws::signaling::ws_session_handler),
+        )
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http())

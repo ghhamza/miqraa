@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-//! Al-Miqraa (المقرأ) SFU — Selective Forwarding Unit for audio
+//! Al-Miqraa (المقرأ) SFU — Selective Forwarding Unit for audio/video
 //!
-//! Architecture:
-//! - Each room has one SFU session
-//! - Audio tracks from the active reciter + teacher are forwarded to all participants
-//! - Students are muted by default, unmuted only when they become the active reciter
-//! - No audio mixing — pure Opus forwarding to preserve recitation quality
+//! - Each live session has one SFU session (`WebRtcSfu`)
+//! - Opus / VP8 RTP passthrough — no transcoding
 
-pub mod session;
-pub mod track;
+pub mod media_service;
+pub mod webrtc_sfu;
+
+#[allow(unused_imports)]
+pub use media_service::{MediaError, MediaService, ParticipantRole, SfuServerEvent};
+pub use webrtc_sfu::WebRtcSfu;

@@ -32,6 +32,11 @@ export interface UseMushafInteractionOptions {
   onPageChange: (page: number) => void;
   onWordSelect?: (data: MushafActiveWord) => void;
   onAyahSelect?: (data: { surah: number; ayah: number }) => void;
+  /**
+   * When true (default), moving the highlight to an ayah on another page updates the page.
+   * Live-session students should set false so only the teacher-driven page is shown.
+   */
+  followHighlightPage?: boolean;
 }
 
 /**
@@ -44,6 +49,7 @@ export function useMushafInteraction({
   onPageChange,
   onWordSelect,
   onAyahSelect,
+  followHighlightPage = true,
 }: UseMushafInteractionOptions): MushafInteractionState {
   const [highlightRange, setHighlightRange] = useState<MushafHighlightRange | null>(null);
   const [activeWord, setActiveWord] = useState<MushafActiveWord | null>(null);
@@ -85,14 +91,21 @@ export function useMushafInteraction({
   const pageRef = useRef(initialPage);
   pageRef.current = initialPage;
 
-  /** When `highlightRange` changes (e.g. WebSocket), jump to that page — not when the user turns pages manually. */
+  const onPageChangeRef = useRef(onPageChange);
+  onPageChangeRef.current = onPageChange;
+
+  /** Semantic ayah for highlight — use primitives so new object identity from WS sync does not retrigger. */
+  const hlSurah = highlightRange?.surah;
+  const hlAyahStart = highlightRange?.ayahStart;
+
+  /** When the selected ayah changes, optionally jump to its page. Omit `onPageChange` from deps (often unstable). */
   useEffect(() => {
-    if (!highlightRange) return;
-    const targetPage = getPageForAyah(highlightRange.surah, highlightRange.ayahStart, riwaya);
+    if (!followHighlightPage || hlSurah == null || hlAyahStart == null) return;
+    const targetPage = getPageForAyah(hlSurah, hlAyahStart, riwaya);
     if (targetPage !== pageRef.current) {
-      onPageChange(targetPage);
+      onPageChangeRef.current(targetPage);
     }
-  }, [highlightRange, riwaya, onPageChange]);
+  }, [followHighlightPage, hlSurah, hlAyahStart, riwaya]);
 
   return {
     highlightRange,

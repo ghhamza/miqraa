@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -52,6 +52,7 @@ function statusLabelKey(s: SessionPublic["status"]): string {
 export function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const routerLocation = useLocation();
   const { t } = useTranslation();
   const { full, mediumTime } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
@@ -68,6 +69,7 @@ export function SessionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sessionRecitations, setSessionRecitations] = useState<RecitationPublic[]>([]);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
+  const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -83,6 +85,15 @@ export function SessionDetailPage() {
     }
     setLocalAttendance(next);
   }, [id]);
+
+  useEffect(() => {
+    const st = routerLocation.state as { liveSessionError?: string; sessionEndedMessage?: string } | null;
+    const msg = st?.liveSessionError ?? st?.sessionEndedMessage;
+    if (msg) {
+      setLiveSessionFlash(msg);
+      navigate(".", { replace: true, state: {} });
+    }
+  }, [routerLocation.state, navigate]);
 
   useEffect(() => {
     if (!id) return;
@@ -146,6 +157,20 @@ export function SessionDetailPage() {
     try {
       const { data } = await api.put<SessionPublic>(`sessions/${id}`, { status });
       setDetail((prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : null));
+    } catch (err) {
+      setError(userFacingApiError(err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function startSessionAndEnterLive() {
+    if (!id || !detail) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.put<SessionPublic>(`sessions/${id}`, { status: "in_progress" });
+      navigate(`/sessions/${id}/live`);
     } catch (err) {
       setError(userFacingApiError(err));
     } finally {
@@ -219,6 +244,46 @@ export function SessionDetailPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <BackLink to="/calendar">{t("sessions.calendar")}</BackLink>
+
+      {manage && detail.status === "scheduled" ? (
+        <div className="rounded-2xl border border-[#1B5E20]/25 bg-[#1B5E20]/[0.06] p-4 shadow-sm">
+          <Button
+            type="button"
+            variant="primary"
+            loading={actionLoading}
+            onClick={() => void startSessionAndEnterLive()}
+            className="min-h-14 w-full bg-[#1B5E20] text-base font-semibold hover:opacity-95"
+          >
+            {t("liveSession.startSession")}
+          </Button>
+        </div>
+      ) : null}
+
+      {liveSessionFlash ? (
+        <div
+          className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <span>{liveSessionFlash}</span>
+          <button
+            type="button"
+            className="shrink-0 underline"
+            onClick={() => setLiveSessionFlash(null)}
+          >
+            {t("common.close")}
+          </button>
+        </div>
+      ) : null}
+
+      {detail.status === "in_progress" ? (
+        <div>
+          <Link to={`/sessions/${detail.id}/live`}>
+            <Button type="button" variant="primary">
+              {t("liveSession.enterLive")}
+            </Button>
+          </Link>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h1
@@ -306,24 +371,14 @@ export function SessionDetailPage() {
       {manage ? (
         <div className="flex flex-wrap gap-2">
           {detail.status === "scheduled" ? (
-            <>
-              <Button
-                type="button"
-                variant="primary"
-                loading={actionLoading}
-                onClick={() => void patchStatus("in_progress")}
-              >
-                {t("sessions.start")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                loading={actionLoading}
-                onClick={() => void patchStatus("cancelled")}
-              >
-                {t("sessions.cancel")}
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={actionLoading}
+              onClick={() => void patchStatus("cancelled")}
+            >
+              {t("sessions.cancel")}
+            </Button>
           ) : null}
           {detail.status === "in_progress" ? (
             <Button

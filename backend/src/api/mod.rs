@@ -10,6 +10,7 @@ pub mod ws;
 use crate::config::AppConfig;
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
+use crate::sfu::MediaService;
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -21,15 +22,23 @@ pub struct AppState {
     pub storage: StorageService,
     pub config: AppConfig,
     pub rooms: Arc<RoomManager>,
+    pub media_service: Arc<dyn MediaService>,
 }
 
 impl AppState {
-    pub fn new(db: PgPool, storage: StorageService, config: AppConfig) -> Self {
+    pub fn new(
+        db: PgPool,
+        storage: StorageService,
+        config: AppConfig,
+        rooms: Arc<RoomManager>,
+        media_service: Arc<dyn MediaService>,
+    ) -> Self {
         Self {
             db,
             storage,
             config,
-            rooms: Arc::new(RoomManager::new()),
+            rooms,
+            media_service,
         }
     }
 }

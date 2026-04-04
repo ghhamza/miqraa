@@ -104,9 +104,6 @@ export function QCFPageRenderer({
     (word: WordData) => {
       const payload = { surah: word.surah, ayah: word.ayah, wordIndex: word.wordPosition };
       onWordClick?.(payload);
-      if (import.meta.env.DEV) {
-        console.log("[mushaf word]", payload);
-      }
       onAyahClick?.({ surah: word.surah, ayah: word.ayah });
     },
     [onWordClick, onAyahClick],

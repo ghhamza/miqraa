@@ -4,21 +4,37 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { cn } from "@/lib/utils";
+
 interface MushafPageTurnButtonsProps {
   page: number;
   totalPages: number;
   onPageChange: (p: number) => void;
+  /** When true, prev/next controls do nothing (e.g. live session students). */
+  disabled?: boolean;
+  /**
+   * Mobile fixed strip: offset from viewport bottom (e.g. live session footer stacked below).
+   * Desktop edge chevrons are unchanged.
+   */
+  mobileBottomClassName?: string;
 }
 
 /**
  * Mushaf is always read RTL: advancing in the book (higher page #) matches turning toward the
  * left. Left control = next page, right control = previous page.
  */
-export function MushafPageTurnButtons({ page, totalPages, onPageChange }: MushafPageTurnButtonsProps) {
+export function MushafPageTurnButtons({
+  page,
+  totalPages,
+  onPageChange,
+  disabled = false,
+  mobileBottomClassName,
+}: MushafPageTurnButtonsProps) {
   const { t } = useTranslation();
 
   const btnClass =
     "rounded-xl border border-gray-200 bg-[var(--color-surface)] p-2 text-[var(--color-text)] shadow-sm hover:bg-gray-50 disabled:opacity-40";
+  const navDisabled = disabled;
 
   return (
     <>
@@ -30,7 +46,7 @@ export function MushafPageTurnButtons({ page, totalPages, onPageChange }: Mushaf
             className={btnClass}
             aria-label={t("mushaf.nextPage")}
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={page >= totalPages}
+            disabled={navDisabled || page >= totalPages}
           >
             <ChevronLeft className="h-6 w-6" aria-hidden />
           </button>
@@ -41,7 +57,7 @@ export function MushafPageTurnButtons({ page, totalPages, onPageChange }: Mushaf
             className={btnClass}
             aria-label={t("mushaf.prevPage")}
             onClick={() => onPageChange(Math.max(1, page - 1))}
-            disabled={page <= 1}
+            disabled={navDisabled || page <= 1}
           >
             <ChevronRight className="h-6 w-6" aria-hidden />
           </button>
@@ -50,7 +66,10 @@ export function MushafPageTurnButtons({ page, totalPages, onPageChange }: Mushaf
 
       {/* Small screens: same mapping — left = next, right = previous */}
       <div
-        className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-gray-200 bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-sm md:hidden"
+        className={cn(
+          "fixed inset-x-0 z-20 flex items-center justify-between border-t border-gray-200 bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-sm md:hidden",
+          mobileBottomClassName ?? "bottom-0",
+        )}
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
         <button
@@ -58,7 +77,7 @@ export function MushafPageTurnButtons({ page, totalPages, onPageChange }: Mushaf
           className={btnClass}
           aria-label={t("mushaf.nextPage")}
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
+          disabled={navDisabled || page >= totalPages}
         >
           <ChevronLeft className="h-6 w-6" aria-hidden />
         </button>
@@ -67,7 +86,7 @@ export function MushafPageTurnButtons({ page, totalPages, onPageChange }: Mushaf
           className={btnClass}
           aria-label={t("mushaf.prevPage")}
           onClick={() => onPageChange(Math.max(1, page - 1))}
-          disabled={page <= 1}
+          disabled={navDisabled || page <= 1}
         >
           <ChevronRight className="h-6 w-6" aria-hidden />
         </button>

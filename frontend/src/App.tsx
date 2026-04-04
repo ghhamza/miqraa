@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useEffect, type ReactNode } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Direction } from "radix-ui";
 import { LoginPage } from "./pages/auth/LoginPage";
@@ -18,6 +18,7 @@ import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
 import { RoomDetailPage } from "./pages/rooms/RoomDetailPage";
 import { CalendarPage } from "./pages/sessions/CalendarPage";
 import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
+import { LiveSessionPage } from "./pages/sessions/LiveSessionPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
@@ -32,69 +33,77 @@ function RadixDirectionProvider({ children }: { children: ReactNode }) {
   return <Direction.Provider dir={dir}>{children}</Direction.Provider>;
 }
 
-function AppRoutes() {
+const router = createBrowserRouter([
+  { path: "/login", element: <LoginPage /> },
+  { path: "/register", element: <RegisterPage /> },
+  {
+    path: "/sessions/:id/live",
+    element: (
+      <ProtectedRoute>
+        <LiveSessionPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/",
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <HomePage /> },
+      {
+        path: "users",
+        element: (
+          <AdminRoute>
+            <UsersPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "users/:id",
+        element: (
+          <AdminRoute>
+            <UserDetailPage />
+          </AdminRoute>
+        ),
+      },
+      { path: "rooms", element: <RoomsPage /> },
+      {
+        path: "rooms/archived",
+        element: (
+          <AdminRoute>
+            <ArchivedRoomsPage />
+          </AdminRoute>
+        ),
+      },
+      { path: "rooms/:id", element: <RoomDetailPage /> },
+      { path: "calendar", element: <CalendarPage /> },
+      { path: "sessions/:id", element: <SessionDetailPage /> },
+      { path: "recitations", element: <RecitationsPage /> },
+      { path: "profile", element: <ProfilePage /> },
+      { path: "students/:id/progress", element: <StudentProgressPage /> },
+      { path: "mushaf", element: <Navigate to="/mushaf/1" replace /> },
+      { path: "mushaf/:page", element: <MushafPage /> },
+    ],
+  },
+]);
+
+function RouterWithAuth() {
   const loadUser = useAuthStore((s) => s.loadUser);
 
   useEffect(() => {
     void loadUser();
   }, [loadUser]);
 
-  return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route
-        element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<HomePage />} />
-        <Route
-          path="users"
-          element={
-            <AdminRoute>
-              <UsersPage />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="users/:id"
-          element={
-            <AdminRoute>
-              <UserDetailPage />
-            </AdminRoute>
-          }
-        />
-        <Route path="rooms" element={<RoomsPage />} />
-        <Route
-          path="rooms/archived"
-          element={
-            <AdminRoute>
-              <ArchivedRoomsPage />
-            </AdminRoute>
-          }
-        />
-        <Route path="rooms/:id" element={<RoomDetailPage />} />
-        <Route path="calendar" element={<CalendarPage />} />
-        <Route path="sessions/:id" element={<SessionDetailPage />} />
-        <Route path="recitations" element={<RecitationsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="students/:id/progress" element={<StudentProgressPage />} />
-        <Route path="mushaf" element={<Navigate to="/mushaf/1" replace />} />
-        <Route path="mushaf/:page" element={<MushafPage />} />
-      </Route>
-    </Routes>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default function App() {
   return (
     <RadixDirectionProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <RouterWithAuth />
     </RadixDirectionProvider>
   );
 }

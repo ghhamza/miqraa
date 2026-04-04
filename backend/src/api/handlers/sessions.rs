@@ -780,6 +780,14 @@ pub async fn update_session(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+    if matches!(
+        updated.status.as_str(),
+        "completed" | "cancelled"
+    ) {
+        crate::api::ws::signaling::on_session_ended(&state, id).await;
+    }
+
     Ok(Json(updated))
 }
 

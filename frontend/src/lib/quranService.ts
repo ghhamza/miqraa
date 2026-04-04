@@ -223,6 +223,9 @@ export function getPrevAyah(
   return { surah: s, ayah: a };
 }
 
+/** Alias for live-session / prompts that use `getPreviousAyah`. */
+export const getPreviousAyah = getPrevAyah;
+
 export function getNextSurah(surah: number): number | null {
   if (surah < 1 || surah >= 114) return null;
   return surah + 1;
