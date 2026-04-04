@@ -210,8 +210,8 @@
     "goToJuz": "Aller au juz",
     "prevPage": "Page précédente",
     "nextPage": "Page suivante",
-    "loading": "Chargement du Mushaf...",
-    "loadError": "Impossible de charger le Mushaf. Veuillez réessayer.",
+    "loading": "Chargement de la page...",
+    "loadError": "Impossible de charger la page",
     "comingSoon": "Bientôt disponible",
     "comingSoonDesc": "L'affichage de la récitation {{riwaya}} est en cours de développement",
     "retryLoad": "Réessayer",
@@ -223,7 +223,12 @@
     "boundaryPageHint": "Sur une même page du Mushaf, on trouve souvent la fin d’une sourate et le début de la suivante — c’est normal.",
     "juzOf": "Juz {{n}}",
     "totalPages": "{{n}} pages",
-    "bookPageNumberAria": "Page {{n}} — aller au champ page"
+    "bookPageNumberAria": "Page {{n}} — aller au champ page",
+    "miniViewerPage": "Page {{page}} / {{total}}",
+    "autoFollow": "Suivi automatique",
+    "autoFollowOn": "Suivi activé",
+    "autoFollowOff": "Suivi désactivé",
+    "freeBrowse": "Navigation libre"
   },
   "enrollment": {
     "title": "Inscription",

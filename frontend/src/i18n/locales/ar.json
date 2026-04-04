@@ -210,8 +210,8 @@
     "goToJuz": "الذهاب إلى جزء",
     "prevPage": "الصفحة السابقة",
     "nextPage": "الصفحة التالية",
-    "loading": "جارٍ تحميل المصحف...",
-    "loadError": "تعذّر تحميل المصحف. يرجى إعادة المحاولة.",
+    "loading": "جارٍ تحميل الصفحة...",
+    "loadError": "تعذّر تحميل الصفحة",
     "comingSoon": "قريبًا",
     "comingSoonDesc": "عرض رواية {{riwaya}} قيد التطوير",
     "retryLoad": "إعادة المحاولة",
@@ -223,7 +223,12 @@
     "boundaryPageHint": "في المصحف قد تجتمع في صفحة واحدة أواخر سورة مع أوائل السورة التالية — وهذا أمر طبيعي.",
     "juzOf": "الجزء {{n}}",
     "totalPages": "{{n}} صفحة",
-    "bookPageNumberAria": "صفحة {{n}} — الانتقال إلى حقل الصفحة"
+    "bookPageNumberAria": "صفحة {{n}} — الانتقال إلى حقل الصفحة",
+    "miniViewerPage": "صفحة {{page}} / {{total}}",
+    "autoFollow": "متابعة تلقائية",
+    "autoFollowOn": "المتابعة مفعّلة",
+    "autoFollowOff": "المتابعة متوقفة",
+    "freeBrowse": "تصفح حر"
   },
   "enrollment": {
     "title": "التسجيل",

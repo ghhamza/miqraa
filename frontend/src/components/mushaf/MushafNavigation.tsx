@@ -41,11 +41,14 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
     }
   }, [surahStart]);
 
+  const fieldClass =
+    "w-full min-h-11 rounded-lg border border-border bg-background px-3 py-2.5 text-base font-medium text-foreground shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50";
+
   const surahField = (
     <div>
-      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToSurah")}</label>
+      <label className="mb-1 block text-sm font-medium text-foreground/80">{t("mushaf.goToSurah")}</label>
       <select
-        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        className={fieldClass}
         style={{ fontFamily: "var(--font-quran)" }}
         value={String(surahStart)}
         onChange={(e) => {
@@ -66,9 +69,10 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
 
   const juzField = (
     <div>
-      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToJuz")}</label>
+      <label className="mb-1 block text-sm font-medium text-foreground/80">{t("mushaf.goToJuz")}</label>
       <select
-        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        className={fieldClass}
+        style={{ fontFamily: "var(--font-quran)" }}
         value={String(juz)}
         onChange={(e) => {
           const jn = Number(e.target.value);
@@ -88,14 +92,14 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
 
   const pageField = (
     <div>
-      <label className="mb-0.5 block text-[0.65rem] text-[var(--color-text-muted)]">{t("mushaf.goToPage")}</label>
+      <label className="mb-1 block text-sm font-medium text-foreground/80">{t("mushaf.goToPage")}</label>
       <input
         id="mushaf-go-to-page"
         key={page}
         type="number"
         min={1}
         max={totalPages}
-        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+        className={`${fieldClass} tabular-nums`}
         defaultValue={page}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -108,8 +112,8 @@ export function MushafNavigation({ page, totalPages, riwaya, onPageChange }: Mus
   );
 
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className="grid gap-2 sm:grid-cols-3" dir={isRtl ? "rtl" : "ltr"}>
+    <div className="flex w-full flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-3" dir={isRtl ? "rtl" : "ltr"}>
         {isRtl ? (
           <>
             {pageField}

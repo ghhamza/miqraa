@@ -210,10 +210,10 @@
     "goToJuz": "Go to juz",
     "prevPage": "Previous page",
     "nextPage": "Next page",
-    "loading": "Loading the Mushaf...",
-    "loadError": "Failed to load the Mushaf. Please try again.",
+    "loading": "Loading page...",
+    "loadError": "Failed to load the page",
     "comingSoon": "Coming Soon",
-    "comingSoonDesc": "The {{riwaya}} recitation display is under development",
+    "comingSoonDesc": "{{riwaya}} display is under development",
     "retryLoad": "Retry",
     "meccan": "Meccan",
     "medinan": "Medinan",
@@ -223,7 +223,12 @@
     "boundaryPageHint": "On many Mushaf pages, the last verses of one surah and the first verses of the next appear together — this is normal.",
     "juzOf": "Juz {{n}}",
     "totalPages": "{{n}} pages",
-    "bookPageNumberAria": "Page {{n}} — jump to page field"
+    "bookPageNumberAria": "Page {{n}} — jump to page field",
+    "miniViewerPage": "Page {{page}} / {{total}}",
+    "autoFollow": "Auto-follow",
+    "autoFollowOn": "Following",
+    "autoFollowOff": "Not following",
+    "freeBrowse": "Free browse"
   },
   "enrollment": {
     "title": "Enrollment",

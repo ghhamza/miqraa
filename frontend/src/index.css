@@ -156,3 +156,55 @@
     cursor: pointer;
   }
 }
+
+/* QCF V2 Mushaf page (see QCFPageRenderer) */
+.mushaf-line {
+  direction: rtl;
+  width: 100%;
+  min-height: 1.2em;
+  line-height: 2;
+}
+/* Surah title / basmalah blocks (not ayah rows) */
+.mushaf-line--centered {
+  text-align: center;
+}
+/* Ayah lines: flex avoids `text-align: justify` + space nodes (bad for RTL QCF). */
+.mushaf-ayah-line {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  width: 100%;
+  min-width: 0;
+}
+.mushaf-ayah-line--justify {
+  justify-content: space-between;
+}
+.mushaf-ayah-line--center {
+  justify-content: center;
+  column-gap: 0;
+}
+.mushaf-word {
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  padding: 1px 0;
+  white-space: nowrap;
+}
+.mushaf-word:hover {
+  background-color: rgba(27, 94, 32, 0.08);
+  border-radius: 3px;
+}
+.mushaf-word--highlighted {
+  background-color: rgba(27, 94, 32, 0.12);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+.mushaf-word--active {
+  background-color: rgba(212, 168, 67, 0.3);
+  border-radius: 4px;
+  outline: 2px solid rgba(212, 168, 67, 0.6);
+}
+.mushaf-word--active:hover {
+  background-color: rgba(212, 168, 67, 0.35);
+}

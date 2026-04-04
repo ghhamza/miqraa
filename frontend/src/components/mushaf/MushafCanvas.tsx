@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Hamza Ghandouri
+
+import { useTranslation } from "react-i18next";
+import { getRiwayaInfo } from "../../lib/quranService";
+import type { Riwaya } from "../../lib/quranService";
+import type { QCFPageRendererProps } from "./QCFPageRenderer";
+import { QCFPageRenderer } from "./QCFPageRenderer";
+
+export interface MushafCanvasProps {
+  page: number;
+  riwaya: Riwaya;
+  highlightRange?: QCFPageRendererProps["highlightRange"];
+  activeWord?: QCFPageRendererProps["activeWord"];
+  onWordClick?: QCFPageRendererProps["onWordClick"];
+  onAyahClick?: QCFPageRendererProps["onAyahClick"];
+}
+
+export function MushafCanvas({
+  page,
+  riwaya,
+  highlightRange,
+  activeWord,
+  onWordClick,
+  onAyahClick,
+}: MushafCanvasProps) {
+  const { t } = useTranslation();
+
+  if (riwaya !== "hafs") {
+    const info = getRiwayaInfo(riwaya);
+    return (
+      <div className="flex min-h-[12rem] flex-col items-center justify-center gap-2 px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
+        <p className="font-medium text-foreground">{t("mushaf.comingSoon")}</p>
+        <p>{t("mushaf.comingSoonDesc", { riwaya: info.nameAr })}</p>
+      </div>
+    );
+  }
+
+  return (
+    <QCFPageRenderer
+      pageNumber={page}
+      riwaya={riwaya}
+      highlightRange={highlightRange}
+      activeWord={activeWord}
+      onWordClick={onWordClick}
+      onAyahClick={onAyahClick}
+    />
+  );
+}
