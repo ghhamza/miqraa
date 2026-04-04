@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "@fontsource/amiri/400.css";
+@import "@fontsource/amiri/700.css";
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+
+:root {
+  --font-quran: "Amiri", serif;
+  --font-ui: "IBM Plex Sans Arabic", sans-serif;
+  --color-primary: #1B5E20;
+  --color-primary-light: #4CAF50;
+  --color-gold: #D4A843;
+  --color-bg: #FAFAF5;
+  --color-surface: #FFFFFF;
+  --color-text: #1A1A1A;
+  --color-text-muted: #6B7280;
+}
+
+body {
+  font-family: var(--font-ui);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}

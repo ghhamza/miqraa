@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Hamza Ghandouri
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use sqlx::FromRow;
+use uuid::Uuid;
+
+#[derive(Serialize)]
+pub struct UserResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct UserPublic {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub role: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct UserStatsResponse {
+    pub total: i64,
+    pub students: i64,
+    pub teachers: i64,
+    pub admins: i64,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct RoomPublic {
+    pub id: Uuid,
+    pub name: String,
+    pub teacher_id: Uuid,
+    pub teacher_name: String,
+    pub max_students: i32,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub riwaya: String,
+    pub enrolled_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct EnrollmentPublic {
+    pub id: Uuid,
+    pub student_id: Uuid,
+    pub student_name: String,
+    pub student_email: String,
+    pub enrolled_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct EnrollmentCountResponse {
+    pub count: i64,
+    pub max: i32,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct StudentOption {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+}
+
+#[derive(Serialize)]
+pub struct RoomStatsResponse {
+    pub total: i64,
+    pub active: i64,
+    pub inactive: i64,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct TeacherOption {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct SessionPublic {
+    pub id: Uuid,
+    pub room_id: Uuid,
+    pub room_name: String,
+    pub teacher_id: Uuid,
+    pub title: Option<String>,
+    pub scheduled_at: DateTime<Utc>,
+    pub duration_minutes: i32,
+    pub status: String,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct SessionAttendanceRow {
+    pub student_id: Uuid,
+    pub student_name: String,
+    pub attended: bool,
+    pub joined_at: Option<DateTime<Utc>>,
+    pub left_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct SessionDetailResponse {
+    #[serde(flatten)]
+    pub session: SessionPublic,
+    pub attendance: Vec<SessionAttendanceRow>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct RecitationPublic {
+    pub id: Uuid,
+    pub student_id: Uuid,
+    pub student_name: String,
+    pub room_id: Option<Uuid>,
+    pub room_name: Option<String>,
+    pub session_id: Option<Uuid>,
+    pub surah: i32,
+    pub ayah_start: i32,
+    pub ayah_end: i32,
+    pub grade: Option<String>,
+    pub teacher_notes: Option<String>,
+    pub teacher_id: Option<Uuid>,
+    pub teacher_name: Option<String>,
+    pub recording_path: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub riwaya: String,
+}
+
+#[derive(Serialize)]
+pub struct GradeCounts {
+    pub excellent: i64,
+    pub good: i64,
+    pub needs_work: i64,
+    pub weak: i64,
+}
+
+#[derive(Serialize)]
+pub struct SurahCount {
+    pub surah: i32,
+    pub count: i64,
+}
+
+#[derive(Serialize)]
+pub struct RecitationStatsResponse {
+    pub total: i64,
+    pub by_grade: GradeCounts,
+    pub by_surah: Vec<SurahCount>,
+    pub recent_count: i64,
+}
+
+#[derive(Serialize)]
+pub struct SurahBestGrade {
+    pub surah: i32,
+    pub best_grade: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct StudentProgressResponse {
+    pub student_name: String,
+    pub total_recitations: i64,
+    pub surahs_covered: Vec<i32>,
+    pub surah_best_grades: Vec<SurahBestGrade>,
+    pub grade_distribution: GradeCounts,
+    pub recent_recitations: i64,
+    pub last_recitation_date: Option<DateTime<Utc>>,
+    pub streak_days: i32,
+}

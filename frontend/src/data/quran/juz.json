@@ -1,0 +1,242 @@
+[
+  {
+    "number": 1,
+    "nameAr": "الجزء الأول",
+    "startSurah": 1,
+    "startAyah": 1,
+    "endSurah": 2,
+    "endAyah": 141
+  },
+  {
+    "number": 2,
+    "nameAr": "الجزء الثاني",
+    "startSurah": 2,
+    "startAyah": 142,
+    "endSurah": 2,
+    "endAyah": 252
+  },
+  {
+    "number": 3,
+    "nameAr": "الجزء الثالث",
+    "startSurah": 2,
+    "startAyah": 253,
+    "endSurah": 3,
+    "endAyah": 92
+  },
+  {
+    "number": 4,
+    "nameAr": "الجزء الرابع",
+    "startSurah": 3,
+    "startAyah": 93,
+    "endSurah": 4,
+    "endAyah": 23
+  },
+  {
+    "number": 5,
+    "nameAr": "الجزء الخامس",
+    "startSurah": 4,
+    "startAyah": 24,
+    "endSurah": 4,
+    "endAyah": 147
+  },
+  {
+    "number": 6,
+    "nameAr": "الجزء السادس",
+    "startSurah": 4,
+    "startAyah": 148,
+    "endSurah": 5,
+    "endAyah": 81
+  },
+  {
+    "number": 7,
+    "nameAr": "الجزء السابع",
+    "startSurah": 5,
+    "startAyah": 82,
+    "endSurah": 6,
+    "endAyah": 110
+  },
+  {
+    "number": 8,
+    "nameAr": "الجزء الثامن",
+    "startSurah": 6,
+    "startAyah": 111,
+    "endSurah": 7,
+    "endAyah": 87
+  },
+  {
+    "number": 9,
+    "nameAr": "الجزء التاسع",
+    "startSurah": 7,
+    "startAyah": 88,
+    "endSurah": 8,
+    "endAyah": 40
+  },
+  {
+    "number": 10,
+    "nameAr": "الجزء العاشر",
+    "startSurah": 8,
+    "startAyah": 41,
+    "endSurah": 9,
+    "endAyah": 92
+  },
+  {
+    "number": 11,
+    "nameAr": "الجزء الحادي عشر",
+    "startSurah": 9,
+    "startAyah": 93,
+    "endSurah": 11,
+    "endAyah": 5
+  },
+  {
+    "number": 12,
+    "nameAr": "الجزء الثاني عشر",
+    "startSurah": 11,
+    "startAyah": 6,
+    "endSurah": 12,
+    "endAyah": 52
+  },
+  {
+    "number": 13,
+    "nameAr": "الجزء الثالث عشر",
+    "startSurah": 12,
+    "startAyah": 53,
+    "endSurah": 14,
+    "endAyah": 52
+  },
+  {
+    "number": 14,
+    "nameAr": "الجزء الرابع عشر",
+    "startSurah": 15,
+    "startAyah": 1,
+    "endSurah": 16,
+    "endAyah": 128
+  },
+  {
+    "number": 15,
+    "nameAr": "الجزء الخامس عشر",
+    "startSurah": 17,
+    "startAyah": 1,
+    "endSurah": 18,
+    "endAyah": 74
+  },
+  {
+    "number": 16,
+    "nameAr": "الجزء السادس عشر",
+    "startSurah": 18,
+    "startAyah": 75,
+    "endSurah": 20,
+    "endAyah": 135
+  },
+  {
+    "number": 17,
+    "nameAr": "الجزء السابع عشر",
+    "startSurah": 21,
+    "startAyah": 1,
+    "endSurah": 22,
+    "endAyah": 78
+  },
+  {
+    "number": 18,
+    "nameAr": "الجزء الثامن عشر",
+    "startSurah": 23,
+    "startAyah": 1,
+    "endSurah": 25,
+    "endAyah": 20
+  },
+  {
+    "number": 19,
+    "nameAr": "الجزء التاسع عشر",
+    "startSurah": 25,
+    "startAyah": 21,
+    "endSurah": 27,
+    "endAyah": 55
+  },
+  {
+    "number": 20,
+    "nameAr": "الجزء العشرون",
+    "startSurah": 27,
+    "startAyah": 56,
+    "endSurah": 29,
+    "endAyah": 45
+  },
+  {
+    "number": 21,
+    "nameAr": "الجزء الحادي والعشرون",
+    "startSurah": 29,
+    "startAyah": 46,
+    "endSurah": 33,
+    "endAyah": 30
+  },
+  {
+    "number": 22,
+    "nameAr": "الجزء الثاني والعشرون",
+    "startSurah": 33,
+    "startAyah": 31,
+    "endSurah": 36,
+    "endAyah": 27
+  },
+  {
+    "number": 23,
+    "nameAr": "الجزء الثالث والعشرون",
+    "startSurah": 36,
+    "startAyah": 28,
+    "endSurah": 39,
+    "endAyah": 31
+  },
+  {
+    "number": 24,
+    "nameAr": "الجزء الرابع والعشرون",
+    "startSurah": 39,
+    "startAyah": 32,
+    "endSurah": 41,
+    "endAyah": 46
+  },
+  {
+    "number": 25,
+    "nameAr": "الجزء الخامس والعشرون",
+    "startSurah": 41,
+    "startAyah": 47,
+    "endSurah": 45,
+    "endAyah": 37
+  },
+  {
+    "number": 26,
+    "nameAr": "الجزء السادس والعشرون",
+    "startSurah": 46,
+    "startAyah": 1,
+    "endSurah": 51,
+    "endAyah": 30
+  },
+  {
+    "number": 27,
+    "nameAr": "الجزء السابع والعشرون",
+    "startSurah": 51,
+    "startAyah": 31,
+    "endSurah": 57,
+    "endAyah": 29
+  },
+  {
+    "number": 28,
+    "nameAr": "الجزء الثامن والعشرون",
+    "startSurah": 58,
+    "startAyah": 1,
+    "endSurah": 66,
+    "endAyah": 12
+  },
+  {
+    "number": 29,
+    "nameAr": "الجزء التاسع والعشرون",
+    "startSurah": 67,
+    "startAyah": 1,
+    "endSurah": 77,
+    "endAyah": 50
+  },
+  {
+    "number": 30,
+    "nameAr": "الجزء الثلاثون",
+    "startSurah": 78,
+    "startAyah": 1,
+    "endSurah": 114,
+    "endAyah": 6
+  }
+]

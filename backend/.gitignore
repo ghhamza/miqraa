@@ -1,0 +1,11 @@
+# Build
+/target
+
+# Secrets — keep .env.example tracked for onboarding
+.env
+.env.*
+!.env.example
+
+# Local recordings (audio); directory kept via .gitkeep
+data/recordings/*
+!data/recordings/.gitkeep

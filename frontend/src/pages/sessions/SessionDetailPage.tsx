@@ -1,0 +1,385 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Hamza Ghandouri
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { api, userFacingApiError } from "../../lib/api";
+import type { RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
+import { useAuthStore } from "../../stores/authStore";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { SessionFormModal } from "../../components/sessions/SessionFormModal";
+import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
+import { AttendanceList } from "../../components/sessions/AttendanceList";
+import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
+import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
+
+function canManage(user: { id: string; role: string } | null, session: SessionPublic): boolean {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return user.role === "teacher" && user.id === session.teacher_id;
+}
+
+function statusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" | "gold" {
+  switch (s) {
+    case "scheduled":
+      return "green";
+    case "in_progress":
+      return "blue";
+    case "completed":
+      return "gray";
+    case "cancelled":
+      return "gray";
+    default:
+      return "gray";
+  }
+}
+
+function statusLabelKey(s: SessionPublic["status"]): string {
+  switch (s) {
+    case "in_progress":
+      return "inProgress";
+    default:
+      return s;
+  }
+}
+
+export function SessionDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { full } = useLocaleDate();
+  const user = useAuthStore((s) => s.user);
+
+  const [detail, setDetail] = useState<SessionDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sessionRecitations, setSessionRecitations] = useState<RecitationPublic[]>([]);
+  const [recitationFormOpen, setRecitationFormOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    const [{ data }, recRes] = await Promise.all([
+      api.get<SessionDetail>(`sessions/${id}`),
+      api.get<RecitationPublic[]>("recitations", { params: { session_id: id } }),
+    ]);
+    setDetail(data);
+    setSessionRecitations(recRes.data);
+    const next: Record<string, boolean> = {};
+    for (const a of data.attendance) {
+      next[a.student_id] = a.attended;
+    }
+    setLocalAttendance(next);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setForbidden(false);
+    void (async () => {
+      try {
+        await load();
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 403) {
+          if (!cancelled) setForbidden(true);
+          if (!cancelled) setDetail(null);
+        } else {
+          if (!cancelled) setDetail(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, load]);
+
+  const manage = detail && user ? canManage(user, detail) : false;
+
+  const presentCount = useMemo(() => {
+    if (!detail) return 0;
+    return detail.attendance.filter((a) => localAttendance[a.student_id] ?? a.attended).length;
+  }, [detail, localAttendance]);
+
+  async function saveAttendance() {
+    if (!id || !detail || !manage) return;
+    setSavingAttendance(true);
+    setError(null);
+    try {
+      const attendance = detail.attendance.map((a) => ({
+        student_id: a.student_id,
+        attended: localAttendance[a.student_id] ?? a.attended,
+      }));
+      const { data } = await api.put<SessionAttendance[]>(`sessions/${id}/attendance`, { attendance });
+      setDetail((prev) => (prev ? { ...prev, attendance: data } : null));
+      const next: Record<string, boolean> = {};
+      for (const a of data) {
+        next[a.student_id] = a.attended;
+      }
+      setLocalAttendance(next);
+    } catch (err) {
+      setError(userFacingApiError(err));
+    } finally {
+      setSavingAttendance(false);
+    }
+  }
+
+  async function patchStatus(status: SessionPublic["status"]) {
+    if (!id || !detail) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const { data } = await api.put<SessionPublic>(`sessions/${id}`, { status });
+      setDetail((prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : null));
+    } catch (err) {
+      setError(userFacingApiError(err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!id) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.delete(`sessions/${id}`);
+      navigate("/calendar", { replace: true });
+    } catch (err) {
+      setError(userFacingApiError(err));
+    } finally {
+      setActionLoading(false);
+      setDeleteOpen(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (forbidden) {
+    return (
+      <div className="rounded-2xl bg-[var(--color-surface)] p-8 text-center shadow-sm">
+        <p className="text-[var(--color-text-muted)]">{t("errors.noPermission")}</p>
+        <Link to="/calendar" className="mt-4 inline-block text-[var(--color-primary)]">
+          {t("sessions.calendar")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="rounded-2xl bg-[var(--color-surface)] p-8 text-center shadow-sm">
+        <p className="text-[var(--color-text-muted)]">{t("errors.not_found")}</p>
+        <Link to="/calendar" className="mt-4 inline-block text-[var(--color-primary)]">
+          {t("sessions.calendar")}
+        </Link>
+      </div>
+    );
+  }
+
+  const title = detail.title?.trim() || t("sessions.untitledTitle");
+  const showEditDelete = manage && detail.status !== "completed";
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+      <Link
+        to="/calendar"
+        className="inline-flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
+      >
+        <ArrowRight className="h-4 w-4 rotate-180" />
+        {t("sessions.calendar")}
+      </Link>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <h1
+          className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
+          style={{ fontFamily: "var(--font-quran)" }}
+        >
+          {title}
+        </h1>
+        {showEditDelete ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <Pencil className="h-4 w-4" />
+                {t("common.edit")}
+              </span>
+            </Button>
+            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <Trash2 className="h-4 w-4" />
+                {t("sessions.deleteSession")}
+              </span>
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <dl className="space-y-4 text-start">
+          <div>
+            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.room")}</dt>
+            <dd className="mt-1">
+              <Link
+                to={`/rooms/${detail.room_id}`}
+                className="text-lg font-medium text-[var(--color-primary)] hover:underline"
+              >
+                {detail.room_name}
+              </Link>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.date")}</dt>
+            <dd className="mt-1 text-[var(--color-text)]">{full(detail.scheduled_at)}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.duration")}</dt>
+            <dd className="mt-1 text-[var(--color-text)]">
+              {t("sessions.durationValue", { minutes: detail.duration_minutes })}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.status")}</dt>
+            <dd className="mt-2">
+              <Badge variant={statusVariant(detail.status)}>{t(`sessions.${statusLabelKey(detail.status)}`)}</Badge>
+            </dd>
+          </div>
+          {detail.notes ? (
+            <div>
+              <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.notes")}</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-[var(--color-text)]">{detail.notes}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+
+      {manage ? (
+        <div className="flex flex-wrap gap-2">
+          {detail.status === "scheduled" ? (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                loading={actionLoading}
+                onClick={() => void patchStatus("in_progress")}
+              >
+                {t("sessions.start")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={actionLoading}
+                onClick={() => void patchStatus("cancelled")}
+              >
+                {t("sessions.cancel")}
+              </Button>
+            </>
+          ) : null}
+          {detail.status === "in_progress" ? (
+            <Button
+              type="button"
+              variant="primary"
+              loading={actionLoading}
+              onClick={() => void patchStatus("completed")}
+            >
+              {t("sessions.complete")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {manage && detail.attendance.length > 0 ? (
+        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
+          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+          <div className="mt-4">
+            <AttendanceList
+              items={detail.attendance}
+              localState={localAttendance}
+              onToggle={(studentId, attended) =>
+                setLocalAttendance((prev) => ({ ...prev, [studentId]: attended }))
+              }
+              onPresentAll={() => {
+                const next: Record<string, boolean> = { ...localAttendance };
+                for (const a of detail.attendance) {
+                  next[a.student_id] = true;
+                }
+                setLocalAttendance(next);
+              }}
+              onAbsentAll={() => {
+                const next: Record<string, boolean> = { ...localAttendance };
+                for (const a of detail.attendance) {
+                  next[a.student_id] = false;
+                }
+                setLocalAttendance(next);
+              }}
+              total={detail.attendance.length}
+              presentCount={presentCount}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="primary" loading={savingAttendance} onClick={() => void saveAttendance()}>
+              {t("sessions.saveAttendance")}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.sessionRecitations")}</h2>
+          {manage ? (
+            <Button type="button" variant="primary" onClick={() => setRecitationFormOpen(true)}>
+              {t("recitations.addRecitation")}
+            </Button>
+          ) : null}
+        </div>
+        <RecentRecitationsList items={sessionRecitations} />
+      </section>
+
+      <RecitationFormModal
+        open={recitationFormOpen}
+        mode="create"
+        recitation={null}
+        defaultRoomId={detail.room_id}
+        defaultSessionId={detail.id}
+        onClose={() => setRecitationFormOpen(false)}
+        onSaved={() => void load()}
+      />
+
+      <SessionFormModal
+        open={formOpen}
+        mode="edit"
+        session={detail}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => void load()}
+      />
+
+      <DeleteSessionModal
+        open={deleteOpen}
+        session={detail}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => void confirmDelete()}
+        loading={actionLoading}
+      />
+    </div>
+  );
+}
