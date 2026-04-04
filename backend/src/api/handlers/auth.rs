@@ -10,6 +10,12 @@ use crate::api::types::UserResponse;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
 
+#[derive(Serialize)]
+pub struct ApiMessage {
+    pub message: &'static str,
+    pub code: &'static str,
+}
+
 #[derive(Deserialize)]
 pub struct RegisterRequest {
     pub name: String,
@@ -113,4 +119,126 @@ pub async fn me(auth: AuthenticatedUser) -> Json<UserResponse> {
         email: auth.email,
         role: auth.role,
     })
+}
+
+#[derive(Deserialize)]
+pub struct UpdateProfileRequest {
+    pub name: String,
+    pub email: String,
+}
+
+pub async fn update_profile(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(req): Json<UpdateProfileRequest>,
+) -> Result<Json<UserResponse>, StatusCode> {
+    let name = req.name.trim();
+    let email = req.email.trim().to_lowercase();
+    if name.is_empty() || email.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let existing_lower = auth.email.trim().to_lowercase();
+    if email != existing_lower {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE lower(trim(email)) = $1 AND id <> $2)",
+        )
+        .bind(&email)
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if exists {
+            return Err(StatusCode::CONFLICT);
+        }
+    }
+
+    sqlx::query("UPDATE users SET name = $1, email = $2 WHERE id = $3")
+        .bind(name)
+        .bind(&email)
+        .bind(auth.id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(UserResponse {
+        id: auth.id,
+        name: name.to_string(),
+        email,
+        role: auth.role,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+pub async fn change_password(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiMessage>)> {
+    if req.new_password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "كلمة المرور قصيرة",
+                code: "weak_password",
+            }),
+        ));
+    }
+
+    let hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    if !password::verify_password(&req.current_password, &hash).unwrap_or(false) {
+        // Use 400 (not 401) so the client does not clear the session / redirect to login.
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "كلمة المرور الحالية غير صحيحة",
+                code: "wrong_password",
+            }),
+        ));
+    }
+
+    let new_hash = password::hash_password(&req.new_password).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "خطأ في الخادم",
+                code: "server_error",
+            }),
+        )
+    })?;
+
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(&new_hash)
+        .bind(auth.id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

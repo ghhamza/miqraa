@@ -3,17 +3,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
 import { AttendanceList } from "../../components/sessions/AttendanceList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { BackLink } from "../../components/navigation/BackLink";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 
@@ -59,6 +61,7 @@ export function SessionDetailPage() {
   const [forbidden, setForbidden] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
   const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -165,6 +168,21 @@ export function SessionDetailPage() {
     }
   }
 
+  async function confirmDeleteSeries() {
+    if (!detail?.recurrence_group_id) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.delete<{ deleted: number }>(`sessions/group/${detail.recurrence_group_id}`);
+      navigate("/calendar", { replace: true });
+    } catch (err) {
+      setError(userFacingApiError(err));
+    } finally {
+      setActionLoading(false);
+      setDeleteSeriesOpen(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -200,20 +218,17 @@ export function SessionDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <Link
-        to="/calendar"
-        className="inline-flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
-      >
-        <ArrowRight className="h-4 w-4 rotate-180" />
-        {t("sessions.calendar")}
-      </Link>
+      <BackLink to="/calendar">{t("sessions.calendar")}</BackLink>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h1
-          className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
+          className="flex items-center gap-2 text-2xl font-bold text-[var(--color-text)] md:text-3xl"
           style={{ fontFamily: "var(--font-quran)" }}
         >
-          {title}
+          {detail.recurrence_group_id || detail.schedule_id ? (
+            <Repeat className="h-6 w-6 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+          ) : null}
+          <span>{title}</span>
         </h1>
         {showEditDelete ? (
           <div className="flex flex-wrap gap-2">
@@ -229,6 +244,14 @@ export function SessionDetailPage() {
                 {t("sessions.deleteSession")}
               </span>
             </Button>
+            {detail.recurrence_group_id && detail.status !== "completed" ? (
+              <Button type="button" variant="danger" onClick={() => setDeleteSeriesOpen(true)}>
+                <span className="inline-flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  {t("sessions.deleteAllUpcoming")}
+                </span>
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -262,6 +285,15 @@ export function SessionDetailPage() {
               <Badge variant={statusVariant(detail.status)}>{t(`sessions.${statusLabelKey(detail.status)}`)}</Badge>
             </dd>
           </div>
+          {detail.recurrence_group_id ? (
+            <div>
+              <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.seriesLabel")}</dt>
+              <dd className="mt-1 flex items-center gap-2 text-[var(--color-text)]">
+                <Repeat className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+                {t("sessions.partOfSeries")}
+              </dd>
+            </div>
+          ) : null}
           {detail.notes ? (
             <div>
               <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.notes")}</dt>
@@ -382,6 +414,20 @@ export function SessionDetailPage() {
         onConfirm={() => void confirmDelete()}
         loading={actionLoading}
       />
+
+      <Modal open={deleteSeriesOpen} onClose={() => setDeleteSeriesOpen(false)} title={t("sessions.deleteAllUpcoming")}>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-text)]">{t("sessions.deleteSeriesConfirm")}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setDeleteSeriesOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="button" variant="danger" loading={actionLoading} onClick={() => void confirmDeleteSeries()}>
+              {t("common.delete")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

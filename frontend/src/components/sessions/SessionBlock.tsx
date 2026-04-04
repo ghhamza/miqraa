@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
+import { Repeat } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -46,13 +47,23 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
     >
       {!compact ? (
         <div className="space-y-0.5">
-          <div className="truncate font-semibold">{title}</div>
+          <div className="flex items-center gap-1 truncate font-semibold">
+            {session.recurrence_group_id || session.schedule_id ? (
+              <Repeat className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+            ) : null}
+            <span className="truncate">{title}</span>
+          </div>
           <div className="truncate opacity-95">{timeStr}</div>
           <div className="truncate text-[0.7rem] opacity-90">{session.room_name}</div>
         </div>
       ) : (
         <div className="flex flex-col gap-0.5">
-          <span className="block truncate">{timeStr}</span>
+          <span className="flex items-center gap-1 truncate">
+            {session.recurrence_group_id || session.schedule_id ? (
+              <Repeat className="h-3 w-3 shrink-0 text-white/80" aria-hidden />
+            ) : null}
+            {timeStr}
+          </span>
           <span className="block truncate opacity-90">{session.room_name}</span>
         </div>
       )}

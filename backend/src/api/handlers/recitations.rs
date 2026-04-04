@@ -86,7 +86,7 @@ async fn fetch_recitation_public(
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
          rec.riwaya \
          FROM recitations rec \
-         INNER JOIN users u ON u.id = rec.student_id \
+         LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
          LEFT JOIN users t ON t.id = rec.teacher_id \
          WHERE rec.id = $1",
@@ -103,7 +103,7 @@ fn can_view_recitation(auth: &AuthenticatedUser, rec: &RecitationPublic) -> bool
         return true;
     }
     if auth.role == "student" {
-        return auth.id == rec.student_id;
+        return rec.student_id == Some(auth.id);
     }
     if auth.role == "teacher" {
         return Some(auth.id) == rec.teacher_id;
@@ -127,7 +127,7 @@ async fn can_access_student(
             "SELECT EXISTS (
                 SELECT 1 FROM enrollments e
                 INNER JOIN rooms r ON r.id = e.room_id
-                WHERE e.student_id = $1 AND r.teacher_id = $2
+                WHERE e.student_id = $1 AND r.teacher_id = $2 AND e.status = 'approved'
             )",
         )
         .bind(student_id)
@@ -185,8 +185,10 @@ pub async fn list_recitations(
     auth: AuthenticatedUser,
     Query(params): Query<ListRecitationsQuery>,
 ) -> Result<Json<Vec<RecitationPublic>>, StatusCode> {
-    if params.student_id.is_some() && auth.role == "student" {
-        return Err(StatusCode::FORBIDDEN);
+    if let Some(sid) = params.student_id {
+        if auth.role == "student" && sid != auth.id {
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
     let mut qb = QueryBuilder::new(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
@@ -194,15 +196,15 @@ pub async fn list_recitations(
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
          rec.riwaya \
          FROM recitations rec \
-         INNER JOIN users u ON u.id = rec.student_id \
+         LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
          LEFT JOIN users t ON t.id = rec.teacher_id \
          WHERE 1=1",
     );
     apply_list_role_scope(&mut qb, &auth)?;
-    if let Some(sid) = params.student_id {
+    if let Some(filter_sid) = params.student_id {
         qb.push(" AND rec.student_id = ");
-        qb.push_bind(sid);
+        qb.push_bind(filter_sid);
     }
     if let Some(rid) = params.room_id {
         qb.push(" AND rec.room_id = ");
@@ -537,7 +539,7 @@ pub async fn list_by_student(
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
          rec.riwaya \
          FROM recitations rec \
-         INNER JOIN users u ON u.id = rec.student_id \
+         LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
          LEFT JOIN users t ON t.id = rec.teacher_id \
          WHERE rec.student_id = ",

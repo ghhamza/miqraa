@@ -137,14 +137,16 @@ export function RecitationsPage() {
               header: t("recitations.student"),
               render: (r: RecitationPublic) => (
                 <div className="flex flex-col gap-1">
-                  <span>{r.student_name}</span>
-                  <Link
-                    to={`/students/${r.student_id}/progress`}
-                    className="text-xs text-[var(--color-primary)] hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {t("recitations.progress")}
-                  </Link>
+                  <span>{r.student_name ?? t("recitations.deletedStudent")}</span>
+                  {r.student_id ? (
+                    <Link
+                      to={`/students/${r.student_id}/progress`}
+                      className="text-xs text-[var(--color-primary)] hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t("recitations.progress")}
+                    </Link>
+                  ) : null}
                 </div>
               ),
             },

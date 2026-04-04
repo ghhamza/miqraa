@@ -134,11 +134,11 @@ export function UserFormModal({
             {error}
           </p>
         ) : null}
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" fullWidth onClick={onClose}>
+        <div className="flex flex-wrap gap-3 pt-2">
+          <Button type="button" variant="secondary" className="min-w-0 flex-1" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" fullWidth loading={loading}>
+          <Button type="submit" variant="primary" className="min-w-0 flex-1" loading={loading}>
             {t("common.save")}
           </Button>
         </div>

@@ -3,12 +3,13 @@
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowRight, Flame } from "lucide-react";
+import { Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
 import type { RecitationPublic, StudentProgress } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
+import { BackLink } from "../../components/navigation/BackLink";
 import { SurahProgressGrid } from "../../components/recitations/SurahProgressGrid";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -87,13 +88,7 @@ export function StudentProgressPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      <Link
-        to="/recitations"
-        className="inline-flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
-      >
-        <ArrowRight className="h-4 w-4 rotate-180" />
-        {t("recitations.title")}
-      </Link>
+      <BackLink to="/recitations">{t("recitations.title")}</BackLink>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>

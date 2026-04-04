@@ -4,13 +4,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import type { UserPublic } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
+import { BackLink } from "../../components/navigation/BackLink";
 import { roleTranslationKey } from "../../lib/roleLabels";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 
@@ -70,13 +71,7 @@ export function UserDetailPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link
-        to="/users"
-        className="inline-flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
-      >
-        <ArrowRight className="h-4 w-4 rotate-180" />
-        {t("users.backToList")}
-      </Link>
+      <BackLink to="/users">{t("users.backToList")}</BackLink>
 
       <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">

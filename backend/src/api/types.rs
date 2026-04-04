@@ -42,6 +42,34 @@ pub struct RoomPublic {
     pub created_at: DateTime<Utc>,
     pub riwaya: String,
     pub enrolled_count: i64,
+    pub is_public: bool,
+    pub enrollment_open: bool,
+    pub requires_approval: bool,
+    pub pending_count: i64,
+    pub my_status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MyEnrollmentStatus {
+    pub status: Option<String>,
+    pub enrollment_id: Option<Uuid>,
+    pub enrolled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct JoinResult {
+    pub status: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct EnrollmentWithStatus {
+    pub id: Uuid,
+    pub student_id: Uuid,
+    pub student_name: String,
+    pub student_email: String,
+    pub enrolled_at: DateTime<Utc>,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -91,7 +119,21 @@ pub struct SessionPublic {
     pub duration_minutes: i32,
     pub status: String,
     pub notes: Option<String>,
+    pub recurrence_group_id: Option<Uuid>,
+    pub recurrence_rule: Option<String>,
+    pub schedule_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct CreateSessionsResponse {
+    pub sessions: Vec<SessionPublic>,
+    pub count: usize,
+}
+
+#[derive(Serialize)]
+pub struct DeleteGroupResult {
+    pub deleted: i32,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -113,8 +155,8 @@ pub struct SessionDetailResponse {
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct RecitationPublic {
     pub id: Uuid,
-    pub student_id: Uuid,
-    pub student_name: String,
+    pub student_id: Option<Uuid>,
+    pub student_name: Option<String>,
     pub room_id: Option<Uuid>,
     pub room_name: Option<String>,
     pub session_id: Option<Uuid>,

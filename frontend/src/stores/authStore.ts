@@ -13,6 +13,8 @@ interface AuthState {
   login: (token: string, user: User) => void;
   logout: () => void;
   loadUser: () => Promise<void>;
+  /** Update cached user (e.g. after profile save). */
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -27,6 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem("miqraa_token");
     set({ token: null, user: null });
   },
+  setUser: (user) => set({ user }),
   loadUser: async () => {
     const token = localStorage.getItem("miqraa_token");
     if (!token) {

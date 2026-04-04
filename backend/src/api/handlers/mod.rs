@@ -5,5 +5,6 @@ pub mod auth;
 pub mod enrollments;
 pub mod recitations;
 pub mod rooms;
+pub mod schedules;
 pub mod sessions;
 pub mod users;

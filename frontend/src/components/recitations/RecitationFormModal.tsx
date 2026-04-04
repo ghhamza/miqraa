@@ -82,7 +82,7 @@ export function RecitationFormModal({
     if (!open) return;
     setError(null);
     if (mode === "edit" && recitation) {
-      setStudentId(recitation.student_id);
+      setStudentId(recitation.student_id ?? "");
       setRoomId(recitation.room_id ?? "");
       setSessionId(recitation.session_id ?? "");
       setSurah(recitation.surah);
@@ -263,21 +263,27 @@ export function RecitationFormModal({
           <label className="mb-1 block text-sm font-medium text-[var(--color-text)]" htmlFor="rec-student">
             {t("recitations.student")}
           </label>
-          <select
-            id="rec-student"
-            required
-            disabled={studentLocked}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            value={studentId}
-            onChange={(e) => setStudentId(e.target.value)}
-          >
-            <option value="">{students.length === 0 ? t("common.loading") : t("recitations.selectStudent")}</option>
-            {students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          {mode === "edit" && recitation && recitation.student_id === null ? (
+            <p id="rec-student" className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[var(--color-text-muted)]">
+              {t("recitations.deletedStudent")}
+            </p>
+          ) : (
+            <select
+              id="rec-student"
+              required={mode === "create"}
+              disabled={studentLocked}
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+            >
+              <option value="">{students.length === 0 ? t("common.loading") : t("recitations.selectStudent")}</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>

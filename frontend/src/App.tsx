@@ -14,11 +14,13 @@ import { HomePage } from "./pages/HomePage";
 import { UsersPage } from "./pages/users/UsersPage";
 import { UserDetailPage } from "./pages/users/UserDetailPage";
 import { RoomsPage } from "./pages/rooms/RoomsPage";
+import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
 import { RoomDetailPage } from "./pages/rooms/RoomDetailPage";
 import { CalendarPage } from "./pages/sessions/CalendarPage";
 import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
+import { ProfilePage } from "./pages/profile/ProfilePage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
 
@@ -66,10 +68,19 @@ function AppRoutes() {
           }
         />
         <Route path="rooms" element={<RoomsPage />} />
+        <Route
+          path="rooms/archived"
+          element={
+            <AdminRoute>
+              <ArchivedRoomsPage />
+            </AdminRoute>
+          }
+        />
         <Route path="rooms/:id" element={<RoomDetailPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="sessions/:id" element={<SessionDetailPage />} />
         <Route path="recitations" element={<RecitationsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="students/:id/progress" element={<StudentProgressPage />} />
         <Route path="mushaf" element={<Navigate to="/mushaf/1" replace />} />
         <Route path="mushaf/:page" element={<MushafPage />} />

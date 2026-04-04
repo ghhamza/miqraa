@@ -48,6 +48,23 @@ export interface Room {
   created_at: string;
   riwaya: QuranRiwaya;
   enrolled_count: number;
+  is_public: boolean;
+  enrollment_open: boolean;
+  requires_approval: boolean;
+  pending_count: number;
+  /** Set for students in room list/detail: current user's enrollment state */
+  my_status: "pending" | "approved" | "rejected" | null;
+}
+
+export interface MyEnrollmentStatus {
+  status: "pending" | "approved" | "rejected" | null;
+  enrollment_id: string | null;
+  enrolled_at: string | null;
+}
+
+export interface JoinResult {
+  status: string;
+  message: string;
 }
 
 export interface Enrollment {
@@ -56,6 +73,10 @@ export interface Enrollment {
   student_name: string;
   student_email: string;
   enrolled_at: string;
+}
+
+export interface EnrollmentWithStatus extends Enrollment {
+  status: "pending" | "approved" | "rejected";
 }
 
 export interface EnrollmentCount {
@@ -110,7 +131,34 @@ export interface SessionPublic {
   duration_minutes: number;
   status: SessionStatus;
   notes: string | null;
+  recurrence_group_id: string | null;
+  recurrence_rule: string | null;
+  schedule_id: string | null;
   created_at: string;
+}
+
+export interface CreateSessionsResponse {
+  sessions: SessionPublic[];
+  count: number;
+}
+
+/** Weekly slot template for recurring session generation */
+export interface Schedule {
+  id: string;
+  room_id: string;
+  room_name: string;
+  title: string | null;
+  day_of_week: number;
+  start_time_minutes: number;
+  duration_minutes: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface GenerateResult {
+  created: number;
+  skipped: number;
+  sessions: { id: string; scheduled_at: string }[];
 }
 
 export interface SessionAttendance {
@@ -130,8 +178,8 @@ export type RecitationGrade = "excellent" | "good" | "needs_work" | "weak";
 
 export interface RecitationPublic {
   id: string;
-  student_id: string;
-  student_name: string;
+  student_id: string | null;
+  student_name: string | null;
   room_id: string | null;
   room_name: string | null;
   session_id: string | null;

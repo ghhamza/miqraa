@@ -2,21 +2,35 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useNavigate } from "react-router-dom";
-import { Pencil, Trash2, Users } from "lucide-react";
+import { Archive, Pencil, RotateCcw, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Room } from "../../types";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 
 interface RoomCardProps {
   room: Room;
   canManage: boolean;
   onEdit: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  user?: { id: string; role: string } | null;
+  onJoin?: (room: Room) => void;
+  joinLoadingId?: string | null;
 }
 
-export function RoomCard({ room, canManage, onEdit, onDelete }: RoomCardProps) {
+export function RoomCard({
+  room,
+  canManage,
+  onEdit,
+  onArchive,
+  onRestore,
+  user,
+  onJoin,
+  joinLoadingId,
+}: RoomCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { medium } = useLocaleDate();
@@ -46,6 +60,11 @@ export function RoomCard({ room, canManage, onEdit, onDelete }: RoomCardProps) {
           >
             {t(`mushaf.${room.riwaya}`)}
           </span>
+          {canManage && room.pending_count > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-xs font-semibold text-[var(--color-gold)]">
+              {room.pending_count} {t("enrollment.pendingRequests")}
+            </span>
+          ) : null}
         </div>
 
         <p className="text-sm text-[var(--color-text-muted)]">
@@ -80,6 +99,35 @@ export function RoomCard({ room, canManage, onEdit, onDelete }: RoomCardProps) {
           <span className="text-xs text-[var(--color-text-muted)]">{medium(room.created_at)}</span>
         </div>
 
+        {user?.role === "student" && onJoin ? (
+          <div className="border-t border-gray-100 pt-3" onClick={(e) => e.stopPropagation()}>
+            {room.my_status === "approved" ? (
+              <Badge variant="green">{t("enrollment.statusApproved")}</Badge>
+            ) : room.my_status === "pending" ? (
+              <Badge variant="gold">{t("enrollment.statusPending")}</Badge>
+            ) : room.my_status === "rejected" ? (
+              <Badge variant="gray">{t("enrollment.statusRejected")}</Badge>
+            ) : !room.enrollment_open ? (
+              <Badge variant="gray">{t("enrollment.enrollmentClosed")}</Badge>
+            ) : room.enrolled_count >= room.max_students ? (
+              <Badge variant="gray">{t("enrollment.roomFull")}</Badge>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                fullWidth
+                loading={joinLoadingId === room.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onJoin(room);
+                }}
+              >
+                {room.requires_approval ? t("enrollment.requestJoin") : t("enrollment.joinRoom")}
+              </Button>
+            )}
+          </div>
+        ) : null}
+
         {canManage ? (
           <div className="flex justify-end gap-2 border-t border-gray-100 pt-3" onClick={(e) => e.stopPropagation()}>
             <button
@@ -93,17 +141,31 @@ export function RoomCard({ room, canManage, onEdit, onDelete }: RoomCardProps) {
             >
               <Pencil className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              className="rounded-lg p-2 text-red-600 transition hover:bg-red-50"
-              aria-label={t("common.delete")}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {room.is_active ? (
+              <button
+                type="button"
+                className="rounded-lg p-2 text-amber-700 transition hover:bg-amber-50"
+                aria-label={t("common.archive")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive();
+                }}
+              >
+                <Archive className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="rounded-lg p-2 text-[var(--color-primary)] transition hover:bg-[var(--color-primary)]/10"
+                aria-label={t("common.restore")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore();
+                }}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            )}
           </div>
         ) : null}
       </div>

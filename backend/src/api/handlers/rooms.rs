@@ -27,6 +27,9 @@ pub struct CreateRoomRequest {
     pub teacher_id: Option<Uuid>,
     pub max_students: Option<i32>,
     pub riwaya: Option<String>,
+    pub is_public: Option<bool>,
+    pub enrollment_open: Option<bool>,
+    pub requires_approval: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -35,6 +38,9 @@ pub struct UpdateRoomRequest {
     pub max_students: Option<i32>,
     pub is_active: Option<bool>,
     pub riwaya: Option<String>,
+    pub is_public: Option<bool>,
+    pub enrollment_open: Option<bool>,
+    pub requires_approval: Option<bool>,
 }
 
 fn require_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> {
@@ -140,14 +146,35 @@ pub async fn list_rooms(
     auth: AuthenticatedUser,
     Query(params): Query<ListRoomsQuery>,
 ) -> Result<Json<Vec<RoomPublic>>, StatusCode> {
-    let mut qb = QueryBuilder::new(
-        "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-         r.riwaya::text AS riwaya, \
-         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id), 0) AS enrolled_count \
-         FROM rooms r \
-         INNER JOIN users u ON u.id = r.teacher_id \
-         WHERE 1=1",
-    );
+    let mut qb = match auth.role.as_str() {
+        "student" => {
+            let mut b = QueryBuilder::new(
+                "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+                 r.riwaya::text AS riwaya, \
+                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+                 r.is_public, r.enrollment_open, r.requires_approval, \
+                 COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+                 e_my.status AS my_status \
+                 FROM rooms r \
+                 INNER JOIN users u ON u.id = r.teacher_id \
+                 LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
+            );
+            b.push_bind(auth.id);
+            b.push(" WHERE 1=1");
+            b
+        }
+        _ => QueryBuilder::new(
+            "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+             r.riwaya::text AS riwaya, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             r.is_public, r.enrollment_open, r.requires_approval, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+             CAST(NULL AS TEXT) AS my_status \
+             FROM rooms r \
+             INNER JOIN users u ON u.id = r.teacher_id \
+             WHERE 1=1",
+        ),
+    };
 
     match auth.role.as_str() {
         "admin" => {}
@@ -156,6 +183,11 @@ pub async fn list_rooms(
             qb.push_bind(auth.id);
         }
         "student" => {
+            qb.push(
+                " AND (r.is_public = true OR EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = r.id AND e.student_id = ",
+            );
+            qb.push_bind(auth.id);
+            qb.push(" AND e.status IN ('approved', 'pending')))");
             qb.push(" AND r.is_active = true");
         }
         _ => return Err(StatusCode::FORBIDDEN),
@@ -191,22 +223,58 @@ pub async fn get_room(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<RoomPublic>, StatusCode> {
-    let room = sqlx::query_as::<_, RoomPublic>(
-        "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-         r.riwaya::text AS riwaya, \
-         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id), 0) AS enrolled_count \
-         FROM rooms r \
-         INNER JOIN users u ON u.id = r.teacher_id \
-         WHERE r.id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await
+    let room = if auth.role == "student" {
+        sqlx::query_as::<_, RoomPublic>(
+            "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+             r.riwaya::text AS riwaya, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             r.is_public, r.enrollment_open, r.requires_approval, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+             (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status \
+             FROM rooms r \
+             INNER JOIN users u ON u.id = r.teacher_id \
+             WHERE r.id = $1",
+        )
+        .bind(id)
+        .bind(auth.id)
+        .fetch_optional(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, RoomPublic>(
+            "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
+             r.riwaya::text AS riwaya, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+             r.is_public, r.enrollment_open, r.requires_approval, \
+             COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+             CAST(NULL AS TEXT) AS my_status \
+             FROM rooms r \
+             INNER JOIN users u ON u.id = r.teacher_id \
+             WHERE r.id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+    }
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    if auth.role == "student" && !room.is_active {
-        return Err(StatusCode::FORBIDDEN);
+    if auth.role == "student" {
+        if !room.is_active {
+            return Err(StatusCode::FORBIDDEN);
+        }
+        if !room.is_public {
+            let has: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM enrollments WHERE room_id = $1 AND student_id = $2)",
+            )
+            .bind(id)
+            .bind(auth.id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            if !has {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
     }
 
     Ok(Json(room))
@@ -247,14 +315,22 @@ pub async fn create_room(
         .and_then(parse_riwaya)
         .unwrap_or("hafs");
 
+    let is_public = req.is_public.unwrap_or(false);
+    let enrollment_open = req.enrollment_open.unwrap_or(true);
+    let requires_approval = req.requires_approval.unwrap_or(true);
+
     sqlx::query(
-        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya) VALUES ($1, $2, $3, $4, true, $5)",
+        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, is_public, enrollment_open, requires_approval) \
+         VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8)",
     )
     .bind(id)
     .bind(name)
     .bind(teacher_id)
     .bind(max_students)
     .bind(riwaya)
+    .bind(is_public)
+    .bind(enrollment_open)
+    .bind(requires_approval)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -265,7 +341,10 @@ pub async fn create_room(
     let room = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, \
-         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id), 0) AS enrolled_count \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         r.is_public, r.enrollment_open, r.requires_approval, \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+         CAST(NULL AS TEXT) AS my_status \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -287,7 +366,10 @@ pub async fn update_room(
     let existing = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, \
-         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id), 0) AS enrolled_count \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         r.is_public, r.enrollment_open, r.requires_approval, \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+         CAST(NULL AS TEXT) AS my_status \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -302,7 +384,14 @@ pub async fn update_room(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    if req.name.is_none() && req.max_students.is_none() && req.is_active.is_none() && req.riwaya.is_none() {
+    if req.name.is_none()
+        && req.max_students.is_none()
+        && req.is_active.is_none()
+        && req.riwaya.is_none()
+        && req.is_public.is_none()
+        && req.enrollment_open.is_none()
+        && req.requires_approval.is_none()
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -316,18 +405,25 @@ pub async fn update_room(
         .transpose()?
         .map(|s| s.to_string())
         .unwrap_or(existing.riwaya.clone());
+    let is_public = req.is_public.unwrap_or(existing.is_public);
+    let enrollment_open = req.enrollment_open.unwrap_or(existing.enrollment_open);
+    let requires_approval = req.requires_approval.unwrap_or(existing.requires_approval);
 
     if name.is_empty() || max_students < 1 {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     sqlx::query(
-        "UPDATE rooms SET name = $1, max_students = $2, is_active = $3, riwaya = $4 WHERE id = $5",
+        "UPDATE rooms SET name = $1, max_students = $2, is_active = $3, riwaya = $4, \
+         is_public = $5, enrollment_open = $6, requires_approval = $7 WHERE id = $8",
     )
     .bind(&name)
     .bind(max_students)
     .bind(is_active)
     .bind(&riwaya)
+    .bind(is_public)
+    .bind(enrollment_open)
+    .bind(requires_approval)
     .bind(id)
     .execute(&state.db)
     .await
@@ -336,7 +432,10 @@ pub async fn update_room(
     let room = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
          r.riwaya::text AS riwaya, \
-         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id), 0) AS enrolled_count \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
+         r.is_public, r.enrollment_open, r.requires_approval, \
+         COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
+         CAST(NULL AS TEXT) AS my_status \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -349,18 +448,19 @@ pub async fn update_room(
     Ok(Json(room))
 }
 
+/// Deactivates the room (archive). Historical enrollments, sessions, and recitations are preserved.
 pub async fn delete_room(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
-    let row: Option<(Uuid,)> = sqlx::query_as("SELECT teacher_id FROM rooms WHERE id = $1")
+    let row: Option<(Uuid, bool)> = sqlx::query_as("SELECT teacher_id, is_active FROM rooms WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let Some((teacher_id,)) = row else {
+    let Some((teacher_id, was_active)) = row else {
         return Err(StatusCode::NOT_FOUND);
     };
 
@@ -368,7 +468,11 @@ pub async fn delete_room(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let result = sqlx::query("DELETE FROM rooms WHERE id = $1")
+    if !was_active {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let result = sqlx::query("UPDATE rooms SET is_active = false WHERE id = $1 AND is_active = true")
         .bind(id)
         .execute(&state.db)
         .await

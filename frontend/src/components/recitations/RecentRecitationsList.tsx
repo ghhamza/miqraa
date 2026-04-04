@@ -30,7 +30,9 @@ export function RecentRecitationsList({ items, showStudent }: RecentRecitationsL
         >
           <div className="min-w-0 flex-1 text-start">
             {showStudent ? (
-              <p className="font-medium text-[var(--color-text)]">{r.student_name}</p>
+              <p className="font-medium text-[var(--color-text)]">
+                {r.student_name ?? t("recitations.deletedStudent")}
+              </p>
             ) : null}
             <p style={{ fontFamily: "var(--font-quran)" }} className="text-[var(--color-text)]">
               {getSurahNameWithArabic(r.surah, loc)} · {r.ayah_start}–{r.ayah_end}

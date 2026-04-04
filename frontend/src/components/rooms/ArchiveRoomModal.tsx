@@ -7,15 +7,16 @@ import { api, userFacingApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 
-interface DeleteRoomModalProps {
+interface ArchiveRoomModalProps {
   open: boolean;
   roomId: string | null;
   roomName: string;
   onClose: () => void;
-  onDeleted: () => void;
+  onArchived: () => void;
 }
 
-export function DeleteRoomModal({ open, roomId, roomName, onClose, onDeleted }: DeleteRoomModalProps) {
+/** Archives the room (sets inactive). The API uses DELETE but only deactivates the row. */
+export function ArchiveRoomModal({ open, roomId, roomName, onClose, onArchived }: ArchiveRoomModalProps) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,13 +25,13 @@ export function DeleteRoomModal({ open, roomId, roomName, onClose, onDeleted }: 
     if (open) setError(null);
   }, [open]);
 
-  async function confirmDelete() {
+  async function confirmArchive() {
     if (!roomId || loading) return;
     setLoading(true);
     setError(null);
     try {
       await api.delete(`rooms/${roomId}`);
-      onDeleted();
+      onArchived();
       onClose();
     } catch (err) {
       setError(userFacingApiError(err));
@@ -40,21 +41,21 @@ export function DeleteRoomModal({ open, roomId, roomName, onClose, onDeleted }: 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={t("rooms.deleteTitle")}>
+    <Modal open={open} onClose={onClose} title={t("rooms.archiveTitle")}>
       <p className="mb-6 text-[var(--color-text-muted)]">
-        {t("rooms.deleteConfirm", { name: roomName || "—" })}
+        {t("rooms.archiveConfirm", { name: roomName || "—" })}
       </p>
       {error ? (
         <p className="mb-4 text-center text-sm text-red-600" role="alert">
           {error}
         </p>
       ) : null}
-      <div className="flex gap-3">
-        <Button type="button" variant="secondary" fullWidth onClick={onClose}>
+      <div className="flex flex-wrap gap-3">
+        <Button type="button" variant="secondary" className="min-w-0 flex-1" onClick={onClose}>
           {t("common.cancel")}
         </Button>
-        <Button type="button" variant="danger" fullWidth loading={loading} onClick={confirmDelete}>
-          {t("common.delete")}
+        <Button type="button" variant="danger" className="min-w-0 flex-1" loading={loading} onClick={confirmArchive}>
+          {t("common.archive")}
         </Button>
       </div>
     </Modal>

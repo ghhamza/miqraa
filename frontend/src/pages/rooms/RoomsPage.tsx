@@ -2,17 +2,18 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, DoorOpen } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, userFacingApiError } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import type { Room, RoomStats } from "../../types";
+import type { JoinResult, Room, RoomStats } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { RoomCard } from "../../components/rooms/RoomCard";
 import { RoomFormModal } from "../../components/rooms/RoomFormModal";
-import { DeleteRoomModal } from "../../components/rooms/DeleteRoomModal";
+import { ArchiveRoomModal } from "../../components/rooms/ArchiveRoomModal";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -37,14 +38,16 @@ export function RoomsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("active");
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Room | null>(null);
+  const [joinLoading, setJoinLoading] = useState<string | null>(null);
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
 
   const fetchRoomsPage = useCallback(async () => {
     return Promise.all([
@@ -94,9 +97,34 @@ export function RoomsPage() {
     setFormOpen(true);
   }
 
-  function openDelete(r: Room) {
-    setDeleteTarget(r);
-    setDeleteOpen(true);
+  function openArchive(r: Room) {
+    setArchiveTarget(r);
+    setArchiveOpen(true);
+  }
+
+  async function restoreRoom(r: Room) {
+    try {
+      await api.put(`rooms/${r.id}`, { is_active: true });
+      await refreshAll();
+    } catch {
+      /* toast or surface error — optional */
+    }
+  }
+
+  async function handleJoin(room: Room) {
+    if (joinLoading) return;
+    setJoinLoading(room.id);
+    setJoinMessage(null);
+    try {
+      const { data } = await api.post<JoinResult>(`rooms/${room.id}/join`);
+      setJoinMessage(data.status === "pending" ? t("enrollment.requestSent") : t("enrollment.joinedSuccess"));
+      await refreshAll();
+    } catch (err) {
+      setJoinMessage(userFacingApiError(err));
+    } finally {
+      setJoinLoading(null);
+      setTimeout(() => setJoinMessage(null), 4000);
+    }
   }
 
   return (
@@ -121,16 +149,32 @@ export function RoomsPage() {
         </div>
       ) : null}
 
+      {joinMessage ? (
+        <div
+          className="rounded-xl border border-gray-200 bg-[var(--color-bg)] px-4 py-3 text-sm text-[var(--color-text)]"
+          role="status"
+        >
+          {joinMessage}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-[var(--color-text)]">{t("rooms.title")}</h1>
-        {canAddRoom(user) ? (
-          <Button type="button" variant="primary" onClick={openCreate}>
-            <span className="inline-flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              {t("rooms.addRoom")}
-            </span>
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin ? (
+            <Button type="button" variant="secondary" asChild>
+              <Link to="/rooms/archived">{t("nav.archivedRooms")}</Link>
+            </Button>
+          ) : null}
+          {canAddRoom(user) ? (
+            <Button type="button" variant="primary" onClick={openCreate}>
+              <span className="inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                {t("rooms.addRoom")}
+              </span>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-2xl bg-[var(--color-surface)] p-4 shadow-sm">
@@ -181,8 +225,12 @@ export function RoomsPage() {
               key={r.id}
               room={r}
               canManage={canManageRoom(user, r)}
+              user={user}
+              onJoin={user?.role === "student" ? handleJoin : undefined}
+              joinLoadingId={joinLoading}
               onEdit={() => openEdit(r)}
-              onDelete={() => openDelete(r)}
+              onArchive={() => openArchive(r)}
+              onRestore={() => void restoreRoom(r)}
             />
           ))}
         </div>
@@ -197,15 +245,15 @@ export function RoomsPage() {
         onSaved={() => void refreshAll()}
       />
 
-      <DeleteRoomModal
-        open={deleteOpen}
-        roomId={deleteTarget?.id ?? null}
-        roomName={deleteTarget?.name ?? ""}
+      <ArchiveRoomModal
+        open={archiveOpen}
+        roomId={archiveTarget?.id ?? null}
+        roomName={archiveTarget?.name ?? ""}
         onClose={() => {
-          setDeleteOpen(false);
-          setDeleteTarget(null);
+          setArchiveOpen(false);
+          setArchiveTarget(null);
         }}
-        onDeleted={() => void refreshAll()}
+        onArchived={() => void refreshAll()}
       />
     </div>
   );

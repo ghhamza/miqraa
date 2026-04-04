@@ -16,7 +16,7 @@ function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "b
   return "green";
 }
 
-function countdownLabel(iso: string, t: (k: string, o?: Record<string, unknown>) => string): string {
+export function sessionCountdownLabel(iso: string, t: (k: string, o?: Record<string, unknown>) => string): string {
   const d = new Date(iso);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -34,11 +34,19 @@ function countdownLabel(iso: string, t: (k: string, o?: Record<string, unknown>)
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
-export function UpcomingSessionsWidget() {
+export interface UpcomingSessionsWidgetProps {
+  /** Max rows to show (default: all from API). */
+  maxItems?: number;
+  showViewCalendarLink?: boolean;
+}
+
+export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink }: UpcomingSessionsWidgetProps) {
   const { t, i18n } = useTranslation();
   const { mediumTime } = useLocaleDate();
   const [sessions, setSessions] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const displaySessions = maxItems != null ? sessions.slice(0, maxItems) : sessions;
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +87,7 @@ export function UpcomingSessionsWidget() {
     <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.upcomingSectionTitle")}</h2>
       <ul className="mt-4 space-y-3">
-        {sessions.map((s) => (
+        {displaySessions.map((s) => (
           <li key={s.id}>
             <Link
               to={`/sessions/${s.id}`}
@@ -89,7 +97,7 @@ export function UpcomingSessionsWidget() {
                 <div>
                   <p className="font-medium text-[var(--color-text)]">{s.room_name}</p>
                   <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(s.scheduled_at)}</p>
-                  <p className="mt-1 text-xs text-[var(--color-primary)]">{countdownLabel(s.scheduled_at, t)}</p>
+                  <p className="mt-1 text-xs text-[var(--color-primary)]">{sessionCountdownLabel(s.scheduled_at, t)}</p>
                 </div>
                 <Badge variant={sessionStatusVariant(s.status)}>{t(`sessions.${statusKey(s.status)}`)}</Badge>
               </div>
@@ -97,6 +105,16 @@ export function UpcomingSessionsWidget() {
           </li>
         ))}
       </ul>
+      {showViewCalendarLink ? (
+        <div className="mt-4 border-t border-gray-100 pt-4 text-center">
+          <Link
+            to="/calendar"
+            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+          >
+            {t("home.viewCalendar")}
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

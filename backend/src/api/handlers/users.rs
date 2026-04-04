@@ -39,6 +39,7 @@ pub struct UpdateUserRequest {
 #[derive(Serialize)]
 pub struct DeleteSelfError {
     pub message: &'static str,
+    pub code: &'static str,
 }
 
 fn require_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> {
@@ -286,6 +287,7 @@ pub async fn delete_user(
             StatusCode::FORBIDDEN,
             Json(DeleteSelfError {
                 message: "غير مصرح",
+                code: "no_permission",
             }),
         )
     })?;
@@ -295,6 +297,31 @@ pub async fn delete_user(
             StatusCode::BAD_REQUEST,
             Json(DeleteSelfError {
                 message: "لا يمكنك حذف حسابك",
+                code: "delete_self_account",
+            }),
+        ));
+    }
+
+    let has_rooms: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rooms WHERE teacher_id = $1)")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(DeleteSelfError {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    if has_rooms {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(DeleteSelfError {
+                message: "لا يمكن حذف معلّم لديه غرف",
+                code: "teacher_has_rooms",
             }),
         ));
     }
@@ -303,13 +330,22 @@ pub async fn delete_user(
         .bind(id)
         .execute(&state.db)
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(DeleteSelfError { message: "خطأ في الخادم" })))?;
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(DeleteSelfError {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
 
     if result.rows_affected() == 0 {
         return Err((
             StatusCode::NOT_FOUND,
             Json(DeleteSelfError {
                 message: "غير موجود",
+                code: "not_found",
             }),
         ));
     }

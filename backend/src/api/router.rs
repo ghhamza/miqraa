@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 use axum::{
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
@@ -22,7 +22,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(|| async { "بسم الله — Al-Miqraa is running" }))
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
-        .route("/api/auth/me", get(handlers::auth::me))
+        .route(
+            "/api/auth/me",
+            get(handlers::auth::me).put(handlers::auth::update_profile),
+        )
+        .route("/api/auth/password", put(handlers::auth::change_password))
         .route("/api/users/stats", get(handlers::users::stats))
         .route(
             "/api/users",
@@ -61,6 +65,26 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::enrollments::enrollment_count),
         )
         .route(
+            "/api/rooms/{room_id}/join",
+            post(handlers::enrollments::join_room),
+        )
+        .route(
+            "/api/rooms/{room_id}/my-enrollment",
+            get(handlers::enrollments::my_enrollment).delete(handlers::enrollments::cancel_my_enrollment),
+        )
+        .route(
+            "/api/rooms/{room_id}/enrollments/pending",
+            get(handlers::enrollments::list_pending_enrollments),
+        )
+        .route(
+            "/api/rooms/{room_id}/enrollments/{enrollment_id}/approve",
+            put(handlers::enrollments::approve_enrollment),
+        )
+        .route(
+            "/api/rooms/{room_id}/enrollments/{enrollment_id}/reject",
+            put(handlers::enrollments::reject_enrollment),
+        )
+        .route(
             "/api/rooms/{room_id}/enrollments/{enrollment_id}",
             axum::routing::delete(handlers::enrollments::delete_enrollment),
         )
@@ -73,8 +97,32 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::sessions::list_for_room),
         )
         .route(
+            "/api/rooms/{room_id}/schedules",
+            get(handlers::schedules::list_schedules),
+        )
+        .route(
+            "/api/schedules/batch",
+            post(handlers::schedules::create_batch_schedules),
+        )
+        .route(
+            "/api/schedules/generate",
+            post(handlers::schedules::generate_sessions),
+        )
+        .route(
+            "/api/schedules",
+            post(handlers::schedules::create_schedule),
+        )
+        .route(
+            "/api/schedules/{id}",
+            put(handlers::schedules::update_schedule).delete(handlers::schedules::delete_schedule),
+        )
+        .route(
             "/api/sessions/upcoming",
             get(handlers::sessions::upcoming),
+        )
+        .route(
+            "/api/sessions/group/{group_id}",
+            delete(handlers::sessions::delete_recurrence_group),
         )
         .route(
             "/api/sessions",

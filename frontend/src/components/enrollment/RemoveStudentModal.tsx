@@ -56,11 +56,11 @@ export function RemoveStudentModal({
           {error}
         </p>
       ) : null}
-      <div className="flex gap-3">
-        <Button type="button" variant="secondary" fullWidth onClick={onClose}>
+      <div className="flex flex-wrap gap-3">
+        <Button type="button" variant="secondary" className="min-w-0 flex-1" onClick={onClose}>
           {t("common.cancel")}
         </Button>
-        <Button type="button" variant="danger" fullWidth loading={loading} onClick={confirm}>
+        <Button type="button" variant="danger" className="min-w-0 flex-1" loading={loading} onClick={confirm}>
           {t("enrollment.removeStudent")}
         </Button>
       </div>

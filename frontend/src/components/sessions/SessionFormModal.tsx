@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { Room, SessionPublic } from "../../types";
+import type { CreateSessionsResponse, Room, SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
@@ -42,6 +42,12 @@ export function SessionFormModal({
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatDays, setRepeatDays] = useState<number[]>([]);
+  const [repeatWeeks, setRepeatWeeks] = useState(4);
+  const [repeatEndMode, setRepeatEndMode] = useState<"weeks" | "date">("weeks");
+  const [repeatEndDate, setRepeatEndDate] = useState("");
+  const [createdCount, setCreatedCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +58,12 @@ export function SessionFormModal({
       setDatetimeLocal(formatDatetimeLocalValue(new Date(session.scheduled_at)));
       setDuration(session.duration_minutes);
       setNotes(session.notes ?? "");
+      setRepeatEnabled(false);
+      setRepeatDays([]);
+      setRepeatWeeks(4);
+      setRepeatEndMode("weeks");
+      setRepeatEndDate("");
+      setCreatedCount(null);
     } else {
       const dt = defaultDatetime ? new Date(defaultDatetime) : new Date();
       if (presetMorningStart) {
@@ -62,6 +74,12 @@ export function SessionFormModal({
       setDatetimeLocal(formatDatetimeLocalValue(dt));
       setDuration(60);
       setNotes("");
+      setRepeatEnabled(false);
+      setRepeatDays([]);
+      setRepeatWeeks(4);
+      setRepeatEndMode("weeks");
+      setRepeatEndDate("");
+      setCreatedCount(null);
     }
   }, [open, mode, session, defaultRoomId, defaultDatetime, presetMorningStart]);
 
@@ -91,6 +109,14 @@ export function SessionFormModal({
     };
   }, [open, defaultRoomId]);
 
+  useEffect(() => {
+    if (!repeatEnabled || !datetimeLocal) return;
+    const d = new Date(datetimeLocal);
+    const day = d.getDay();
+    const mondayBased = day === 0 ? 6 : day - 1;
+    setRepeatDays((prev) => (prev.includes(mondayBased) ? prev : [...prev, mondayBased]));
+  }, [repeatEnabled, datetimeLocal]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading || !roomId) return;
@@ -103,22 +129,50 @@ export function SessionFormModal({
       setError(t("errors.badRequest"));
       return;
     }
-    if (mode === "create" && scheduled.getTime() <= Date.now()) {
+    const allowPastAnchor = mode === "create" && repeatEnabled && repeatDays.length > 0;
+    if (mode === "create" && scheduled.getTime() <= Date.now() && !allowPastAnchor) {
       setError(t("sessions.pastDate"));
       return;
     }
+    if (mode === "create" && repeatEnabled && repeatDays.length > 0) {
+      if (repeatEndMode === "date" && !repeatEndDate.trim()) {
+        setError(t("errors.badRequest"));
+        return;
+      }
+    }
     setError(null);
+    setCreatedCount(null);
     setLoading(true);
     try {
       const iso = scheduled.toISOString();
       if (mode === "create") {
-        await api.post("sessions", {
+        const payload: Record<string, unknown> = {
           room_id: roomId,
           title: title.trim() || null,
           scheduled_at: iso,
           duration_minutes: duration,
           notes: notes.trim() || null,
-        });
+        };
+
+        if (repeatEnabled && repeatDays.length > 0) {
+          payload.repeat_days = [...repeatDays].sort((a, b) => a - b);
+          if (repeatEndMode === "weeks") {
+            payload.repeat_weeks = Math.max(1, Math.min(12, repeatWeeks));
+          } else if (repeatEndDate) {
+            payload.repeat_end_date = new Date(`${repeatEndDate}T23:59:59`).toISOString();
+          }
+        }
+
+        const { data } = await api.post<CreateSessionsResponse>("sessions", payload);
+        if (data.count > 1) {
+          setCreatedCount(data.count);
+          setTimeout(() => {
+            onSaved();
+            onClose();
+            setCreatedCount(null);
+          }, 1500);
+          return;
+        }
       } else if (session) {
         await api.put(`sessions/${session.id}`, {
           title: title.trim() || null,
@@ -188,6 +242,105 @@ export function SessionFormModal({
             required
           />
         </div>
+        {mode === "create" ? (
+          <div className="space-y-3">
+            <label className="flex cursor-pointer items-center gap-3">
+              <div
+                role="switch"
+                aria-checked={repeatEnabled}
+                tabIndex={0}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  repeatEnabled ? "bg-[var(--color-primary)]" : "bg-gray-300"
+                }`}
+                onClick={() => setRepeatEnabled(!repeatEnabled)}
+                onKeyDown={(e) => e.key === "Enter" && setRepeatEnabled(!repeatEnabled)}
+              >
+                <div
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    repeatEnabled
+                      ? "ltr:translate-x-5 rtl:-translate-x-5"
+                      : "ltr:translate-x-0.5 rtl:-translate-x-0.5"
+                  }`}
+                />
+              </div>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("sessions.repeat")}</span>
+            </label>
+
+            {repeatEnabled ? (
+              <div className="space-y-3 rounded-xl border border-gray-100 bg-[var(--color-bg)] p-4">
+                <div>
+                  <p className="mb-2 text-sm font-medium text-[var(--color-text)]">{t("sessions.repeatOn")}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                      const selected = repeatDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() =>
+                            setRepeatDays((prev) =>
+                              selected ? prev.filter((d) => d !== day) : [...prev, day],
+                            )
+                          }
+                          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                            selected
+                              ? "bg-[var(--color-primary)] text-white"
+                              : "border border-gray-200 bg-white text-[var(--color-text)]"
+                          }`}
+                        >
+                          {t(`sessions.day${day}`)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[var(--color-text)]">{t("sessions.repeatEnds")}</p>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex flex-wrap items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="repeat-end"
+                        checked={repeatEndMode === "weeks"}
+                        onChange={() => setRepeatEndMode("weeks")}
+                        className="accent-[var(--color-primary)]"
+                      />
+                      <span>{t("sessions.afterWeeks")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={repeatWeeks}
+                        onChange={(e) => setRepeatWeeks(Number(e.target.value) || 4)}
+                        disabled={repeatEndMode !== "weeks"}
+                        className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-center text-sm"
+                      />
+                      <span className="text-[var(--color-text-muted)]">{t("sessions.weeksLabel")}</span>
+                    </label>
+                    <label className="flex flex-wrap items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="repeat-end"
+                        checked={repeatEndMode === "date"}
+                        onChange={() => setRepeatEndMode("date")}
+                        className="accent-[var(--color-primary)]"
+                      />
+                      <span>{t("sessions.untilDate")}</span>
+                      <input
+                        type="date"
+                        value={repeatEndDate}
+                        onChange={(e) => setRepeatEndDate(e.target.value)}
+                        disabled={repeatEndMode !== "date"}
+                        className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <Input
           label={t("sessions.duration")}
           name="duration"
@@ -209,6 +362,14 @@ export function SessionFormModal({
             rows={3}
           />
         </div>
+        {createdCount ? (
+          <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-[var(--color-primary)]">
+            <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            {t("sessions.createdCount", { count: createdCount })}
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>

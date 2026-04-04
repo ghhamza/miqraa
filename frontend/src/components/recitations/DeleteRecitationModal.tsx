@@ -31,7 +31,9 @@ export function DeleteRecitationModal({
       <div className="space-y-4">
         <p className="text-sm text-[var(--color-text)]">{t("recitations.deleteConfirm")}</p>
         <div className="rounded-xl border border-gray-100 bg-[var(--color-bg)] p-3 text-sm">
-          <p className="font-semibold text-[var(--color-text)]">{recitation.student_name}</p>
+          <p className="font-semibold text-[var(--color-text)]">
+            {recitation.student_name ?? t("recitations.deletedStudent")}
+          </p>
           <p className="mt-1" style={{ fontFamily: "var(--font-quran)" }}>
             {getSurahNameWithArabic(recitation.surah, loc)} · {recitation.ayah_start}–{recitation.ayah_end}
           </p>

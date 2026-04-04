@@ -8,18 +8,12 @@ use uuid::Uuid;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Recitation {
+pub struct Room {
     pub id: Uuid,
-    pub student_id: Option<Uuid>,
-    pub room_id: Option<Uuid>,
-    pub session_id: Option<Uuid>,
-    pub surah: i32,
-    pub ayah_start: i32,
-    pub ayah_end: i32,
-    pub grade: Option<String>,
-    pub teacher_id: Option<Uuid>,
+    pub name: String,
+    pub teacher_id: Uuid,
+    pub max_students: i32,
+    pub is_active: bool,
     pub riwaya: String,
-    pub recording_path: Option<String>,
-    pub teacher_notes: Option<String>,
     pub created_at: DateTime<Utc>,
 }

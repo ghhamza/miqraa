@@ -37,6 +37,9 @@ export function RoomFormModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
+  const [isPublic, setIsPublic] = useState(false);
+  const [enrollmentOpen, setEnrollmentOpen] = useState(true);
+  const [requiresApproval, setRequiresApproval] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -47,12 +50,18 @@ export function RoomFormModal({
       setIsActive(room.is_active);
       setTeacherId("");
       setRiwaya(room.riwaya);
+      setIsPublic(room.is_public);
+      setEnrollmentOpen(room.enrollment_open);
+      setRequiresApproval(room.requires_approval);
     } else {
       setName("");
       setMaxStudents(20);
       setIsActive(true);
       setTeacherId("");
       setRiwaya("hafs");
+      setIsPublic(false);
+      setEnrollmentOpen(true);
+      setRequiresApproval(true);
     }
   }, [open, mode, room]);
 
@@ -94,6 +103,9 @@ export function RoomFormModal({
           name: name.trim(),
           max_students: maxStudents,
           riwaya,
+          is_public: isPublic,
+          enrollment_open: enrollmentOpen,
+          requires_approval: requiresApproval,
           ...(isAdmin ? { teacher_id: teacherId } : {}),
         });
       } else if (room) {
@@ -102,6 +114,9 @@ export function RoomFormModal({
           max_students: maxStudents,
           is_active: isActive,
           riwaya,
+          is_public: isPublic,
+          enrollment_open: enrollmentOpen,
+          requires_approval: requiresApproval,
         });
       }
       onSaved();
@@ -195,17 +210,60 @@ export function RoomFormModal({
           </label>
         ) : null}
 
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />
+          <div>
+            <span className="text-sm font-medium text-[var(--color-text)]">{t("rooms.publicRoom")}</span>
+            <p className="text-xs text-[var(--color-text-muted)]">{t("rooms.publicRoomHint")}</p>
+          </div>
+        </label>
+
+        {isPublic ? (
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+              checked={enrollmentOpen}
+              onChange={(e) => setEnrollmentOpen(e.target.checked)}
+            />
+            <div>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("rooms.enrollmentOpen")}</span>
+              <p className="text-xs text-[var(--color-text-muted)]">{t("rooms.enrollmentOpenHint")}</p>
+            </div>
+          </label>
+        ) : null}
+
+        {isPublic && enrollmentOpen ? (
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+              checked={requiresApproval}
+              onChange={(e) => setRequiresApproval(e.target.checked)}
+            />
+            <div>
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("rooms.requiresApproval")}</span>
+              <p className="text-xs text-[var(--color-text-muted)]">{t("rooms.requiresApprovalHint")}</p>
+            </div>
+          </label>
+        ) : null}
+
         {error ? (
           <p className="text-center text-sm text-red-600" role="alert">
             {error}
           </p>
         ) : null}
 
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" fullWidth onClick={onClose}>
+        <div className="flex flex-wrap gap-3 pt-2">
+          <Button type="button" variant="secondary" className="min-w-0 flex-1" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" variant="primary" fullWidth loading={loading}>
+          <Button type="submit" variant="primary" className="min-w-0 flex-1" loading={loading}>
             {t("common.save")}
           </Button>
         </div>

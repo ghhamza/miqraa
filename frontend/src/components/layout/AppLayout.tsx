@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, LogOut, Menu, ScrollText } from "lucide-react";
+import { BookOpen, LogOut, Menu, ScrollText, User } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
@@ -150,6 +150,12 @@ export function AppLayout() {
           <span className="inline-flex items-center gap-2">
             <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             {t("nav.recitations")}
+          </span>
+        </NavLink>
+        <NavLink to="/profile" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          <span className="inline-flex items-center gap-2">
+            <User className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.profile")}
           </span>
         </NavLink>
       </div>
@@ -303,6 +309,13 @@ export function AppLayout() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2"
+                  onClick={() => navigate("/profile")}
+                >
+                  <User className="h-4 w-4" />
+                  {t("nav.profile")}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
                   className="cursor-pointer gap-2"

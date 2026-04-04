@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
+use std::collections::BTreeSet;
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Datelike, DateTime, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::postgres::PgConnection;
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
-use crate::api::types::{SessionAttendanceRow, SessionDetailResponse, SessionPublic};
+use crate::api::types::{
+    CreateSessionsResponse, DeleteGroupResult, SessionAttendanceRow, SessionDetailResponse, SessionPublic,
+};
 use crate::api::AppState;
 
 #[derive(Deserialize)]
@@ -31,6 +36,10 @@ pub struct CreateSessionRequest {
     pub scheduled_at: DateTime<Utc>,
     pub duration_minutes: Option<i32>,
     pub notes: Option<String>,
+    /// Days of week: 0 = Monday … 6 = Sunday
+    pub repeat_days: Option<Vec<i16>>,
+    pub repeat_weeks: Option<i32>,
+    pub repeat_end_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize)]
@@ -77,7 +86,7 @@ async fn can_access_room(
         }
         "student" => {
             let ok: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM enrollments WHERE room_id = $1 AND student_id = $2)",
+                "SELECT EXISTS(SELECT 1 FROM enrollments WHERE room_id = $1 AND student_id = $2 AND status = 'approved')",
             )
             .bind(room_id)
             .bind(auth.id)
@@ -140,13 +149,44 @@ async fn has_overlap(
     Ok(exists)
 }
 
+async fn has_overlap_tx(
+    conn: &mut PgConnection,
+    room_id: Uuid,
+    start: DateTime<Utc>,
+    duration_minutes: i32,
+    exclude_session_id: Option<Uuid>,
+) -> Result<bool, StatusCode> {
+    if duration_minutes <= 0 {
+        return Ok(true);
+    }
+    let end = start + Duration::minutes(duration_minutes as i64);
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+            SELECT 1 FROM sessions s
+            WHERE s.room_id = $1
+            AND s.status::text <> 'cancelled'
+            AND ($2::uuid IS NULL OR s.id <> $2)
+            AND s.scheduled_at < $3
+            AND $4 < s.scheduled_at + (s.duration_minutes || ' minutes')::interval
+        )",
+    )
+    .bind(room_id)
+    .bind(exclude_session_id)
+    .bind(end)
+    .bind(start)
+    .fetch_one(conn)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(exists)
+}
+
 async fn fetch_session_public(
     pool: &PgPool,
     session_id: Uuid,
 ) -> Result<Option<SessionPublic>, StatusCode> {
     let row: Option<SessionPublic> = sqlx::query_as::<Postgres, SessionPublic>(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.id = $1",
@@ -167,9 +207,11 @@ fn apply_role_scope(qb: &mut QueryBuilder<'_, sqlx::Postgres>, auth: &Authentica
             Ok(())
         }
         "student" => {
-            qb.push(" AND EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = ");
+            qb.push(
+                " AND EXISTS (SELECT 1 FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = ",
+            );
             qb.push_bind(auth.id);
-            qb.push(")");
+            qb.push(" AND e.status = 'approved')");
             Ok(())
         }
         _ => Err(StatusCode::FORBIDDEN),
@@ -183,7 +225,7 @@ pub async fn list_sessions(
 ) -> Result<Json<Vec<SessionPublic>>, StatusCode> {
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE 1=1",
@@ -227,7 +269,7 @@ pub async fn list_for_room(
     }
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.room_id = ",
@@ -249,7 +291,7 @@ pub async fn upcoming(
 ) -> Result<Json<Vec<SessionPublic>>, StatusCode> {
     let mut qb = QueryBuilder::new(
         "SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes, \
-         s.status::text AS status, s.notes, s.created_at \
+         s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at \
          FROM sessions s \
          INNER JOIN rooms r ON r.id = s.room_id \
          WHERE s.status::text = 'scheduled' \
@@ -293,71 +335,259 @@ pub async fn get_session(
     }))
 }
 
+async fn insert_session_tx(
+    tx: &mut PgConnection,
+    room_id: Uuid,
+    title: Option<&str>,
+    scheduled_at: DateTime<Utc>,
+    duration: i32,
+    notes: Option<&str>,
+    recurrence_group_id: Option<Uuid>,
+    recurrence_rule: Option<&str>,
+) -> Result<Uuid, sqlx::Error> {
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO sessions (room_id, title, scheduled_at, duration_minutes, notes, recurrence_group_id, recurrence_rule) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
+         RETURNING id",
+    )
+    .bind(room_id)
+    .bind(title)
+    .bind(scheduled_at)
+    .bind(duration)
+    .bind(notes)
+    .bind(recurrence_group_id)
+    .bind(recurrence_rule)
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO session_attendance (session_id, student_id, attended) \
+         SELECT $1, e.student_id, false FROM enrollments e WHERE e.room_id = $2 AND e.status = 'approved'",
+    )
+    .bind(id)
+    .bind(room_id)
+    .execute(&mut *tx)
+    .await?;
+    Ok(id)
+}
+
 pub async fn create_session(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Json(req): Json<CreateSessionRequest>,
-) -> Result<(StatusCode, Json<SessionPublic>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<CreateSessionsResponse>), (StatusCode, Json<serde_json::Value>)> {
     let duration = req.duration_minutes.unwrap_or(60);
     if duration <= 0 {
         return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
     }
-    if req.scheduled_at <= Utc::now() {
+
+    let repeat_days_raw = req.repeat_days.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+    let is_repeat = !repeat_days_raw.is_empty();
+
+    let mut days_set = BTreeSet::new();
+    for &d in repeat_days_raw {
+        if d < 0 || d > 6 {
+            return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
+        }
+        days_set.insert(d);
+    }
+    let days: Vec<i16> = days_set.into_iter().collect();
+
+    if !is_repeat && req.scheduled_at <= Utc::now() {
         return Err(json_err(StatusCode::BAD_REQUEST, "session_past"));
     }
+
     let room_row: Option<(Uuid, Uuid)> = sqlx::query_as::<Postgres, (Uuid, Uuid)>(
         "SELECT id, teacher_id FROM rooms WHERE id = $1",
     )
     .bind(req.room_id)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
-    let (_, teacher_id) = room_row.ok_or((StatusCode::NOT_FOUND, Json(json!({ "code": "not_found" }))))?;
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+    let (_, teacher_id) = room_row.ok_or_else(|| json_err(StatusCode::NOT_FOUND, "not_found"))?;
     let allowed = auth.role == "admin" || (auth.role == "teacher" && auth.id == teacher_id);
     if !allowed {
-        return Err((StatusCode::FORBIDDEN, Json(json!({ "code": "forbidden" }))));
+        return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
     }
-    if has_overlap(&state.db, req.room_id, req.scheduled_at, duration, None)
+
+    if !is_repeat {
+        if has_overlap(&state.db, req.room_id, req.scheduled_at, duration, None)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
+        {
+            return Err(json_err(StatusCode::CONFLICT, "session_overlap"));
+        }
+        let mut tx = state
+            .db
+            .begin()
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let conn: &mut PgConnection = &mut *tx;
+        let session_id = insert_session_tx(
+            conn,
+            req.room_id,
+            req.title.as_deref(),
+            req.scheduled_at,
+            duration,
+            req.notes.as_deref(),
+            None,
+            None,
+        )
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
-    {
-        return Err((StatusCode::CONFLICT, Json(json!({ "code": "session_overlap" }))));
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        tx.commit()
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        let session = fetch_session_public(&state.db, session_id)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
+            .ok_or_else(|| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(CreateSessionsResponse {
+                sessions: vec![session],
+                count: 1,
+            }),
+        ));
     }
+
+    let start = req.scheduled_at;
+    let start_time = start.naive_utc().time();
+    let start_d = start.date_naive();
+    let start_monday = start_d - Duration::days(start_d.weekday().num_days_from_monday() as i64);
+
+    let (num_weeks, end_d_opt): (i64, Option<NaiveDate>) = if let Some(end_dt) = req.repeat_end_date {
+        let end_d = end_dt.date_naive();
+        let end_monday = end_d - Duration::days(end_d.weekday().num_days_from_monday() as i64);
+        if end_monday < start_monday {
+            return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
+        }
+        let nw = ((end_monday - start_monday).num_days() / 7) + 1;
+        (nw, Some(end_d))
+    } else {
+        let nw = req.repeat_weeks.unwrap_or(4).clamp(1, 12) as i64;
+        (nw, None)
+    };
+
+    let recurrence_rule = format!(
+        "weekly:{}",
+        days.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(",")
+    );
+    let group_id = Uuid::new_v4();
+
+    let mut candidates: Vec<DateTime<Utc>> = Vec::new();
+    for week_offset in 0..num_weeks {
+        let monday = start_monday + Duration::weeks(week_offset);
+        for &day in &days {
+            let session_date = monday + Duration::days(day as i64);
+            if let Some(end_d) = end_d_opt {
+                if session_date > end_d {
+                    continue;
+                }
+            }
+            let naive = NaiveDateTime::new(session_date, start_time);
+            let scheduled_at = Utc.from_utc_datetime(&naive);
+            candidates.push(scheduled_at);
+        }
+    }
+    candidates.sort();
+    candidates.dedup();
+
     let mut tx = state
         .db
         .begin()
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
-    let session_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO sessions (room_id, title, scheduled_at, duration_minutes, notes) \
-         VALUES ($1, $2, $3, $4, $5) \
-         RETURNING id",
-    )
-    .bind(req.room_id)
-    .bind(req.title.as_ref())
-    .bind(req.scheduled_at)
-    .bind(duration)
-    .bind(req.notes.as_ref())
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
-    sqlx::query(
-        "INSERT INTO session_attendance (session_id, student_id, attended) \
-         SELECT $1, e.student_id, false FROM enrollments e WHERE e.room_id = $2",
-    )
-    .bind(session_id)
-    .bind(req.room_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+    let conn: &mut PgConnection = &mut *tx;
+    let mut created_ids: Vec<Uuid> = Vec::new();
+
+    for scheduled_at in candidates {
+        if scheduled_at <= Utc::now() {
+            continue;
+        }
+        if has_overlap_tx(conn, req.room_id, scheduled_at, duration, None)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
+        {
+            continue;
+        }
+        let id = insert_session_tx(
+            conn,
+            req.room_id,
+            req.title.as_deref(),
+            scheduled_at,
+            duration,
+            req.notes.as_deref(),
+            Some(group_id),
+            Some(&recurrence_rule),
+        )
+        .await
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+        created_ids.push(id);
+    }
+
     tx.commit()
         .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
-    let session = fetch_session_public(&state.db, session_id)
-        .await
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
-    Ok((StatusCode::CREATED, Json(session)))
+        .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    if created_ids.is_empty() {
+        return Err(json_err(StatusCode::BAD_REQUEST, "no_sessions_generated"));
+    }
+
+    let mut sessions: Vec<SessionPublic> = Vec::with_capacity(created_ids.len());
+    for id in created_ids {
+        if let Some(s) = fetch_session_public(&state.db, id)
+            .await
+            .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?
+        {
+            sessions.push(s);
+        }
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateSessionsResponse {
+            count: sessions.len(),
+            sessions,
+        }),
+    ))
+}
+
+pub async fn delete_recurrence_group(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(group_id): Path<Uuid>,
+) -> Result<Json<DeleteGroupResult>, (StatusCode, Json<serde_json::Value>)> {
+    let sample: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT s.room_id, r.teacher_id FROM sessions s \
+         INNER JOIN rooms r ON r.id = s.room_id \
+         WHERE s.recurrence_group_id = $1 LIMIT 1",
+    )
+    .bind(group_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    let Some((_, teacher_id)) = sample else {
+        return Err(json_err(StatusCode::NOT_FOUND, "not_found"));
+    };
+
+    let allowed = auth.role == "admin" || (auth.role == "teacher" && auth.id == teacher_id);
+    if !allowed {
+        return Err(json_err(StatusCode::FORBIDDEN, "forbidden"));
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM sessions WHERE recurrence_group_id = $1 \
+         AND status::text = 'scheduled' AND scheduled_at > NOW()",
+    )
+    .bind(group_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
+
+    Ok(Json(DeleteGroupResult {
+        deleted: result.rows_affected() as i32,
+    }))
 }
 
 fn parse_status(s: &str) -> Option<&'static str> {
