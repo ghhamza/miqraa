@@ -50,6 +50,9 @@ interface ApiResponse {
 const PAGE_CACHE_VER = 4;
 const PAGE_CACHE = new Map<string, PageData>();
 
+/** Madani mushaf page count (Hafs 604 lines). */
+const MUSHAF_PAGE_COUNT = 604;
+
 function pageCacheKey(pageNumber: number): string {
   return `${PAGE_CACHE_VER}:${pageNumber}`;
 }
@@ -228,6 +231,19 @@ async function fetchPage(pageNumber: number, riwaya: Riwaya): Promise<PageData> 
   return built;
 }
 
+/**
+ * Warm `PAGE_CACHE` for pages around the current one (default ±2) so navigation feels instant
+ * after the first visit. Fire-and-forget; failures are ignored.
+ */
+export function prefetchAdjacentPageData(pageNumber: number, riwaya: Riwaya, radius = 2): void {
+  for (let d = 1; d <= radius; d++) {
+    const before = pageNumber - d;
+    const after = pageNumber + d;
+    if (before >= 1) void fetchPage(before, riwaya).catch(() => {});
+    if (after <= MUSHAF_PAGE_COUNT) void fetchPage(after, riwaya).catch(() => {});
+  }
+}
+
 export function useQuranPage(pageNumber: number, riwaya: Riwaya): {
   data: PageData | null;
   loading: boolean;
@@ -244,6 +260,7 @@ export function useQuranPage(pageNumber: number, riwaya: Riwaya): {
     setData(null);
     setLoading(true);
     setError(null);
+    prefetchAdjacentPageData(pageNumber, riwaya, 2);
     void fetchPage(pageNumber, riwaya)
       .then((d) => {
         if (!cancelled) setData(d);

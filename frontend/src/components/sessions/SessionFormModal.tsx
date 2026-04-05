@@ -8,6 +8,7 @@ import type { CreateSessionsResponse, Paginated, Room, SessionPublic } from "../
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { FormSelect } from "../ui/select";
 import { formatDatetimeLocalValue } from "../../lib/calendarUtils";
 
 interface SessionFormModalProps {
@@ -202,26 +203,22 @@ export function SessionFormModal({
           <label className="mb-1 block text-sm font-medium text-[var(--color-text)]" htmlFor="session-room">
             {t("sessions.room")}
           </label>
-          <select
+          <FormSelect
             id="session-room"
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)]"
+            triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm text-[var(--color-text)]"
+            triggerStyle={{ color: "var(--color-text)" }}
             value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
+            onValueChange={setRoomId}
             disabled={mode === "edit" || loadingRooms}
             required
-          >
-            {loadingRooms ? (
-              <option value="">{t("common.loading")}</option>
-            ) : rooms.length === 0 ? (
-              <option value="">{t("rooms.noRooms")}</option>
-            ) : (
-              rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))
-            )}
-          </select>
+            options={
+              loadingRooms
+                ? [{ value: "", label: t("common.loading") }]
+                : rooms.length === 0
+                  ? [{ value: "", label: t("rooms.noRooms") }]
+                  : rooms.map((r) => ({ value: r.id, label: r.name }))
+            }
+          />
         </div>
         <Input
           label={t("sessions.sessionTitle")}

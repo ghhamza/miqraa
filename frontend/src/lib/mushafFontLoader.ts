@@ -31,10 +31,14 @@ export async function loadPageFont(pageNumber: number): Promise<void> {
   await document.fonts.ready;
 }
 
-/** Preload adjacent pages for smooth navigation. */
-export function preloadAdjacentPages(currentPage: number): void {
-  if (currentPage > 1) void loadPageFont(currentPage - 1);
-  if (currentPage < 604) void loadPageFont(currentPage + 1);
+const MUSHAF_PAGE_COUNT = 604;
+
+/** Preload fonts for nearby pages (default ±2) so flipping pages stays smooth. */
+export function preloadAdjacentPages(currentPage: number, radius = 2): void {
+  for (let d = 1; d <= radius; d++) {
+    if (currentPage - d >= 1) void loadPageFont(currentPage - d);
+    if (currentPage + d <= MUSHAF_PAGE_COUNT) void loadPageFont(currentPage + d);
+  }
 }
 
 /** Must match the `FontFace` name in `loadPageFont` (no CSS quote characters in the string). */

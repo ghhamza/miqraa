@@ -210,6 +210,8 @@
     "goToJuz": "Go to juz",
     "prevPage": "Previous page",
     "nextPage": "Next page",
+    "jumpTitle": "Go to location",
+    "jumpOpen": "Jump",
     "loading": "Loading page...",
     "loadError": "Failed to load the page",
     "comingSoon": "Coming Soon",

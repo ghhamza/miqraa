@@ -163,9 +163,9 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--color-bg)]">
-      <header className="sticky top-0 z-40 border-b border-border bg-[var(--color-surface)] shadow-sm">
-        <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:px-6">
+    <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col bg-[var(--color-bg)]">
+      <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-[var(--color-surface)] shadow-sm">
+        <div className="mx-auto flex w-full max-w-[100%] min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none md:items-stretch">
             <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
               <SheetTrigger asChild>
@@ -335,10 +335,10 @@ export function AppLayout() {
 
       <main
         className={cn(
-          "flex-1",
+          "w-full min-w-0 max-w-full flex-1",
           isMushafRoute
-            ? "flex min-h-0 flex-col overflow-hidden p-1 sm:p-2 md:p-3"
-            : "p-4 md:p-8",
+            ? "flex min-h-0 flex-col overflow-hidden p-1 sm:p-2 md:p-3 lg:p-4"
+            : "p-3 sm:p-4 md:p-6 lg:p-8",
         )}
       >
         <Outlet />

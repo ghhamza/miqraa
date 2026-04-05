@@ -30,6 +30,10 @@
   --mushaf-selected-word-color: var(--color-gold);
   --mushaf-frame-teal: #2c5f7c;
   --mushaf-frame-teal-deep: #1a5276;
+  /* Surah frame / rules / fallback text; title artwork tint uses `.mushaf-surah-title-img` filter */
+  --mushaf-surah-title-color: #1a5276;
+  /* App shell: viewports narrower than this get horizontal scroll (avoids unusably narrow layout) */
+  --app-min-width: 360px;
   --color-bg: #FAFAF5;
   --color-surface: #FFFFFF;
   --color-text: #1A1A1A;
@@ -144,23 +148,50 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --mushaf-surah-title-color: #9fd0e8;
+}
+
+/*
+ * Surah title SVGs are black glyphs on transparent. Tint to `--mushaf-surah-title-color` without
+ * `mask-image` (Safari/WebKit often fails external SVG masks → solid colored rectangle).
+ */
+.mushaf-surah-title-img {
+  filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(172deg)
+    brightness(95%) contrast(95%);
+}
+
+.dark .mushaf-surah-title-img {
+  filter: brightness(0) saturate(100%) invert(90%) sepia(35%) saturate(600%) hue-rotate(175deg)
+    brightness(95%) contrast(95%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-sans;
+    min-width: var(--app-min-width);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-ui);
-  }
-  html {
-    @apply font-sans;
+    min-width: var(--app-min-width);
   }
   /* Native buttons default to `cursor: auto`; match link affordance for clickable controls */
   button:enabled {
     cursor: pointer;
   }
+}
+
+/* React mount: fill viewport height, participate in global min-width */
+#root {
+  display: flex;
+  min-height: 100dvh;
+  min-width: var(--app-min-width);
+  flex-direction: column;
 }
 
 /* QCF V2 Mushaf page (see QCFPageRenderer) */

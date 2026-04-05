@@ -9,6 +9,7 @@ import { getAvailableRiwayat } from "../../lib/quranService";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { FormSelect } from "../ui/select";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -151,22 +152,21 @@ export function RoomFormModal({
             {loadingTeachers ? (
               <p className="text-sm text-[var(--color-text-muted)]">{t("rooms.loadingTeachers")}</p>
             ) : (
-              <select
-                className="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5 text-start focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              <FormSelect
+                triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-start focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                triggerStyle={{ color: "var(--color-text)" }}
                 value={teacherId}
-                onChange={(e) => setTeacherId(e.target.value)}
+                onValueChange={setTeacherId}
                 required
-              >
-                {teachers.length === 0 ? (
-                  <option value="">{t("rooms.noTeachersOption")}</option>
-                ) : (
-                  teachers.map((teach) => (
-                    <option key={teach.id} value={teach.id}>
-                      {teach.name} ({teach.email})
-                    </option>
-                  ))
-                )}
-              </select>
+                options={
+                  teachers.length === 0
+                    ? [{ value: "", label: t("rooms.noTeachersOption") }]
+                    : teachers.map((teach) => ({
+                        value: teach.id,
+                        label: `${teach.name} (${teach.email})`,
+                      }))
+                }
+              />
             )}
           </div>
         ) : null}
@@ -185,17 +185,16 @@ export function RoomFormModal({
           <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             {t("rooms.riwayaField")}
           </label>
-          <select
-            className="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5 text-start focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          <FormSelect
+            triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-start focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            triggerStyle={{ color: "var(--color-text)" }}
             value={riwaya}
-            onChange={(e) => setRiwaya(e.target.value as QuranRiwaya)}
-          >
-            {getAvailableRiwayat().map((r) => (
-              <option key={r.id} value={r.id}>
-                {t(`mushaf.${r.id}`)} — {r.nameAr}
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => setRiwaya(v as QuranRiwaya)}
+            options={getAvailableRiwayat().map((r) => ({
+              value: r.id,
+              label: `${t(`mushaf.${r.id}`)} — ${r.nameAr}`,
+            }))}
+          />
         </div>
 
         {mode === "edit" ? (

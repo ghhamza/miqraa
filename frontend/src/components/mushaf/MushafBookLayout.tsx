@@ -75,7 +75,7 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
           </span>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 py-3 sm:px-7">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-auto px-4 py-3 sm:px-6 md:px-7">
           {/* Stretch mushaf content / loading skeleton to full page column height */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </div>

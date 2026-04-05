@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import type { Paginated, Room, SessionPublic } from "../../types";
 import { Button } from "../../components/ui/Button";
+import { FormSelect } from "../../components/ui/select";
 import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import {
@@ -222,19 +223,16 @@ export function CalendarPage() {
           <label htmlFor="room-filter" className="text-sm text-[var(--color-text-muted)]">
             {t("sessions.room")}
           </label>
-          <select
+          <FormSelect
             id="room-filter"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+            triggerClassName="min-w-[12rem] rounded-xl border border-gray-200 bg-white py-2 text-sm"
             value={roomFilter}
-            onChange={(e) => setRoomFilter(e.target.value)}
-          >
-            <option value="">{t("sessions.allRooms")}</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setRoomFilter}
+            options={[
+              { value: "", label: t("sessions.allRooms") },
+              ...rooms.map((r) => ({ value: r.id, label: r.name })),
+            ]}
+          />
         </div>
       </div>
 

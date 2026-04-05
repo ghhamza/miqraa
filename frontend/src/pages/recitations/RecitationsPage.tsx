@@ -17,6 +17,7 @@ import type {
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
+import { FormSelect } from "../../components/ui/select";
 import { Table } from "../../components/ui/Table";
 import { GradeBadge } from "../../components/recitations/GradeBadge";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
@@ -25,6 +26,11 @@ import { DeleteRecitationModal } from "../../components/recitations/DeleteRecita
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { cn } from "@/lib/utils";
+
+/** Align with SurahPicker + native date inputs (Radix trigger defaults include `sm:text-base`). */
+const FILTER_FIELD_CLASS =
+  "h-11 w-full box-border rounded-xl border border-gray-200 bg-white px-3 py-0 text-sm sm:text-sm text-[var(--color-text)] shadow-sm";
 
 type GradeFilter = "" | RecitationGrade;
 
@@ -346,18 +352,18 @@ export function RecitationsPage() {
         {hasMultipleRiwayat ? (
           <div className="max-w-xs">
             <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.riwaya")}</label>
-            <select
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-              value={riwayaFilter}
-              onChange={(e) => setRiwayaFilter((e.target.value || "") as QuranRiwaya | "")}
-            >
-              <option value="">{t("common.all")}</option>
-              {getAvailableRiwayat().map((r) => (
-                <option key={r.id} value={r.id}>
-                  {t(`mushaf.${r.id}`)}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              triggerClassName={FILTER_FIELD_CLASS}
+              value={riwayaFilter || ""}
+              onValueChange={(v) => setRiwayaFilter((v || "") as QuranRiwaya | "")}
+              options={[
+                { value: "", label: t("common.all") },
+                ...getAvailableRiwayat().map((r) => ({
+                  value: r.id,
+                  label: t(`mushaf.${r.id}`),
+                })),
+              ]}
+            />
           </div>
         ) : null}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -375,25 +381,22 @@ export function RecitationsPage() {
               <label className="mb-1 block text-xs text-[var(--color-text-muted)]">
                 {t("recitations.filterStudent")}
               </label>
-              <select
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              <FormSelect
+                triggerClassName={FILTER_FIELD_CLASS}
                 value={studentFilter}
-                onChange={(e) => setStudentFilter(e.target.value)}
-              >
-                <option value="">{t("recitations.allStudents")}</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setStudentFilter}
+                options={[
+                  { value: "", label: t("recitations.allStudents") },
+                  ...students.map((s) => ({ value: s.id, label: s.name })),
+                ]}
+              />
             </div>
           ) : null}
           <div>
             <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateFrom")}</label>
             <input
               type="date"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              className={cn(FILTER_FIELD_CLASS, "min-h-11")}
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
             />
@@ -402,7 +405,7 @@ export function RecitationsPage() {
             <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateTo")}</label>
             <input
               type="date"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              className={cn(FILTER_FIELD_CLASS, "min-h-11")}
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
             />

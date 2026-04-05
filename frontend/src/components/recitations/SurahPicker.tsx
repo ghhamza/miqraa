@@ -12,6 +12,7 @@ import {
 } from "../../lib/quranService";
 import type { SurahInfo } from "../../lib/quranService";
 import type { QuranRiwaya } from "../../types";
+import { cn } from "@/lib/utils";
 
 export interface SurahPickerProps {
   /** Selected surah number, or `null` when `allowClear` and “all surahs” is chosen */
@@ -21,13 +22,22 @@ export interface SurahPickerProps {
   /** Show an “all surahs” row; `null` means all */
   allowClear?: boolean;
   disabled?: boolean;
+  /** Merged onto the trigger button (e.g. align height with adjacent selects). */
+  className?: string;
 }
 
 function surahRowLabel(s: SurahInfo, loc: string, riwaya: QuranRiwaya, ayahsWord: string): string {
   return `${s.number}. ${getSurahNameWithArabic(s.number, loc)} · ${getSurahAyahCount(s.number, riwaya)} ${ayahsWord}`;
 }
 
-export function SurahPicker({ value, onChange, riwaya, allowClear = false, disabled = false }: SurahPickerProps) {
+export function SurahPicker({
+  value,
+  onChange,
+  riwaya,
+  allowClear = false,
+  disabled = false,
+  className,
+}: SurahPickerProps) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
   const [open, setOpen] = useState(false);
@@ -82,7 +92,10 @@ export function SurahPicker({ value, onChange, riwaya, allowClear = false, disab
         aria-haspopup="listbox"
         aria-controls={listboxId}
         onClick={() => !disabled && setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-start text-sm text-[var(--color-text)] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className={cn(
+          "flex h-11 w-full box-border items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 text-start text-sm text-[var(--color-text)] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60",
+          className,
+        )}
         style={{ fontFamily: "var(--font-quran)" }}
       >
         <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>

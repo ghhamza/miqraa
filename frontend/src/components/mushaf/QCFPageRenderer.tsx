@@ -5,12 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
-import { getSurah, isMushafOpeningCenterPage } from "../../lib/quranService";
+import { isMushafOpeningCenterPage } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 import type { LineData, WordData } from "../../hooks/useQuranPage";
 import { Button } from "../ui/Button";
 import { MushafBasmalahSvg } from "./MushafBasmalahSvg";
-import { MushafSurahTitleFrame } from "./MushafSurahTitleFrame";
+import { MushafSurahArabesqueFrame } from "./MushafSurahArabesqueFrame";
+import { SurahNameSvg } from "./SurahNameSvg";
 
 export interface QCFPageRendererProps {
   pageNumber: number;
@@ -75,6 +76,7 @@ export function QCFPageRenderer({
   const { data, loading, error, reload } = useQuranPage(pageNumber, riwaya);
   const [fontReady, setFontReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** Default until we read a real column width (avoid fontSize=12 when width was 0 → huge flex gaps). */
   const [fontSizePx, setFontSizePx] = useState(28);
 
   useEffect(() => {
@@ -98,14 +100,39 @@ export function QCFPageRenderer({
   useEffect(() => {
     if (!fontReady || !containerRef.current) return;
     const el = containerRef.current;
+
+    const MIN_WIDTH_PX = 64;
+
+    function computeFontSize(widthPx: number): number {
+      /* Subpixel + padding: slightly conservative so justified QCF lines (flex, no shrink) stay in column */
+      const w = Math.max(0, Math.floor(widthPx) - 2);
+      if (w < MIN_WIDTH_PX) return -1;
+      return Math.max(12, Math.min(40, w / 16));
+    }
+
+    function measureFromEl(): void {
+      const raw = el.clientWidth;
+      const next = computeFontSize(raw);
+      if (next < 0) return;
+      setFontSizePx(next);
+    }
+
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? el.clientWidth;
-      const base = Math.max(12, Math.min(42, w / 14));
-      setFontSizePx(base);
+      /* Read after layout; first frame often reports 0 in nested flex min-h-0 chains. */
+      requestAnimationFrame(() => {
+        const raw = entries[0]?.contentRect.width ?? el.clientWidth;
+        const next = computeFontSize(raw);
+        if (next < 0) return;
+        setFontSizePx(next);
+      });
     });
     ro.observe(el);
-    const w0 = el.clientWidth;
-    setFontSizePx(Math.max(12, Math.min(42, w0 / 14)));
+
+    /* Double rAF: wait until parent flex layout has stable width (fixes flaky refresh). */
+    requestAnimationFrame(() => {
+      requestAnimationFrame(measureFromEl);
+    });
+
     return () => ro.disconnect();
   }, [fontReady, pageNumber]);
 
@@ -176,7 +203,7 @@ export function QCFPageRenderer({
     return (
       <div
         ref={containerRef}
-        className="flex min-h-0 w-full flex-1 flex-col text-[var(--color-text)]"
+        className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-auto text-[var(--color-text)]"
         style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
       >
         {head.length > 0 ? (
@@ -198,7 +225,7 @@ export function QCFPageRenderer({
   return (
     <div
       ref={containerRef}
-      className="min-w-0 w-full text-[var(--color-text)]"
+      className="min-w-0 w-full overflow-x-auto text-[var(--color-text)]"
       style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
     >
       {data.lines.map((line) => (
@@ -222,13 +249,12 @@ function LineView({
   onWordClick: (w: WordData) => void;
 }) {
   if (line.lineType === "surah_name" && line.surahNumber != null) {
-    const s = getSurah(line.surahNumber);
-    const name = s?.nameAr ?? String(line.surahNumber);
+    const sn = line.surahNumber;
     return (
-      <div className="mushaf-line mushaf-line--centered py-1">
-        <MushafSurahTitleFrame>
-          سُورَةُ {name}
-        </MushafSurahTitleFrame>
+      <div className="mushaf-line mushaf-line--centered w-full py-[0.2rem]">
+        <MushafSurahArabesqueFrame>
+          <SurahNameSvg surah={sn} className="h-[calc(2.5em*2/3*0.8)] w-auto max-w-full" />
+        </MushafSurahArabesqueFrame>
       </div>
     );
   }

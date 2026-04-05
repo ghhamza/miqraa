@@ -8,6 +8,7 @@ import type { UserPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { FormSelect } from "../ui/select";
 
 interface UserFormModalProps {
   open: boolean;
@@ -108,15 +109,17 @@ export function UserFormModal({
           <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
             {t("users.roleField")}
           </label>
-          <select
-            className="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5 text-start focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          <FormSelect
+            triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-start focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            triggerStyle={{ color: "var(--color-text)" }}
             value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
-          >
-            <option value="student">{t("auth.student")}</option>
-            <option value="teacher">{t("auth.teacher")}</option>
-            <option value="admin">{t("auth.admin")}</option>
-          </select>
+            onValueChange={(v: string) => setRole(v as typeof role)}
+            options={[
+              { value: "student", label: t("auth.student") },
+              { value: "teacher", label: t("auth.teacher") },
+              { value: "admin", label: t("auth.admin") },
+            ]}
+          />
         </div>
         {mode === "create" ? (
           <Input

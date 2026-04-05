@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { MushafBookLayout } from "./MushafBookLayout";
 import { MushafNavigation } from "./MushafNavigation";
 import { MushafPageTurnButtons } from "./MushafPageTurnButtons";
-import { getTotalPages } from "../../lib/quranService";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { getPageForSurahStart, getTotalPages } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 
 export interface MushafReaderProps {
@@ -31,8 +33,18 @@ export function MushafReader({
   mobileBottomClassName,
   children,
 }: MushafReaderProps) {
+  const { t } = useTranslation();
+  const [jumpOpen, setJumpOpen] = useState(false);
+  /** Last surah chosen via “go to surah”; shown in the select when that surah starts on `page` (mid-page starts vs first surah on page). */
+  const [surahIntent, setSurahIntent] = useState<number | null>(null);
   const totalPages = getTotalPages(riwaya);
   const navDisabled = !canChangePage;
+
+  useEffect(() => {
+    if (surahIntent == null) return;
+    const p = getPageForSurahStart(surahIntent, riwaya);
+    if (p !== page) setSurahIntent(null);
+  }, [page, riwaya, surahIntent]);
 
   useEffect(() => {
     if (!canChangePage) return;
@@ -54,20 +66,43 @@ export function MushafReader({
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col gap-2">
-      <div className="w-full shrink-0 border-b border-gray-100 pb-2">
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6">
+      <Sheet open={jumpOpen} onOpenChange={setJumpOpen}>
+        <SheetContent side="bottom" className="max-h-[min(85dvh,32rem)] overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <SheetHeader className="text-start">
+            <SheetTitle>{t("mushaf.jumpTitle")}</SheetTitle>
+          </SheetHeader>
+          <div className="px-1 pb-2">
+            <MushafNavigation
+              page={page}
+              totalPages={totalPages}
+              riwaya={riwaya}
+              onPageChange={onPageChange}
+              disabled={navDisabled}
+              surahIntent={surahIntent}
+              onSurahIntent={setSurahIntent}
+              onAfterNavigate={() => setJumpOpen(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Tablet / desktop: always-visible surah · juz · page (small screens use bottom sheet + jump). */}
+      <div className="hidden w-full shrink-0 border-b border-gray-100 pb-2 md:block">
+        <div className="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-5 lg:px-6">
           <MushafNavigation
             page={page}
             totalPages={totalPages}
             riwaya={riwaya}
             onPageChange={onPageChange}
             disabled={navDisabled}
+            surahIntent={surahIntent}
+            onSurahIntent={setSurahIntent}
           />
         </div>
       </div>
 
       <div
-        className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4 sm:px-6"
+        className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-3 sm:px-4 md:px-5 lg:px-6"
         aria-label="Mushaf content"
       >
         <MushafBookLayout page={page} riwaya={riwaya}>
@@ -81,6 +116,8 @@ export function MushafReader({
         onPageChange={onPageChange}
         disabled={navDisabled}
         mobileBottomClassName={mobileBottomClassName}
+        onOpenJump={() => setJumpOpen(true)}
+        showDesktopJump={false}
       />
     </div>
   );

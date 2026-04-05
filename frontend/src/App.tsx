@@ -103,7 +103,9 @@ function RouterWithAuth() {
 export default function App() {
   return (
     <RadixDirectionProvider>
-      <RouterWithAuth />
+      <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
+        <RouterWithAuth />
+      </div>
     </RadixDirectionProvider>
   );
 }

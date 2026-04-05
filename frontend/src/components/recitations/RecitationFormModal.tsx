@@ -21,6 +21,7 @@ import type {
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { FormSelect } from "../ui/select";
 import { SurahPicker } from "./SurahPicker";
 
 interface RecitationFormModalProps {
@@ -276,21 +277,21 @@ export function RecitationFormModal({
               {t("recitations.deletedStudent")}
             </p>
           ) : (
-            <select
+            <FormSelect
               id="rec-student"
               required={mode === "create"}
               disabled={studentLocked}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm"
               value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-            >
-              <option value="">{students.length === 0 ? t("common.loading") : t("recitations.selectStudent")}</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setStudentId}
+              options={[
+                {
+                  value: "",
+                  label: students.length === 0 ? t("common.loading") : t("recitations.selectStudent"),
+                },
+                ...students.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
           )}
         </div>
 
@@ -308,17 +309,15 @@ export function RecitationFormModal({
             <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">
               {t("recitations.riwaya")}
             </label>
-            <select
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+            <FormSelect
+              triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm"
               value={riwaya}
-              onChange={(e) => setRiwaya(e.target.value as QuranRiwaya)}
-            >
-              {getAvailableRiwayat().map((r) => (
-                <option key={r.id} value={r.id}>
-                  {t(`mushaf.${r.id}`)} — {r.nameAr}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setRiwaya(v as QuranRiwaya)}
+              options={getAvailableRiwayat().map((r) => ({
+                value: r.id,
+                label: `${t(`mushaf.${r.id}`)} — ${r.nameAr}`,
+              }))}
+            />
           </div>
         ) : recitation ? (
           <p className="text-sm text-[var(--color-text-muted)]">
@@ -331,41 +330,31 @@ export function RecitationFormModal({
             <label htmlFor="rec-ayah-start" className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
               {t("recitations.ayahStart")}
             </label>
-            <select
+            <FormSelect
               id="rec-ayah-start"
-              name="ayah_start"
               required
               dir="rtl"
-              className="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              value={ayahStart}
-              onChange={(e) => setAyahStart(Number(e.target.value))}
-            >
-              {ayahStartOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-sm text-[var(--color-text)] shadow-sm focus-visible:ring-[var(--color-primary)]"
+              triggerStyle={{ color: "var(--color-text)" }}
+              value={String(ayahStart)}
+              onValueChange={(v) => setAyahStart(Number(v))}
+              options={ayahStartOptions.map((n) => ({ value: String(n), label: String(n) }))}
+            />
           </div>
           <div className="w-full">
             <label htmlFor="rec-ayah-end" className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
               {t("recitations.ayahEnd")}
             </label>
-            <select
+            <FormSelect
               id="rec-ayah-end"
-              name="ayah_end"
               required
               dir="rtl"
-              className="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              value={ayahEnd}
-              onChange={(e) => setAyahEnd(Number(e.target.value))}
-            >
-              {ayahEndOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-sm text-[var(--color-text)] shadow-sm focus-visible:ring-[var(--color-primary)]"
+              triggerStyle={{ color: "var(--color-text)" }}
+              value={String(ayahEnd)}
+              onValueChange={(v) => setAyahEnd(Number(v))}
+              options={ayahEndOptions.map((n) => ({ value: String(n), label: String(n) }))}
+            />
           </div>
         </div>
 
@@ -378,21 +367,18 @@ export function RecitationFormModal({
                   {selectedRoomName}
                 </div>
               ) : (
-                <select
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                <FormSelect
+                  triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm"
                   value={roomId}
-                  onChange={(e) => {
-                    setRoomId(e.target.value);
+                  onValueChange={(v) => {
+                    setRoomId(v);
                     setSessionId("");
                   }}
-                >
-                  <option value="">—</option>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "—" },
+                    ...rooms.map((r) => ({ value: r.id, label: r.name })),
+                  ]}
+                />
               )}
             </div>
             <div>
@@ -402,19 +388,19 @@ export function RecitationFormModal({
                   {selectedSessionLabel}
                 </div>
               ) : (
-                <select
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                <FormSelect
+                  triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm"
                   value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
+                  onValueChange={setSessionId}
                   disabled={!roomId}
-                >
-                  <option value="">—</option>
-                  {sessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title?.trim() || s.room_name} · {new Date(s.scheduled_at).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "—" },
+                    ...sessions.map((s) => ({
+                      value: s.id,
+                      label: `${s.title?.trim() || s.room_name} · ${new Date(s.scheduled_at).toLocaleString()}`,
+                    })),
+                  ]}
+                />
               )}
             </div>
           </>
@@ -424,18 +410,18 @@ export function RecitationFormModal({
           <>
             <div>
               <label className="mb-1 block text-sm font-medium">{t("recitations.grade")}</label>
-              <select
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              <FormSelect
+                triggerClassName="w-full rounded-xl border border-gray-200 bg-white py-2 text-sm"
                 value={grade}
-                onChange={(e) => setGrade((e.target.value || "") as RecitationGrade | "")}
-              >
-                <option value="">{t("recitations.allGrades")}</option>
-                {GRADES.map((g) => (
-                  <option key={g} value={g}>
-                    {t(`recitations.${gradeLabelKey(g)}`)}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(v) => setGrade((v || "") as RecitationGrade | "")}
+                options={[
+                  { value: "", label: t("recitations.allGrades") },
+                  ...GRADES.map((g) => ({
+                    value: g,
+                    label: t(`recitations.${gradeLabelKey(g)}`),
+                  })),
+                ]}
+              />
             </div>
 
             <div>
