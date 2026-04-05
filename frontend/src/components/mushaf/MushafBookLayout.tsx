@@ -61,11 +61,10 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
       >
         <div
           dir="rtl"
-          className="flex shrink-0 justify-between gap-2 border-b px-4 py-2 text-sm leading-snug sm:text-base"
+          className="flex shrink-0 justify-between gap-2 px-4 py-2.5 text-lg font-medium leading-snug sm:text-xl"
           style={{
             fontFamily: "var(--font-quran)",
-            color: "var(--mushaf-page-chrome)",
-            borderColor: "var(--mushaf-page-border)",
+            color: "var(--mushaf-surah-title-color)",
           }}
         >
           <span className="min-w-0 truncate text-right">{surahHeader}</span>
@@ -75,17 +74,16 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
           </span>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-auto px-4 py-3 sm:px-6 md:px-7">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-auto px-4 sm:px-6 md:px-7">
           {/* Stretch mushaf content / loading skeleton to full page column height */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </div>
 
         <div
-          className="shrink-0 border-t px-4 py-2 text-center text-xs sm:text-sm"
+          className={`shrink-0 px-4 py-2.5 text-lg font-medium tabular-nums sm:text-xl ${page % 2 === 1 ? "text-right" : "text-left"}`}
           style={{
             fontFamily: "var(--font-quran)",
-            color: "var(--mushaf-page-chrome)",
-            borderColor: "var(--mushaf-page-border)",
+            color: "var(--mushaf-surah-title-color)",
           }}
         >
           {toArabicIndic(page)}
