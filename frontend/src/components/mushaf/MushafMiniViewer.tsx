@@ -167,9 +167,12 @@ export function MushafMiniViewer({
         </button>
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-1">
         <div
-          className={cn(!interactive && "pointer-events-none [&_.mushaf-word]:cursor-default")}
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            !interactive && "pointer-events-none [&_.mushaf-word]:cursor-default",
+          )}
         >
           <MushafCanvas
             page={page}

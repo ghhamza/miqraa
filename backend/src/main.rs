@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -24,13 +25,75 @@ use crate::api::ws::signaling::on_session_ended;
 use crate::rooms::RoomManager;
 use crate::sfu::{MediaService, SfuServerEvent, WebRtcSfu};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[derive(Parser)]
+#[command(name = "miqraa-backend")]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Create an admin user (bootstrap when no admin exists yet)
+    CreateAdmin {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        password: String,
+    },
+}
+
+fn init_tracing() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::from_default_env().add_directive("miqraa_backend=debug".parse()?),
         )
         .init();
+    Ok(())
+}
+
+async fn create_admin(name: String, email: String, password: String) -> Result<()> {
+    init_tracing()?;
+
+    let config = config::AppConfig::load()?;
+    let pool = db::create_pool(&config.database_url).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    let email_norm = email.trim().to_lowercase();
+    let existing: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM users WHERE lower(trim(email)) = $1",
+    )
+    .bind(&email_norm)
+    .fetch_optional(&pool)
+    .await?;
+
+    if existing.is_some() {
+        println!("❌ User with email {email_norm} already exists");
+        std::process::exit(1);
+    }
+
+    let hash = auth::password::hash_password(&password)?;
+    let id = Uuid::new_v4();
+
+    sqlx::query(
+        "INSERT INTO users (id, name, email, password_hash, role) \
+         VALUES ($1, $2, $3, $4, 'admin'::user_role)",
+    )
+    .bind(id)
+    .bind(name.trim())
+    .bind(&email_norm)
+    .bind(&hash)
+    .execute(&pool)
+    .await?;
+
+    println!("✅ Admin user created: {id}");
+    Ok(())
+}
+
+async fn run_server() -> Result<()> {
+    init_tracing()?;
 
     tracing::info!("بسم الله الرحمن الرحيم");
     tracing::info!("Starting Al-Miqraa server...");
@@ -119,4 +182,18 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Some(Commands::CreateAdmin {
+            name,
+            email,
+            password,
+        }) => create_admin(name, email, password).await,
+        None => run_server().await,
+    }
 }

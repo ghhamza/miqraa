@@ -271,6 +271,18 @@ export function getPageForSurahStart(surah: number, riwaya: Riwaya = "hafs"): nu
   return m.findPage(surah as SurahN, 1 as AyahNo);
 }
 
+/**
+ * Al-Fatiha’s page and Al-Baqarah’s opening page are laid out centered in the mushaf column
+ * (vertically in the reader UI, matching common print presentation).
+ */
+export function isMushafOpeningCenterPage(page: number, riwaya: Riwaya = "hafs"): boolean {
+  const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+  return (
+    (page === getPageForSurahStart(1, riwaya) && s === 1) ||
+    (page === getPageForSurahStart(2, riwaya) && s === 2 && a === 1)
+  );
+}
+
 /** Juz whose first ayah matches the first ayah on this Mushaf page (Madani marginal “juz begins” marker). */
 export function findJuzStartingAtPage(page: number, riwaya: Riwaya = "hafs"): JuzInfo | null {
   const [s, a] = getSurahAyahAtPageStart(page, riwaya);

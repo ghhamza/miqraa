@@ -20,8 +20,14 @@
   --color-primary: #1B5E20;
   --color-primary-light: #4CAF50;
   --color-gold: #D4A843;
-  /* Mushaf reader (King Fahd–style frame / parchment) */
-  --mushaf-madinah-parchment: #fdf6e3;
+  /* Mushaf reader — white page, neutral chrome (printed Mushaf: black script on white) */
+  --mushaf-page-paper: #ffffff;
+  --mushaf-page-border: rgba(15, 23, 42, 0.12);
+  --mushaf-page-chrome: #1e293b;
+  /* Mushaf: default = --color-text (#1A1A1A); ayah range = Blue 600; hover & clicked word = gold */
+  --mushaf-ayah-range-color: #185fa5;
+  --mushaf-word-hover: var(--color-gold);
+  --mushaf-selected-word-color: var(--color-gold);
   --mushaf-frame-teal: #2c5f7c;
   --mushaf-frame-teal-deep: #1a5276;
   --color-bg: #FAFAF5;
@@ -187,24 +193,42 @@
 .mushaf-word {
   flex-shrink: 0;
   cursor: pointer;
-  transition: background-color 0.2s ease;
   padding: 1px 0;
   white-space: nowrap;
+  color: var(--color-text);
+  transition: color 0.15s ease;
 }
 .mushaf-word:hover {
-  background-color: rgba(27, 94, 32, 0.08);
-  border-radius: 3px;
+  color: var(--mushaf-word-hover);
 }
+/* Words in the current ayah range */
 .mushaf-word--highlighted {
-  background-color: rgba(27, 94, 32, 0.12);
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
+  color: var(--mushaf-ayah-range-color);
 }
+.mushaf-word--highlighted:hover {
+  color: var(--mushaf-word-hover);
+}
+/* Clicked / focused word */
 .mushaf-word--active {
-  background-color: rgba(212, 168, 67, 0.3);
-  border-radius: 4px;
-  outline: 2px solid rgba(212, 168, 67, 0.6);
+  color: var(--mushaf-selected-word-color);
 }
 .mushaf-word--active:hover {
-  background-color: rgba(212, 168, 67, 0.35);
+  color: var(--mushaf-word-hover);
+}
+.mushaf-word--active.mushaf-word--highlighted {
+  color: var(--mushaf-selected-word-color);
+}
+.mushaf-word--active.mushaf-word--highlighted:hover {
+  color: var(--mushaf-word-hover);
+}
+/* Verse number (QCF `end`): keep default ink */
+.mushaf-word--ayah-marker:hover,
+.mushaf-word--ayah-marker.mushaf-word--highlighted,
+.mushaf-word--ayah-marker.mushaf-word--highlighted:hover {
+  color: inherit;
+}
+.mushaf-word--ayah-marker.mushaf-word--active,
+.mushaf-word--ayah-marker.mushaf-word--active:hover,
+.mushaf-word--ayah-marker.mushaf-word--active.mushaf-word--highlighted {
+  color: inherit;
 }

@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useEffect, useState } from "react";
-import { getSurahAyahAtPageStart } from "../lib/quranService";
+import { getPageForSurahStart, getSurahAyahAtPageStart } from "../lib/quranService";
 import type { Riwaya } from "../lib/quranService";
 
 export interface WordData {
@@ -47,7 +47,7 @@ interface ApiResponse {
 }
 
 /** Bump when layout rules change so cached pages refetch. */
-const PAGE_CACHE_VER = 3;
+const PAGE_CACHE_VER = 4;
 const PAGE_CACHE = new Map<string, PageData>();
 
 function pageCacheKey(pageNumber: number): string {
@@ -112,8 +112,14 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
   if (minLine === 0) minLine = 1;
 
   const sortedLines = [...byLine.keys()].sort((a, b) => a - b);
-  /** Al-Fatiha on page 1 is printed with centered verse lines in the Madani Mushaf. */
-  const fatihaCenteredAyah = pageNumber === 1 && getSurahAyahAtPageStart(pageNumber, riwaya)[0] === 1;
+  const [pageStartSurah, pageStartAyah] = getSurahAyahAtPageStart(pageNumber, riwaya);
+  /**
+   * Opening pages of Al-Fatiha and Al-Baqarah use centered verse lines in the printed Madani Mushaf
+   * (same “shape” as the first page — not full-width justified blocks).
+   */
+  const madaniCenteredAyahLines =
+    (pageNumber === getPageForSurahStart(1, riwaya) && pageStartSurah === 1) ||
+    (pageNumber === getPageForSurahStart(2, riwaya) && pageStartSurah === 2 && pageStartAyah === 1);
 
   type Slot = LineData | null;
   const grid: Slot[] = Array.from({ length: 15 }, () => null);
@@ -124,7 +130,7 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
     grid[lineNum - 1] = {
       lineNumber: lineNum,
       lineType: "ayah",
-      isCentered: fatihaCenteredAyah,
+      isCentered: madaniCenteredAyahLines,
       surahNumber: null,
       words,
     };

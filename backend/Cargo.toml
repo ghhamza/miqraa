@@ -45,3 +45,6 @@ anyhow = "1"
 
 # Config
 figment = { version = "0.10", features = ["toml", "env"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }

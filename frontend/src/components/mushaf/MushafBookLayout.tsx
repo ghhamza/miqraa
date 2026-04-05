@@ -53,10 +53,10 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center">
       <div
-        className="flex min-h-0 w-full max-w-3xl flex-1 flex-col rounded-lg border-2 shadow-sm"
+        className="flex min-h-0 w-full max-w-3xl flex-1 flex-col rounded-lg border shadow-sm"
         style={{
-          borderColor: "var(--mushaf-frame-teal)",
-          background: "var(--mushaf-madinah-parchment)",
+          borderColor: "var(--mushaf-page-border)",
+          background: "var(--mushaf-page-paper)",
         }}
       >
         <div
@@ -64,8 +64,8 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
           className="flex shrink-0 justify-between gap-2 border-b px-4 py-2 text-sm leading-snug sm:text-base"
           style={{
             fontFamily: "var(--font-quran)",
-            color: "var(--mushaf-frame-teal)",
-            borderColor: "rgba(44, 95, 124, 0.25)",
+            color: "var(--mushaf-page-chrome)",
+            borderColor: "var(--mushaf-page-border)",
           }}
         >
           <span className="min-w-0 truncate text-right">{surahHeader}</span>
@@ -75,16 +75,17 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
           </span>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-3 sm:px-7">
-          {children}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 py-3 sm:px-7">
+          {/* Stretch mushaf content / loading skeleton to full page column height */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </div>
 
         <div
           className="shrink-0 border-t px-4 py-2 text-center text-xs sm:text-sm"
           style={{
             fontFamily: "var(--font-quran)",
-            color: "var(--mushaf-frame-teal)",
-            borderColor: "rgba(44, 95, 124, 0.25)",
+            color: "var(--mushaf-page-chrome)",
+            borderColor: "var(--mushaf-page-border)",
           }}
         >
           {toArabicIndic(page)}

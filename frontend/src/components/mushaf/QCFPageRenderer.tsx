@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
-import { getSurah } from "../../lib/quranService";
+import { getSurah, isMushafOpeningCenterPage } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
 import type { LineData, WordData } from "../../hooks/useQuranPage";
 import { Button } from "../ui/Button";
@@ -38,6 +38,29 @@ function isActiveWord(
   return (
     word.surah === active.surah && word.ayah === active.ayah && word.wordPosition === active.wordIndex
   );
+}
+
+/** Quran.com / QCF: verse-end glyphs (circle + number) use `char_type_name: end` — still clickable, not “word” text. */
+function isVerseEndMarker(word: WordData): boolean {
+  return word.charTypeName.toLowerCase() === "end";
+}
+
+/** Surah frame + basmalah stay at top; remaining lines are ayah rows (incl. empty grid slots). */
+function partitionOpeningHeadBody(lines: LineData[]): { head: LineData[]; body: LineData[] } {
+  let i = 0;
+  while (i < lines.length && (lines[i].lineType === "surah_name" || lines[i].lineType === "basmallah")) {
+    i++;
+  }
+  return { head: lines.slice(0, i), body: lines.slice(i) };
+}
+
+/** Vertically center only real ayah text — drop leading/trailing empty grid lines. */
+function trimAyahLinesForCentering(body: LineData[]): LineData[] {
+  const first = body.findIndex((l) => l.words.length > 0);
+  if (first === -1) return body;
+  let last = body.length - 1;
+  while (last >= first && body[last].words.length === 0) last--;
+  return body.slice(first, last + 1);
 }
 
 export function QCFPageRenderer({
@@ -122,12 +145,14 @@ export function QCFPageRenderer({
 
   if (loading || !data || !fontReady) {
     return (
-      <div className="flex w-full flex-col gap-2 px-1 py-2" aria-busy="true">
+      <div
+        className="flex w-full flex-1 flex-col gap-1.5 px-1 py-2 min-h-0"
+        aria-busy="true"
+      >
         {Array.from({ length: 15 }).map((_, i) => (
           <div
             key={i}
-            className="h-[1.15em] w-full animate-pulse rounded-sm bg-muted/60"
-            style={{ lineHeight: 2 }}
+            className="min-h-[6px] flex-1 basis-0 rounded-sm bg-muted/60 animate-pulse"
           />
         ))}
         <span className="sr-only">{t("mushaf.loading")}</span>
@@ -136,6 +161,39 @@ export function QCFPageRenderer({
   }
 
   const pageFont = getPageFontFamily(pageNumber);
+  const centerInColumn = isMushafOpeningCenterPage(pageNumber, riwaya);
+
+  const lineProps = {
+    pageFont,
+    highlightRange,
+    activeWord,
+    onWordClick: handleWordClick,
+  };
+
+  if (centerInColumn) {
+    const { head, body } = partitionOpeningHeadBody(data.lines);
+    const bodyCenter = trimAyahLinesForCentering(body);
+    return (
+      <div
+        ref={containerRef}
+        className="flex min-h-0 w-full flex-1 flex-col text-[var(--color-text)]"
+        style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
+      >
+        {head.length > 0 ? (
+          <div className="w-full shrink-0">
+            {head.map((line) => (
+              <LineView key={line.lineNumber} line={line} {...lineProps} />
+            ))}
+          </div>
+        ) : null}
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center">
+          {bodyCenter.map((line) => (
+            <LineView key={line.lineNumber} line={line} {...lineProps} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -144,14 +202,7 @@ export function QCFPageRenderer({
       style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
     >
       {data.lines.map((line) => (
-        <LineView
-          key={line.lineNumber}
-          line={line}
-          pageFont={pageFont}
-          highlightRange={highlightRange}
-          activeWord={activeWord}
-          onWordClick={handleWordClick}
-        />
+        <LineView key={line.lineNumber} line={line} {...lineProps} />
       ))}
     </div>
   );
@@ -185,7 +236,7 @@ function LineView({
   if (line.lineType === "basmallah") {
     return (
       <div className="mushaf-line mushaf-line--centered flex justify-center py-1">
-        <MushafBasmalahSvg className="h-9 w-auto max-w-full text-[var(--mushaf-frame-teal)]" />
+        <MushafBasmalahSvg className="h-9 w-auto max-w-full text-[var(--color-text)]" />
       </div>
     );
   }
@@ -204,9 +255,9 @@ function LineView({
       {line.words.map((word) => (
         <span
           key={word.id}
-          className={`mushaf-word ${isHighlighted(word, highlightRange) ? "mushaf-word--highlighted" : ""} ${
-            isActiveWord(word, activeWord) ? "mushaf-word--active" : ""
-          }`}
+          className={`mushaf-word ${isVerseEndMarker(word) ? "mushaf-word--ayah-marker" : ""} ${
+            isHighlighted(word, highlightRange) ? "mushaf-word--highlighted" : ""
+          } ${isActiveWord(word, activeWord) ? "mushaf-word--active" : ""}`}
           style={{ fontFamily: pageFont }}
           data-surah={word.surah}
           data-ayah={word.ayah}
