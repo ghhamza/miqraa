@@ -29,16 +29,15 @@ export function userFacingApiError(err: unknown, fallbackKey = "errors.generic")
 
 /**
  * API base URL (must end with `/api`, no trailing slash).
- * - Dev: default is direct `http://127.0.0.1:3000/api` so the browser talks to Axum without relying on the Vite proxy (avoids HTML/index.html responses when proxy misbehaves).
- * - Prod: use same-origin `/api` (reverse proxy) or set `VITE_API_BASE_URL`.
+ * - Dev: default is same-origin `/api` so another device on the LAN can open `http://<this-machine>:5173`
+ *   and hit the Vite proxy → backend (127.0.0.1 is wrong from a remote browser).
+ * - To bypass the proxy and talk to Axum directly on this machine: `VITE_API_BASE_URL=http://127.0.0.1:3000/api`
+ * - Prod: same-origin `/api` or set `VITE_API_BASE_URL`.
  */
 export function getApiBaseUrl(): string {
   const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim();
   if (fromEnv) {
     return fromEnv.replace(/\/+$/, "");
-  }
-  if (import.meta.env.DEV) {
-    return "http://127.0.0.1:3000/api";
   }
   return "/api";
 }

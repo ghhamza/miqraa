@@ -177,7 +177,10 @@ async fn run_server() -> Result<()> {
     let app = api::router::build_router(state);
 
     let addr = format!("{}:{}", config.host, config.port);
-    tracing::info!("Al-Miqraa listening on {}", addr);
+    tracing::info!(
+        "Al-Miqraa listening on {} (set HOST=127.0.0.1 to block LAN; default 0.0.0.0 accepts all interfaces)",
+        addr
+    );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 

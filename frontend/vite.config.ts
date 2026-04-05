@@ -17,11 +17,14 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    host: '0.0.0.0',
     port: 5173,
     proxy: {
+      // ws: true so /api/ws/session/... upgrades to WebSocket on the Rust server
       '/api': {
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,
+        ws: true,
       },
       '/ws': {
         target: 'ws://127.0.0.1:3000',
