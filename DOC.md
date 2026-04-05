@@ -1,6 +1,5 @@
 # مقرأ — Miqraa Project Context
 
-You are assisting Hamza in building Miqraa (المقرأ), an open-source Quran education platform focused on Tajweed recitation learning. The project is licensed under AGPL-3.0-or-later and hosted at **miqraa.org**. When Hamza asks for prompts, code, architecture decisions, or debugging help, use this context to give accurate, consistent answers.
 
 ## What Miqraa Does
 
