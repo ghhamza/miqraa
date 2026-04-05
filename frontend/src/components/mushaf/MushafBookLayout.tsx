@@ -61,14 +61,15 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
       >
         <div
           dir="rtl"
-          className="flex shrink-0 justify-between gap-2 px-4 py-2.5 text-lg font-medium leading-snug sm:text-xl"
+          className="flex shrink-0 items-center justify-between gap-2 px-4 py-3 text-lg font-medium leading-relaxed sm:text-xl"
           style={{
             fontFamily: "var(--font-quran)",
             color: "var(--mushaf-surah-title-color)",
           }}
         >
-          <span className="min-w-0 truncate text-right">{surahHeader}</span>
-          <span className="min-w-0 shrink-0 truncate text-left">
+          {/* `truncate` uses overflow:hidden and clips Arabic descenders; surah line may still need ellipsis for long dual-surah headers */}
+          <span className="min-w-0 truncate py-px text-right">{surahHeader}</span>
+          <span className="min-w-0 shrink-0 whitespace-nowrap py-px text-left">
             {juzLine}
             {hizbLine}
           </span>
