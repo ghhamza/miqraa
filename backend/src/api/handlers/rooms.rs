@@ -29,6 +29,8 @@ pub struct CreateRoomRequest {
     pub teacher_id: Option<Uuid>,
     pub max_students: Option<i32>,
     pub riwaya: Option<String>,
+    /// `hifz` | `tilawa` | `muraja` | `tajweed`
+    pub halaqah_type: Option<String>,
     pub is_public: Option<bool>,
     pub enrollment_open: Option<bool>,
     pub requires_approval: Option<bool>,
@@ -40,6 +42,7 @@ pub struct UpdateRoomRequest {
     pub max_students: Option<i32>,
     pub is_active: Option<bool>,
     pub riwaya: Option<String>,
+    pub halaqah_type: Option<String>,
     pub is_public: Option<bool>,
     pub enrollment_open: Option<bool>,
     pub requires_approval: Option<bool>,
@@ -61,6 +64,13 @@ fn require_teacher_or_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> 
 
 fn can_manage_room(auth: &AuthenticatedUser, room_teacher_id: Uuid) -> bool {
     auth.role == "admin" || (auth.role == "teacher" && auth.id == room_teacher_id)
+}
+
+fn parse_halaqah_type(s: &str) -> Result<&str, StatusCode> {
+    match s {
+        "hifz" | "tilawa" | "muraja" | "tajweed" => Ok(s),
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
 }
 
 async fn is_valid_teacher(state: &AppState, id: Uuid) -> Result<bool, StatusCode> {
@@ -216,7 +226,7 @@ pub async fn list_rooms(
         "student" => {
             let mut b = QueryBuilder::new(
                 "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-                 r.riwaya::text AS riwaya, \
+                 r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
                  r.is_public, r.enrollment_open, r.requires_approval, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -231,7 +241,7 @@ pub async fn list_rooms(
         }
         _ => QueryBuilder::new(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-             r.riwaya::text AS riwaya, \
+             r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -271,7 +281,7 @@ pub async fn get_room(
     let room = if auth.role == "student" {
         sqlx::query_as::<_, RoomPublic>(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-             r.riwaya::text AS riwaya, \
+             r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -287,7 +297,7 @@ pub async fn get_room(
     } else {
         sqlx::query_as::<_, RoomPublic>(
             "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-             r.riwaya::text AS riwaya, \
+             r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -360,19 +370,23 @@ pub async fn create_room(
         .and_then(parse_riwaya)
         .unwrap_or("hafs");
 
+    let halaqah_type = req.halaqah_type.as_deref().unwrap_or("hifz");
+    parse_halaqah_type(halaqah_type)?;
+
     let is_public = req.is_public.unwrap_or(false);
     let enrollment_open = req.enrollment_open.unwrap_or(true);
     let requires_approval = req.requires_approval.unwrap_or(true);
 
     sqlx::query(
-        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, is_public, enrollment_open, requires_approval) \
-         VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8)",
+        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, halaqah_type, is_public, enrollment_open, requires_approval) \
+         VALUES ($1, $2, $3, $4, true, $5, $6::halaqah_type, $7, $8, $9)",
     )
     .bind(id)
     .bind(name)
     .bind(teacher_id)
     .bind(max_students)
     .bind(riwaya)
+    .bind(halaqah_type)
     .bind(is_public)
     .bind(enrollment_open)
     .bind(requires_approval)
@@ -385,7 +399,7 @@ pub async fn create_room(
 
     let room = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-         r.riwaya::text AS riwaya, \
+         r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -410,7 +424,7 @@ pub async fn update_room(
 ) -> Result<Json<RoomPublic>, StatusCode> {
     let existing = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-         r.riwaya::text AS riwaya, \
+         r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
@@ -433,6 +447,7 @@ pub async fn update_room(
         && req.max_students.is_none()
         && req.is_active.is_none()
         && req.riwaya.is_none()
+        && req.halaqah_type.is_none()
         && req.is_public.is_none()
         && req.enrollment_open.is_none()
         && req.requires_approval.is_none()
@@ -450,6 +465,11 @@ pub async fn update_room(
         .transpose()?
         .map(|s| s.to_string())
         .unwrap_or(existing.riwaya.clone());
+    let halaqah_type: String = if let Some(ref s) = req.halaqah_type {
+        parse_halaqah_type(s.trim())?.to_string()
+    } else {
+        existing.halaqah_type.clone()
+    };
     let is_public = req.is_public.unwrap_or(existing.is_public);
     let enrollment_open = req.enrollment_open.unwrap_or(existing.enrollment_open);
     let requires_approval = req.requires_approval.unwrap_or(existing.requires_approval);
@@ -460,12 +480,13 @@ pub async fn update_room(
 
     sqlx::query(
         "UPDATE rooms SET name = $1, max_students = $2, is_active = $3, riwaya = $4, \
-         is_public = $5, enrollment_open = $6, requires_approval = $7 WHERE id = $8",
+         halaqah_type = $5::halaqah_type, is_public = $6, enrollment_open = $7, requires_approval = $8 WHERE id = $9",
     )
     .bind(&name)
     .bind(max_students)
     .bind(is_active)
     .bind(&riwaya)
+    .bind(&halaqah_type)
     .bind(is_public)
     .bind(enrollment_open)
     .bind(requires_approval)
@@ -476,7 +497,7 @@ pub async fn update_room(
 
     let room = sqlx::query_as::<_, RoomPublic>(
         "SELECT r.id, r.name, r.teacher_id, u.name AS teacher_name, r.max_students, r.is_active, r.created_at, \
-         r.riwaya::text AS riwaya, \
+         r.riwaya::text AS riwaya, r.halaqah_type::text AS halaqah_type, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \

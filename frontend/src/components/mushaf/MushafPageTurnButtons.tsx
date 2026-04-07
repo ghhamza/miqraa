@@ -27,8 +27,9 @@ interface MushafPageTurnButtonsProps {
 }
 
 /**
- * Mushaf is always read RTL: advancing in the book (higher page #) matches turning toward the
- * left. Left control = next page, right control = previous page.
+ * Desktop: controls sit in the cream margin, outside the white page column (anchored to the
+ * max-w-3xl column). RTL book: physical left = next page, physical right = previous; chevrons
+ * point outward (‹ / ›). Mobile strip uses the same mapping.
  */
 export function MushafPageTurnButtons({
   page,
@@ -47,45 +48,48 @@ export function MushafPageTurnButtons({
 
   return (
     <>
-      {/* md+: next (left) / previous (right) at viewport edges */}
-      <div className="pointer-events-none fixed inset-x-0 top-1/2 z-20 hidden -translate-y-1/2 md:block">
-        <div className="pointer-events-auto absolute left-3 top-1/2 -translate-y-1/2 sm:left-5">
-          <button
-            type="button"
-            className={btnClass}
-            aria-label={t("mushaf.nextPage")}
-            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={navDisabled || page >= totalPages}
-          >
-            <ChevronLeft className="h-6 w-6" aria-hidden />
-          </button>
-        </div>
+      {/* md+: next (left) / jump / previous (right) — outside the white page column (parent must be `relative`) */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 right-0 z-20 hidden md:block">
+        <button
+          type="button"
+          className={cn(
+            btnClass,
+            "pointer-events-auto absolute left-0 top-1/2 -translate-x-[calc(100%+0.75rem)] -translate-y-1/2",
+          )}
+          aria-label={t("mushaf.nextPage")}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={navDisabled || page >= totalPages}
+        >
+          <ChevronLeft className="h-6 w-6" aria-hidden />
+        </button>
         {onOpenJump && showDesktopJump ? (
-          <div className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <button
-              type="button"
-              className={btnClass}
-              aria-label={t("mushaf.jumpOpen")}
-              onClick={onOpenJump}
-            >
-              <ListTree className="h-6 w-6" aria-hidden />
-            </button>
-          </div>
-        ) : null}
-        <div className="pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 sm:right-5">
           <button
             type="button"
-            className={btnClass}
-            aria-label={t("mushaf.prevPage")}
-            onClick={() => onPageChange(Math.max(1, page - 1))}
-            disabled={navDisabled || page <= 1}
+            className={cn(
+              btnClass,
+              "pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+            )}
+            aria-label={t("mushaf.jumpOpen")}
+            onClick={onOpenJump}
           >
-            <ChevronRight className="h-6 w-6" aria-hidden />
+            <ListTree className="h-6 w-6" aria-hidden />
           </button>
-        </div>
+        ) : null}
+        <button
+          type="button"
+          className={cn(
+            btnClass,
+            "pointer-events-auto absolute right-0 top-1/2 translate-x-[calc(100%+0.75rem)] -translate-y-1/2",
+          )}
+          aria-label={t("mushaf.prevPage")}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={navDisabled || page <= 1}
+        >
+          <ChevronRight className="h-6 w-6" aria-hidden />
+        </button>
       </div>
 
-      {/* Small screens: same mapping — left = next, right = previous */}
+      {/* Small screens: left = next, right = previous */}
       <div
         className={cn(
           "fixed inset-x-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-gray-200 bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-sm md:hidden",

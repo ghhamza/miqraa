@@ -58,6 +58,18 @@ pub fn build_router(state: AppState) -> Router {
                 .put(handlers::recitations::update_recitation)
                 .delete(handlers::recitations::delete_recitation),
         )
+        .route(
+            "/api/error-annotations/summary",
+            get(handlers::error_annotations::annotation_summary),
+        )
+        .route(
+            "/api/error-annotations",
+            get(handlers::error_annotations::list_annotations).post(handlers::error_annotations::create_annotation),
+        )
+        .route(
+            "/api/error-annotations/{id}",
+            delete(handlers::error_annotations::delete_annotation),
+        )
         .route("/api/rooms/stats", get(handlers::rooms::room_stats))
         .route("/api/teachers", get(handlers::rooms::list_teachers))
         .route(

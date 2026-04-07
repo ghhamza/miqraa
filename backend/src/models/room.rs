@@ -15,6 +15,7 @@ pub struct Room {
     pub max_students: i32,
     pub is_active: bool,
     pub riwaya: String,
+    pub halaqah_type: String,
     pub is_public: bool,
     pub enrollment_open: bool,
     pub requires_approval: bool,

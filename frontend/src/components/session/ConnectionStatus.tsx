@@ -47,9 +47,16 @@ interface ConnectionStatusProps {
   /** WebRTC audio quality when connected; ignored when not connected. */
   networkQuality?: NetworkQuality | null;
   className?: string;
+  /** Light text for dark translucent bars (e.g. immersive live session). */
+  variant?: "default" | "onDark";
 }
 
-export function ConnectionStatus({ status, networkQuality = null, className = "" }: ConnectionStatusProps) {
+export function ConnectionStatus({
+  status,
+  networkQuality = null,
+  className = "",
+  variant = "default",
+}: ConnectionStatusProps) {
   const { t } = useTranslation();
   const cfg = DOT[status] ?? DOT.disconnected;
   const labelKey = `liveSession.${cfg.key}` as const;
@@ -64,6 +71,9 @@ export function ConnectionStatus({ status, networkQuality = null, className = ""
           : "networkGood";
   const qualityLabel = t(`liveSession.${qualityLabelKey}`);
 
+  const labelClass =
+    variant === "onDark" ? "text-white/80" : "text-[var(--color-text-muted)]";
+
   return (
     <div className={`flex items-center gap-2 text-sm ${className}`}>
       <span
@@ -72,7 +82,7 @@ export function ConnectionStatus({ status, networkQuality = null, className = ""
         aria-hidden
       />
       {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
-      <span className="text-[var(--color-text-muted)]">{t(labelKey)}</span>
+      <span className={labelClass}>{t(labelKey)}</span>
     </div>
   );
 }

@@ -9,6 +9,8 @@ import { api } from "../../lib/api";
 import type { Paginated, Room, SessionPublic } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import {
@@ -178,14 +180,13 @@ export function CalendarPage() {
   const inMonth = (d: Date) => d.getMonth() === cursor.getMonth() && d.getFullYear() === cursor.getFullYear();
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <h1
-          className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("sessions.calendar")}
-        </h1>
+    <PageShell
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("sessions.calendar") },
+      ]}
+      title={t("sessions.calendar")}
+      actions={
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -202,8 +203,9 @@ export function CalendarPage() {
             {t("sessions.weekView")}
           </Button>
         </div>
-      </div>
-
+      }
+    >
+      <PageCard padding="md">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" className="!p-2" onClick={goPrev} aria-label="prev">
@@ -236,6 +238,7 @@ export function CalendarPage() {
         </div>
       </div>
 
+      <div className="mt-6 space-y-6">
       {loading ? (
         <div className="flex justify-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
@@ -334,7 +337,7 @@ export function CalendarPage() {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end border-t border-gray-100 pt-4">
         <Button
           type="button"
           variant="primary"
@@ -348,6 +351,8 @@ export function CalendarPage() {
           {t("sessions.addSession")}
         </Button>
       </div>
+      </div>
+      </PageCard>
 
       <SessionFormModal
         open={formOpen}
@@ -362,6 +367,6 @@ export function CalendarPage() {
         }}
         onSaved={() => void fetchSessions()}
       />
-    </div>
+    </PageShell>
   );
 }

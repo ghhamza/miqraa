@@ -25,7 +25,8 @@ import { Button } from "../../components/ui/Button";
 import { RoomFormModal } from "../../components/rooms/RoomFormModal";
 import { ArchiveRoomModal } from "../../components/rooms/ArchiveRoomModal";
 import { EnrolledStudentsList } from "../../components/enrollment/EnrolledStudentsList";
-import { BackLink } from "../../components/navigation/BackLink";
+import { PageShell } from "../../components/layout/PageShell";
+import { PageCard } from "../../components/layout/PageCard";
 import { PendingRequestsList } from "../../components/enrollment/PendingRequestsList";
 import { EnrollStudentModal } from "../../components/enrollment/EnrollStudentModal";
 import { RemoveStudentModal } from "../../components/enrollment/RemoveStudentModal";
@@ -367,24 +368,23 @@ export function RoomDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <BackLink to="/rooms">{t("rooms.backToRooms")}</BackLink>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1
-            className="text-3xl font-bold text-[var(--color-text)] md:text-4xl"
-            style={{ fontFamily: "var(--font-quran)" }}
-          >
-            {room.name}
-          </h1>
-          <span
-            className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${riwayaBadgeClass(room.riwaya)}`}
-          >
-            {t(`mushaf.${room.riwaya}`)}
-          </span>
-        </div>
-        {showActions ? (
+    <PageShell
+      className="mx-auto max-w-3xl"
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("rooms.title"), to: "/rooms" },
+        { label: room.name },
+      ]}
+      title={room.name}
+      titleAside={
+        <span
+          className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${riwayaBadgeClass(room.riwaya)}`}
+        >
+          {t(`mushaf.${room.riwaya}`)}
+        </span>
+      }
+      actions={
+        showActions ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
               <span className="inline-flex items-center gap-2">
@@ -408,8 +408,9 @@ export function RoomDetailPage() {
               </Button>
             )}
           </div>
-        ) : null}
-      </div>
+        ) : undefined
+      }
+    >
 
       {isArchived ? (
         <div
@@ -420,7 +421,7 @@ export function RoomDetailPage() {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <dl className="space-y-4 text-start">
           <div>
             <dt className="text-sm text-[var(--color-text-muted)]">{t("rooms.teacher")}</dt>
@@ -443,10 +444,10 @@ export function RoomDetailPage() {
             <dd className="mt-1 text-[var(--color-text)]">{full(room.created_at)}</dd>
           </div>
         </dl>
-      </div>
+      </PageCard>
 
       {user?.role === "student" && !isArchived ? (
-        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <PageCard>
           {room.my_status === "approved" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -499,10 +500,10 @@ export function RoomDetailPage() {
           ) : room.enrolled_count >= room.max_students ? (
             <p className="text-sm text-[var(--color-text-muted)]">{t("enrollment.roomFull")}</p>
           ) : null}
-        </section>
+        </PageCard>
       ) : null}
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">
             {t("enrollment.headerCount", { count: enrolledCount, max: room.max_students })}
@@ -536,18 +537,18 @@ export function RoomDetailPage() {
             <p className="text-sm text-[var(--color-text-muted)]">{t("enrollment.listRestricted")}</p>
           </div>
         )}
-      </section>
+      </PageCard>
 
       {showActions && room.pending_count > 0 && !isArchived ? (
-        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <PageCard>
           <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
             {t("enrollment.pendingSectionTitle")}
           </h2>
           <PendingRequestsList roomId={room.id} onChanged={() => void refreshAfterMutation()} />
-        </section>
+        </PageCard>
       ) : null}
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("rooms.upcomingSessions")}</h2>
           <div className="flex flex-wrap items-center gap-2">
@@ -812,9 +813,9 @@ export function RoomDetailPage() {
             )}
           </div>
         )}
-      </section>
+      </PageCard>
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.roomRecitations")}</h2>
           {showActions ? (
@@ -830,7 +831,7 @@ export function RoomDetailPage() {
         ) : (
           <RecentRecitationsList items={roomRecitations} />
         )}
-      </section>
+      </PageCard>
 
       <SessionFormModal
         open={sessionFormOpen}
@@ -890,6 +891,6 @@ export function RoomDetailPage() {
         onClose={() => setRemoveEnrollment(null)}
         onRemoved={() => void refreshAfterMutation()}
       />
-    </div>
+    </PageShell>
   );
 }

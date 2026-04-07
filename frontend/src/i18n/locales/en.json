@@ -21,6 +21,9 @@
     "archive": "Archive",
     "restore": "Restore"
   },
+  "layout": {
+    "breadcrumbNav": "Breadcrumb"
+  },
   "auth": {
     "login": "Log in",
     "register": "Register",
@@ -183,7 +186,13 @@
     "forbiddenRoom": "You cannot view this room.",
     "backToRooms": "Back to rooms",
     "enrolledFraction": "{{enrolled}}/{{max}} students",
-    "riwayaField": "Reading (riwaya)"
+    "riwayaField": "Reading (riwaya)",
+    "halaqahType": "Halaqah type",
+    "halaqahTypeHint": "Determines which recitation tabs are available in each session",
+    "halaqahHifz": "Hifz (memorization)",
+    "halaqahTilawa": "Tilawa (recitation)",
+    "halaqahMuraja": "Muraja'a (revision)",
+    "halaqahTajweed": "Tajweed (rules)"
   },
   "mushaf": {
     "title": "Mushaf",
@@ -222,6 +231,8 @@
     "revelationOrder": "Revelation order",
     "ayahs": "Ayahs",
     "pageOf": "Page {{n}}",
+    "pageN": "p. {{n}}",
+    "juzN": "Juz {{n}}",
     "boundaryPageHint": "On many Mushaf pages, the last verses of one surah and the first verses of the next appear together — this is normal.",
     "juzOf": "Juz {{n}}",
     "totalPages": "{{n}} pages",
@@ -378,6 +389,15 @@
     "saveAttendance": "Save attendance",
     "presentAll": "Mark all present",
     "absentAll": "Mark all absent",
+    "studentSheet": "Sheet",
+    "noteLate": "Late",
+    "noteExcused": "Excused",
+    "attendanceNote": "Attendance note",
+    "grade_excellent": "Excellent",
+    "grade_good": "Good",
+    "grade_needs_work": "Needs work",
+    "grade_weak": "Weak",
+    "grade_none": "No grade",
     "countdownToday": "Today",
     "countdownTomorrow": "Tomorrow",
     "countdownInHours": "in {{hours}} hours",
@@ -406,7 +426,24 @@
     "weeksAhead": "weeks ahead",
     "batchCreate": "Add multiple slots",
     "selectDays": "Select days",
-    "viewCalendar": "View in calendar"
+    "viewCalendar": "View in calendar",
+    "backToSession": "Back to session",
+    "studentHistory": "History",
+    "periodSummary": "Period summary",
+    "totalRecitations": "Total recitations",
+    "avgRating": "Average rating",
+    "tab_dars": "Lesson",
+    "tab_tathbit": "Consolidation",
+    "tab_muraja": "Review",
+    "fromSurah": "From surah",
+    "toSurah": "To surah",
+    "ayah": "Ayah",
+    "pagesCount": "Pages (awjuh)",
+    "teacherNotes": "Teacher notes",
+    "notesPlaceholder": "Notes on student performance...",
+    "starRating": "Rating",
+    "saveRecitation": "Save recitation",
+    "saved": "Saved successfully"
   },
   "recitations": {
     "title": "Recitation log",
@@ -451,7 +488,8 @@
     "recentList": "Recent recitations",
     "lastRecitationAt": "Last recitation",
     "deletedStudent": "Deleted student",
-    "selectStudent": "Select a student"
+    "selectStudent": "Select a student",
+    "invalidRange": "Invalid ayah range for this surah"
   },
   "liveSession": {
     "connecting": "Connecting...",
@@ -505,6 +543,35 @@
     "userLeftAnnounce": "{{name}} left the session",
     "reciterChangedAnnounce": "{{name}} is now the reciter",
     "gradeAnnouncement": "Your grade: {{grade}}",
-    "micDeniedListener": "Microphone permission was denied — you can listen only."
+    "micDeniedListener": "Microphone permission was denied — you can listen only.",
+    "live": "Live",
+    "reciting": "reciting"
+  },
+  "annotation": {
+    "error": "Error",
+    "repeat": "Repeat",
+    "comment": "Note",
+    "good": "Good",
+    "lahnJali": "Major error",
+    "lahnKhafi": "Subtle error",
+    "commentPlaceholder": "Write a note...",
+    "noRecitation": "Save a grade first so there is a recitation to attach annotations to.",
+    "toggleMode": "Annotation mode"
+  },
+  "error": {
+    "harf": "Letter",
+    "haraka": "Vowel",
+    "kalima": "Word",
+    "waqf_qabih": "Bad stop",
+    "makharij": "Articulation",
+    "sifat": "Characteristics",
+    "tafkhim": "Heavy/light",
+    "madd": "Elongation",
+    "ghunnah": "Nasalization",
+    "noon_sakin": "Noon rules",
+    "meem_sakin": "Meem rules",
+    "waqf_ibtida": "Stop/start",
+    "shadda": "Emphasis",
+    "other": "Other"
   }
 }

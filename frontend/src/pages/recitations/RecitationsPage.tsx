@@ -23,6 +23,8 @@ import { GradeBadge } from "../../components/recitations/GradeBadge";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { SurahPicker } from "../../components/recitations/SurahPicker";
 import { DeleteRecitationModal } from "../../components/recitations/DeleteRecitationModal";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -264,21 +266,20 @@ export function RecitationsPage() {
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1
-          className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("recitations.title")}
-        </h1>
-        {canAdd ? (
+    <PageShell
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("recitations.title") },
+      ]}
+      title={t("recitations.title")}
+      actions={
+        canAdd ? (
           <Button type="button" variant="primary" onClick={() => setFormOpen(true)}>
             {t("recitations.addRecitation")}
           </Button>
-        ) : null}
-      </div>
-
+        ) : undefined
+      }
+    >
       {stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
@@ -332,23 +333,7 @@ export function RecitationsPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {gradeTabs.map((tab) => (
-            <button
-              key={tab.id || "all"}
-              type="button"
-              onClick={() => setGradeTab(tab.id)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                gradeTab === tab.id
-                  ? "bg-[var(--color-primary)] text-white"
-                  : "bg-gray-100 text-[var(--color-text-muted)] hover:bg-gray-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <PageCard>
         {hasMultipleRiwayat ? (
           <div className="max-w-xs">
             <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.riwaya")}</label>
@@ -366,7 +351,12 @@ export function RecitationsPage() {
             />
           </div>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={cn(
+            "grid gap-3 md:grid-cols-2 lg:grid-cols-4",
+            hasMultipleRiwayat ? "mt-4" : null,
+          )}
+        >
           <div className="space-y-2">
             <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.selectSurah")}</label>
             <SurahPicker
@@ -411,7 +401,23 @@ export function RecitationsPage() {
             />
           </div>
         </div>
-      </div>
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+          {gradeTabs.map((tab) => (
+            <button
+              key={tab.id || "all"}
+              type="button"
+              onClick={() => setGradeTab(tab.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                gradeTab === tab.id
+                  ? "bg-[var(--color-primary)] text-white"
+                  : "bg-gray-100 text-[var(--color-text-muted)] hover:bg-gray-200"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </PageCard>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -457,6 +463,6 @@ export function RecitationsPage() {
         onConfirm={() => void confirmDelete()}
         loading={actionLoading}
       />
-    </div>
+    </PageShell>
   );
 }

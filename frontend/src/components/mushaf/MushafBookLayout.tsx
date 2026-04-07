@@ -15,6 +15,10 @@ import type { Riwaya } from "../../lib/quranService";
 
 const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 
+/** Portrait page proportion (≈ A4 width:height) so the mushaf card keeps shape across viewports. */
+const MUSHAF_PAGE_ASPECT = "210 / 297" as const;
+const MUSHAF_PAGE_W_H = 210 / 297;
+
 function toArabicIndic(n: number): string {
   return String(n)
     .split("")
@@ -51,12 +55,16 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
     hizbAtPageStart != null ? ` · حزب ${toArabicIndic(hizbAtPageStart.number)}` : "";
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden [container-type:size]">
       <div
-        className="flex min-h-0 w-full max-w-3xl flex-1 flex-col rounded-lg border shadow-sm"
+        className="mx-auto flex min-h-0 w-full max-w-3xl shrink-0 flex-col overflow-hidden rounded-lg border shadow-sm"
         style={{
           borderColor: "var(--mushaf-page-border)",
           background: "var(--mushaf-page-paper)",
+          aspectRatio: MUSHAF_PAGE_ASPECT,
+          maxHeight: "100%",
+          /* Fit when height is the limiting axis (short viewports): width scales with container height. */
+          width: `min(100%, min(48rem, calc(100cqh * ${MUSHAF_PAGE_W_H})))`,
         }}
       >
         <div
@@ -75,9 +83,9 @@ export function MushafBookLayout({ page, riwaya, children }: MushafBookLayoutPro
           </span>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-auto px-4 sm:px-6 md:px-7">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden px-4 sm:px-6 md:px-7">
           {/* Stretch mushaf content / loading skeleton to full page column height */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
         </div>
 
         <div

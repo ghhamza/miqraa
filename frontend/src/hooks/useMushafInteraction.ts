@@ -13,6 +13,9 @@ export interface MushafHighlightRange {
 
 export type MushafActiveWord = { surah: number; ayah: number; wordIndex: number };
 
+/** Word tap payload from QCF (includes optional bounding rect for popovers). */
+export type MushafWordClickData = MushafActiveWord & { rect?: DOMRect };
+
 export interface MushafInteractionState {
   highlightRange: MushafHighlightRange | null;
   activeWord: MushafActiveWord | null;
@@ -21,7 +24,7 @@ export interface MushafInteractionState {
   setActiveWord: (word: MushafActiveWord | null) => void;
   goToAyah: (surah: number, ayah: number) => void;
   goToPage: (page: number) => void;
-  handleWordClick: (data: MushafActiveWord) => void;
+  handleWordClick: (data: MushafWordClickData) => void;
   handleAyahClick: (data: { surah: number; ayah: number }) => void;
 }
 
@@ -30,7 +33,7 @@ export interface UseMushafInteractionOptions {
   initialPage: number;
   riwaya: Riwaya;
   onPageChange: (page: number) => void;
-  onWordSelect?: (data: MushafActiveWord) => void;
+  onWordSelect?: (data: MushafWordClickData) => void;
   onAyahSelect?: (data: { surah: number; ayah: number }) => void;
   /**
    * When true (default), moving the highlight to an ayah on another page updates the page.
@@ -80,8 +83,8 @@ export function useMushafInteraction({
   );
 
   const handleWordClick = useCallback(
-    (data: MushafActiveWord) => {
-      setActiveWord(data);
+    (data: MushafWordClickData) => {
+      setActiveWord({ surah: data.surah, ayah: data.ayah, wordIndex: data.wordIndex });
       onWordSelect?.(data);
       handleAyahClick({ surah: data.surah, ayah: data.ayah });
     },

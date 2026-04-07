@@ -13,6 +13,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Table, type TableColumn } from "../../components/ui/Table";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { roleTranslationKey } from "../../lib/roleLabels";
@@ -146,40 +148,45 @@ export function UsersPage() {
       },
     ];
 
-  return (
-    <div className="space-y-6">
-      {stats ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: t("home.totalUsers"), value: stats.total },
-            { label: t("home.students"), value: stats.students },
-            { label: t("home.teachers"), value: stats.teachers },
-            { label: t("home.admins"), value: stats.admins },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm"
-            >
-              <p className="text-sm text-[var(--color-text-muted)]">{s.label}</p>
-              <p className="mt-1 text-3xl font-bold" style={{ color: "var(--color-gold)" }}>
-                {s.value}
-              </p>
-            </div>
-          ))}
+  const statsRow = stats ? (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {[
+        { label: t("home.totalUsers"), value: stats.total },
+        { label: t("home.students"), value: stats.students },
+        { label: t("home.teachers"), value: stats.teachers },
+        { label: t("home.admins"), value: stats.admins },
+      ].map((s) => (
+        <div
+          key={s.label}
+          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm"
+        >
+          <p className="text-sm text-[var(--color-text-muted)]">{s.label}</p>
+          <p className="mt-1 text-3xl font-bold" style={{ color: "var(--color-gold)" }}>
+            {s.value}
+          </p>
         </div>
-      ) : null}
+      ))}
+    </div>
+  ) : null;
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-[var(--color-text)]">{t("users.title")}</h1>
+  return (
+    <PageShell
+      stats={statsRow}
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("users.title") },
+      ]}
+      title={t("users.title")}
+      actions={
         <Button type="button" variant="primary" onClick={openCreate}>
           <span className="inline-flex items-center gap-2">
             <Plus className="h-4 w-4" />
             {t("users.addUser")}
           </span>
         </Button>
-      </div>
-
-      <div className="rounded-2xl bg-[var(--color-surface)] p-4 shadow-sm">
+      }
+    >
+      <PageCard>
         <Input
           label={t("common.search")}
           name="search"
@@ -187,7 +194,7 @@ export function UsersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
           {(
             [
               ["", t("users.tabsAll")],
@@ -210,7 +217,7 @@ export function UsersPage() {
             </button>
           ))}
         </div>
-      </div>
+      </PageCard>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -244,6 +251,6 @@ export function UsersPage() {
         }}
         onDeleted={() => void refreshAll()}
       />
-    </div>
+    </PageShell>
   );
 }

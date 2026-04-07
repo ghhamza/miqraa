@@ -9,7 +9,8 @@ import { api } from "../../lib/api";
 import type { RecitationPublic, StudentProgress } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
-import { BackLink } from "../../components/navigation/BackLink";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 import { SurahProgressGrid } from "../../components/recitations/SurahProgressGrid";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -87,22 +88,19 @@ export function StudentProgressPage() {
   const sum = gd.excellent + gd.good + gd.needs_work + gd.weak;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <BackLink to="/recitations">{t("recitations.title")}</BackLink>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-            style={{ fontFamily: "var(--font-quran)" }}
-          >
-            {progress.student_name}
-          </h1>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("recitations.studentProgress")}</p>
-        </div>
-        <Badge variant="green">{t(roleTranslationKey("student"))}</Badge>
-      </div>
-
+    <PageShell
+      className="mx-auto max-w-4xl"
+      backTo={{ to: "/recitations", label: t("recitations.title") }}
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("recitations.title"), to: "/recitations" },
+        { label: progress.student_name },
+      ]}
+      title={progress.student_name}
+      titleAside={<Badge variant="green">{t(roleTranslationKey("student"))}</Badge>}
+      description={t("recitations.studentProgress")}
+      contentClassName="space-y-8"
+    >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
           <p className="text-xs text-[var(--color-text-muted)]">{t("recitations.totalRecitations")}</p>
@@ -129,7 +127,7 @@ export function StudentProgressPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
           {t("recitations.gradeDistribution")}
         </h2>
@@ -151,17 +149,17 @@ export function StudentProgressPage() {
           <span>{t("recitations.needsWork")}: {gd.needs_work}</span>
           <span>{t("recitations.weak")}: {gd.weak}</span>
         </div>
-      </section>
+      </PageCard>
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.surahsCovered")}</h2>
         <SurahProgressGrid surahBestGrades={progress.surah_best_grades} />
-      </section>
+      </PageCard>
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.recentList")}</h2>
         <RecentRecitationsList items={recent} />
-      </section>
-    </div>
+      </PageCard>
+    </PageShell>
   );
 }

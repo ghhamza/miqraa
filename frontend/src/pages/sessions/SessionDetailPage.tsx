@@ -13,9 +13,10 @@ import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
-import { AttendanceList } from "../../components/sessions/AttendanceList";
+import { AttendanceSheet, type GradeColor } from "../../components/sessions/AttendanceSheet";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import { BackLink } from "../../components/navigation/BackLink";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 
@@ -64,6 +65,8 @@ export function SessionDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
   const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
+  const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
+  const [studentGrades, setStudentGrades] = useState<Record<string, GradeColor>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +83,32 @@ export function SessionDetailPage() {
     setDetail(data);
     setSessionRecitations(recRes.data.items);
     const next: Record<string, boolean> = {};
+    const notesInit: Record<string, string> = {};
     for (const a of data.attendance) {
       next[a.student_id] = a.attended;
+      notesInit[a.student_id] = a.attendance_note ?? "";
     }
     setLocalAttendance(next);
+    setLocalNotes(notesInit);
+
+    const gradesMap: Record<string, GradeColor> = {};
+    try {
+      for (const att of data.attendance) {
+        const res = await api.get<Paginated<RecitationPublic>>("recitations", {
+          params: { student_id: att.student_id, room_id: data.room_id, limit: 1 },
+        });
+        if (res.data.items.length > 0 && res.data.items[0].grade) {
+          gradesMap[att.student_id] = res.data.items[0].grade as GradeColor;
+        } else {
+          gradesMap[att.student_id] = "none";
+        }
+      }
+    } catch {
+      for (const att of data.attendance) {
+        gradesMap[att.student_id] = "none";
+      }
+    }
+    setStudentGrades(gradesMap);
   }, [id]);
 
   useEffect(() => {
@@ -132,17 +157,24 @@ export function SessionDetailPage() {
     setSavingAttendance(true);
     setError(null);
     try {
-      const attendance = detail.attendance.map((a) => ({
-        student_id: a.student_id,
-        attended: localAttendance[a.student_id] ?? a.attended,
-      }));
+      const attendance = detail.attendance.map((a) => {
+        const attended = localAttendance[a.student_id] ?? a.attended;
+        return {
+          student_id: a.student_id,
+          attended,
+          attendance_note: attended ? (localNotes[a.student_id] ?? a.attendance_note ?? null) : null,
+        };
+      });
       const { data } = await api.put<SessionAttendance[]>(`sessions/${id}/attendance`, { attendance });
       setDetail((prev) => (prev ? { ...prev, attendance: data } : null));
       const next: Record<string, boolean> = {};
+      const nextNotes: Record<string, string> = {};
       for (const a of data) {
         next[a.student_id] = a.attended;
+        nextNotes[a.student_id] = a.attendance_note ?? "";
       }
       setLocalAttendance(next);
+      setLocalNotes(nextNotes);
     } catch (err) {
       setError(userFacingApiError(err));
     } finally {
@@ -242,9 +274,49 @@ export function SessionDetailPage() {
   const showEditDelete = manage && detail.status !== "completed";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <BackLink to="/calendar">{t("sessions.calendar")}</BackLink>
-
+    <PageShell
+      className="mx-auto max-w-3xl"
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("sessions.calendar"), to: "/calendar" },
+        { label: title },
+      ]}
+      title={
+        <span className="inline-flex items-center gap-2">
+          {detail.recurrence_group_id || detail.schedule_id ? (
+            <Repeat className="h-6 w-6 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+          ) : null}
+          <span>{title}</span>
+        </span>
+      }
+      actions={
+        showEditDelete ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <Pencil className="h-4 w-4" />
+                {t("common.edit")}
+              </span>
+            </Button>
+            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+              <span className="inline-flex items-center gap-2">
+                <Trash2 className="h-4 w-4" />
+                {t("sessions.deleteSession")}
+              </span>
+            </Button>
+            {detail.recurrence_group_id && detail.status !== "completed" ? (
+              <Button type="button" variant="danger" onClick={() => setDeleteSeriesOpen(true)}>
+                <span className="inline-flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  {t("sessions.deleteAllUpcoming")}
+                </span>
+              </Button>
+            ) : null}
+          </div>
+        ) : undefined
+      }
+      contentClassName="space-y-8"
+    >
       {manage && detail.status === "scheduled" ? (
         <div className="rounded-2xl border border-[#1B5E20]/25 bg-[#1B5E20]/[0.06] p-4 shadow-sm">
           <Button
@@ -285,43 +357,7 @@ export function SessionDetailPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <h1
-          className="flex items-center gap-2 text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {detail.recurrence_group_id || detail.schedule_id ? (
-            <Repeat className="h-6 w-6 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
-          ) : null}
-          <span>{title}</span>
-        </h1>
-        {showEditDelete ? (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
-              <span className="inline-flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                {t("common.edit")}
-              </span>
-            </Button>
-            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
-              <span className="inline-flex items-center gap-2">
-                <Trash2 className="h-4 w-4" />
-                {t("sessions.deleteSession")}
-              </span>
-            </Button>
-            {detail.recurrence_group_id && detail.status !== "completed" ? (
-              <Button type="button" variant="danger" onClick={() => setDeleteSeriesOpen(true)}>
-                <span className="inline-flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  {t("sessions.deleteAllUpcoming")}
-                </span>
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <dl className="space-y-4 text-start">
           <div>
             <dt className="text-sm text-[var(--color-text-muted)]">{t("sessions.room")}</dt>
@@ -366,7 +402,7 @@ export function SessionDetailPage() {
             </div>
           ) : null}
         </dl>
-      </div>
+      </PageCard>
 
       {manage ? (
         <div className="flex flex-wrap gap-2">
@@ -394,15 +430,21 @@ export function SessionDetailPage() {
       ) : null}
 
       {manage && detail.attendance.length > 0 ? (
-        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+        <PageCard>
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
           <div className="mt-4">
-            <AttendanceList
+            <AttendanceSheet
+              sessionId={detail.id}
               items={detail.attendance}
               localState={localAttendance}
+              localNotes={localNotes}
+              studentGrades={studentGrades}
               onToggle={(studentId, attended) =>
                 setLocalAttendance((prev) => ({ ...prev, [studentId]: attended }))
+              }
+              onNoteChange={(studentId, note) =>
+                setLocalNotes((prev) => ({ ...prev, [studentId]: note }))
               }
               onPresentAll={() => {
                 const next: Record<string, boolean> = { ...localAttendance };
@@ -427,10 +469,10 @@ export function SessionDetailPage() {
               {t("sessions.saveAttendance")}
             </Button>
           </div>
-        </section>
+        </PageCard>
       ) : null}
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.sessionRecitations")}</h2>
           {manage ? (
@@ -440,7 +482,7 @@ export function SessionDetailPage() {
           ) : null}
         </div>
         <RecentRecitationsList items={sessionRecitations} />
-      </section>
+      </PageCard>
 
       <RecitationFormModal
         open={recitationFormOpen}
@@ -483,6 +525,6 @@ export function SessionDetailPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

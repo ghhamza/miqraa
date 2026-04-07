@@ -27,6 +27,8 @@ export interface GradingPanelProps {
   riwaya: string;
   locale: string;
   onGradeSubmitted: (studentId: string, grade: string, notes?: string) => void;
+  /** Fires after POST /recitations succeeds — use for linking error annotations to a recitation row. */
+  onRecitationCreated?: (rec: RecitationPublic) => void;
 }
 
 export function GradingPanel({
@@ -38,6 +40,7 @@ export function GradingPanel({
   riwaya,
   locale,
   onGradeSubmitted,
+  onRecitationCreated,
 }: GradingPanelProps) {
   const { t } = useTranslation();
   const [surah, setSurah] = useState(1);
@@ -105,6 +108,7 @@ export function GradingPanel({
       setNotes("");
       setOkFlash(true);
       window.setTimeout(() => setOkFlash(false), 1800);
+      onRecitationCreated?.(data);
       onGradeSubmitted(activeReciter.userId, grade, notes.trim() || undefined);
     } catch (e: unknown) {
       setError(userFacingApiError(e));

@@ -5,24 +5,36 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { Room, SessionDetail } from "../../types";
+import type { ErrorCategory, ErrorSeverity, Paginated, RecitationPublic, Room, SessionDetail } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
-import { useMushafInteraction } from "../../hooks/useMushafInteraction";
+import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
+import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafReader } from "../../components/mushaf/MushafReader";
-import { SessionTopBar } from "../../components/session/SessionTopBar";
-import { SessionBottomBar } from "../../components/session/SessionBottomBar";
+import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
+import { SessionNavCorner } from "../../components/session/SessionNavCorner";
+import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
-import { getNextAyah, getPrevAyah, getSurahName, getTotalPages } from "../../lib/quranService";
+import {
+  findJuzStartingAtPage,
+  getJuz,
+  getJuzForAyah,
+  getNextAyah,
+  getPrevAyah,
+  getSurahAyahAtPageStart,
+  getSurahName,
+  getSurahRangeOnPage,
+  getTotalPages,
+} from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
-import { AyahControls } from "../../components/session/AyahControls";
 import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
+import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { useWebRTCConnection } from "../../hooks/useWebRTCConnection";
 
 function formatElapsed(ms: number): string {
@@ -63,6 +75,19 @@ export function LiveSessionPage() {
   const [anotherTab, setAnotherTab] = useState(false);
   const [announce, setAnnounce] = useState("");
   const [reconnectedToast, setReconnectedToast] = useState(false);
+  const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [currentRecitationId, setCurrentRecitationId] = useState<string | null>(null);
+
+  const {
+    loadAnnotations,
+    addError,
+    addComment,
+    getWordAnnotationClass,
+  } = useAnnotations(currentRecitationId);
+
+  const annotationTargetRef = useRef<AnnotationTarget | null>(null);
+  annotationTargetRef.current = annotationTarget;
 
   const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
   const totalPages = getTotalPages(riwaya);
@@ -274,6 +299,71 @@ export function LiveSessionPage() {
     }
   }, [syncSurah, syncAyah, autoFollow, isTeacher, setHighlightRange, setActiveWord]);
 
+  const closeAnnotationToolbar = useCallback(() => setAnnotationTarget(null), []);
+
+  const handleLiveWordClick = useCallback(
+    (data: MushafWordClickData) => {
+      interaction.handleWordClick(data);
+      if (annotationMode && isTeacher && data.rect) {
+        setAnnotationTarget({
+          surah: data.surah,
+          ayah: data.ayah,
+          wordIndex: data.wordIndex,
+          rect: data.rect,
+        });
+      }
+    },
+    [interaction, annotationMode, isTeacher],
+  );
+
+  useEffect(() => {
+    if (!annotationMode) setAnnotationTarget(null);
+  }, [annotationMode]);
+
+  const handleMarkAnnotationError = useCallback(
+    async (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
+      if (!annotationTarget || !currentRecitationId) {
+        setAnnounce(t("annotation.noRecitation"));
+        return;
+      }
+      await addError(
+        currentRecitationId,
+        annotationTarget.surah,
+        annotationTarget.ayah,
+        annotationTarget.wordIndex,
+        severity,
+        category,
+        comment,
+      );
+    },
+    [annotationTarget, currentRecitationId, addError, t],
+  );
+
+  const handleAnnotationComment = useCallback(
+    async (comment: string) => {
+      if (!annotationTarget || !currentRecitationId) {
+        setAnnounce(t("annotation.noRecitation"));
+        return;
+      }
+      await addComment(
+        currentRecitationId,
+        annotationTarget.surah,
+        annotationTarget.ayah,
+        annotationTarget.wordIndex,
+        comment,
+      );
+    },
+    [annotationTarget, currentRecitationId, addComment, t],
+  );
+
+  const handleAnnotationRepeat = useCallback(
+    (surah: number, ayah: number) => {
+      interaction.setHighlightRange({ surah, ayahStart: ayah, ayahEnd: ayah });
+      sessionState.setCurrentAyah(surah, ayah);
+    },
+    [interaction, sessionState],
+  );
+
   const handleAutoFollowToggle = useCallback(() => {
     setAutoFollow((prev) => {
       if (prev) {
@@ -284,15 +374,28 @@ export function LiveSessionPage() {
     });
   }, [sessionState.state.currentPage]);
 
-  const surahLabel = useMemo(() => {
+  const ayahNavLabel = useMemo(() => {
     const ca = sessionState.state.currentAyah;
     const hr = interaction.highlightRange;
     const surahNum = ca?.surah ?? hr?.surah ?? null;
+    const ayahNum = ca?.ayah ?? hr?.ayahStart ?? null;
     if (!surahNum) return "—";
-    return getSurahName(surahNum, loc);
+    const name = getSurahName(surahNum, loc);
+    if (ayahNum != null) return `${name} · ${ayahNum}`;
+    return name;
   }, [sessionState.state.currentAyah, interaction.highlightRange, loc]);
 
-  const sessionTitle = sessionDetail?.title?.trim() || sessionDetail?.room_name || "—";
+  const navCornerLabels = useMemo(() => {
+    const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
+    const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+    const juzAtPageStart = findJuzStartingAtPage(page, riwaya);
+    const juz = juzAtPageStart ?? getJuz(getJuzForAyah(s, a, riwaya));
+    const surahLabel =
+      startSurah === endSurah
+        ? getSurahName(startSurah, loc)
+        : `${getSurahName(startSurah, loc)} – ${getSurahName(endSurah, loc)}`;
+    return { surahLabel, juzN: juz?.number ?? 0 };
+  }, [page, riwaya, loc]);
 
   useEffect(() => {
     if (!sessionDetail?.scheduled_at) return;
@@ -314,6 +417,36 @@ export function LiveSessionPage() {
     if (!rid) return null;
     return sessionState.state.participants.find((p) => p.userId === rid) ?? null;
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
+
+  useEffect(() => {
+    if (!currentRecitationId) return;
+    void loadAnnotations(currentRecitationId);
+  }, [currentRecitationId, loadAnnotations]);
+
+  useEffect(() => {
+    if (!id || !activeReciterParticipant?.userId || !isTeacher) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+          params: { session_id: id, limit: 50 },
+        });
+        if (cancelled) return;
+        const mine = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
+        mine.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setCurrentRecitationId(mine[0]?.id ?? null);
+      } catch {
+        if (!cancelled) setCurrentRecitationId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, activeReciterParticipant?.userId, isTeacher]);
+
+  useEffect(() => {
+    setAnnotationTarget(null);
+  }, [activeReciterParticipant?.userId]);
 
   const canToggleMute = sessionState.isTeacher || sessionState.isActiveReciter;
 
@@ -371,6 +504,10 @@ export function LiveSessionPage() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") {
         e.preventDefault();
+        if (annotationTargetRef.current) {
+          setAnnotationTarget(null);
+          return;
+        }
         setDrawerOpen(false);
         return;
       }
@@ -436,7 +573,7 @@ export function LiveSessionPage() {
 
   return (
     <div
-      className="relative flex min-h-0 h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[var(--color-bg)]"
+      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[#FDF6E3]"
       dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
     >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -444,7 +581,7 @@ export function LiveSessionPage() {
       </div>
       {!webrtc.browserSupported ? (
         <div
-          className="fixed top-[max(3.5rem,env(safe-area-inset-top))] left-0 right-0 z-[45] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[60] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
           role="alert"
         >
           {t("liveSession.browserNotSupported")}
@@ -452,7 +589,7 @@ export function LiveSessionPage() {
       ) : null}
       {webrtc.micDenied ? (
         <div
-          className="fixed top-[max(3.5rem,env(safe-area-inset-top))] left-0 right-0 z-[44] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[59] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
           role="status"
         >
           {t("liveSession.micDeniedListener")}
@@ -460,7 +597,7 @@ export function LiveSessionPage() {
       ) : null}
       {reconnectedToast ? (
         <div
-          className="fixed top-[max(4.5rem,env(safe-area-inset-top))] left-1/2 z-[55] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
+          className="fixed top-[max(3rem,env(safe-area-inset-top))] left-1/2 z-[60] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
           role="status"
         >
           {t("liveSession.reconnected")}
@@ -474,62 +611,77 @@ export function LiveSessionPage() {
         />
       ) : null}
 
-      <div className="fixed top-0 left-0 right-0 z-30 border-b border-gray-100 bg-[var(--color-surface)]/95 shadow-sm backdrop-blur-sm">
-        <SessionTopBar
-          connectionStatus={sessionState.wsStatus}
-          networkQuality={webrtc.networkQuality}
-          surahLabel={surahLabel}
-          sessionTitle={sessionTitle}
-          elapsedLabel={formatElapsed(elapsedMs)}
-          onLeave={handleLeave}
-          showEndSession={isTeacher}
-          onEndSession={() => setEndSessionOpen(true)}
-        />
-      </div>
-
       <main
-        className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(9rem,env(safe-area-inset-bottom))] md:pb-24"
+        className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
         aria-label="Mushaf content"
       >
         <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
-        <MushafReader
-          page={page}
-          onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
-          riwaya={riwaya}
-          canChangePage={isTeacher || (!isTeacher && !autoFollow)}
-          mobileBottomClassName="bottom-[5.5rem] z-[25]"
-        >
-          <MushafCanvas
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <MushafReader
             page={page}
+            onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
             riwaya={riwaya}
-            highlightRange={interaction.highlightRange}
-            activeWord={interaction.activeWord}
-            onWordClick={interaction.handleWordClick}
-            onAyahClick={interaction.handleAyahClick}
-          />
-        </MushafReader>
+            canChangePage={isTeacher || (!isTeacher && !autoFollow)}
+            hideNavigation
+            className="h-full min-h-0"
+            mobileBottomClassName="bottom-[max(calc(3rem+4px),env(safe-area-inset-bottom))] z-[25]"
+          >
+            <MushafCanvas
+              page={page}
+              riwaya={riwaya}
+              highlightRange={interaction.highlightRange}
+              activeWord={interaction.activeWord}
+              onWordClick={isTeacher ? handleLiveWordClick : interaction.handleWordClick}
+              onAyahClick={interaction.handleAyahClick}
+              getWordAnnotationClass={isTeacher ? getWordAnnotationClass : undefined}
+            />
+          </MushafReader>
+        </div>
       </main>
 
-      {!isTeacher ? <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} /> : null}
-
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-100 bg-[#FFFFFF]/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm">
-        <SessionBottomBar
-          activeReciterName={activeReciterName}
-          canToggleMute={canToggleMute}
+      <div className="absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100%-5.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 px-2">
+        <SessionControlsCorner
           isMuted={sessionState.isMuted}
+          canToggleMute={canToggleMute}
           onToggleMute={sessionState.toggleMute}
+          isTeacher={isTeacher}
+          annotationMode={annotationMode}
+          onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
           onOpenParticipants={() => setDrawerOpen(true)}
-          ayahControls={
-            isTeacher ? (
-              <AyahControls
-                disabled={ayahNavDisabled}
-                onNext={() => stepAyah("next")}
-                onPrev={() => stepAyah("prev")}
-              />
-            ) : undefined
-          }
         />
+        {!isTeacher ? (
+          <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
+        ) : null}
       </div>
+
+      <button
+        type="button"
+        onClick={handleLeave}
+        className="absolute end-2 z-20 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-[#555] shadow-sm transition hover:bg-gray-50 bottom-[max(0.5rem,env(safe-area-inset-bottom))]"
+        style={{ fontFamily: "var(--font-ui)" }}
+      >
+        {t("liveSession.leave")}
+      </button>
+
+      <SessionStatusCorner
+        connectionStatus={sessionState.wsStatus}
+        networkQuality={webrtc.networkQuality}
+        halaqahType={room.halaqah_type}
+        activeReciterName={activeReciterName}
+      />
+
+      <SessionNavCorner
+        elapsedLabel={formatElapsed(elapsedMs)}
+        isTeacher={isTeacher}
+        onEndSession={isTeacher ? () => setEndSessionOpen(true) : undefined}
+        surahLabel={navCornerLabels.surahLabel}
+        juzLabel={navCornerLabels.juzN > 0 ? t("mushaf.juzN", { n: navCornerLabels.juzN }) : "—"}
+        pageLabel={t("mushaf.pageN", { n: page })}
+        ayahLabel={ayahNavLabel}
+        ayahNavDisabled={ayahNavDisabled}
+        onAyahPrev={() => stepAyah("prev")}
+        onAyahNext={() => stepAyah("next")}
+      />
 
       <ParticipantDrawer
         open={drawerOpen}
@@ -553,6 +705,7 @@ export function LiveSessionPage() {
               onGradeSubmitted={(studentId, grade, notes) => {
                 sessionState.sendGradeNotification(studentId, grade, notes);
               }}
+              onRecitationCreated={(rec) => setCurrentRecitationId(rec.id)}
             />
           ) : undefined
         }
@@ -606,6 +759,17 @@ export function LiveSessionPage() {
           </Button>
         </div>
       </Modal>
+
+      {isTeacher ? (
+        <AnnotationToolbar
+          target={annotationTarget}
+          onMarkError={handleMarkAnnotationError}
+          onRepeat={handleAnnotationRepeat}
+          onComment={handleAnnotationComment}
+          onGood={closeAnnotationToolbar}
+          onClose={closeAnnotationToolbar}
+        />
+      ) : null}
     </div>
   );
 }

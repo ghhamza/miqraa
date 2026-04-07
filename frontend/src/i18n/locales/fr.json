@@ -21,6 +21,9 @@
     "archive": "Archiver",
     "restore": "Restaurer"
   },
+  "layout": {
+    "breadcrumbNav": "Fil d'Ariane"
+  },
   "auth": {
     "login": "Connexion",
     "register": "Créer un compte",
@@ -183,7 +186,13 @@
     "forbiddenRoom": "Vous ne pouvez pas voir cette salle.",
     "backToRooms": "Retour aux salles",
     "enrolledFraction": "{{enrolled}}/{{max}} étudiants",
-    "riwayaField": "Lecture (riwaya)"
+    "riwayaField": "Lecture (riwaya)",
+    "halaqahType": "Type de halaqah",
+    "halaqahTypeHint": "Détermine les onglets de récitation disponibles dans chaque séance",
+    "halaqahHifz": "Hifz (mémorisation)",
+    "halaqahTilawa": "Tilawa (récitation)",
+    "halaqahMuraja": "Muraja'a (révision)",
+    "halaqahTajweed": "Tajweed (règles)"
   },
   "mushaf": {
     "title": "Mushaf",
@@ -222,6 +231,8 @@
     "revelationOrder": "Ordre de révélation",
     "ayahs": "Versets",
     "pageOf": "Page {{n}}",
+    "pageN": "p. {{n}}",
+    "juzN": "Juz {{n}}",
     "boundaryPageHint": "Sur une même page du Mushaf, on trouve souvent la fin d’une sourate et le début de la suivante — c’est normal.",
     "juzOf": "Juz {{n}}",
     "totalPages": "{{n}} pages",
@@ -378,6 +389,15 @@
     "saveAttendance": "Enregistrer la présence",
     "presentAll": "Tous présents",
     "absentAll": "Tous absents",
+    "studentSheet": "Fiche",
+    "noteLate": "En retard",
+    "noteExcused": "Excusé",
+    "attendanceNote": "Note de présence",
+    "grade_excellent": "Excellent",
+    "grade_good": "Bien",
+    "grade_needs_work": "À améliorer",
+    "grade_weak": "Faible",
+    "grade_none": "Pas de note",
     "countdownToday": "Aujourd'hui",
     "countdownTomorrow": "Demain",
     "countdownInHours": "dans {{hours}} heures",
@@ -406,7 +426,24 @@
     "weeksAhead": "semaines à venir",
     "batchCreate": "Ajouter plusieurs créneaux",
     "selectDays": "Sélectionner les jours",
-    "viewCalendar": "Voir dans le calendrier"
+    "viewCalendar": "Voir dans le calendrier",
+    "backToSession": "Retour à la séance",
+    "studentHistory": "Historique",
+    "periodSummary": "Résumé de la période",
+    "totalRecitations": "Total des récitations",
+    "avgRating": "Note moyenne",
+    "tab_dars": "Leçon",
+    "tab_tathbit": "Consolidation",
+    "tab_muraja": "Révision",
+    "fromSurah": "De la sourate",
+    "toSurah": "À la sourate",
+    "ayah": "Verset",
+    "pagesCount": "Pages (awjuh)",
+    "teacherNotes": "Notes de l'enseignant",
+    "notesPlaceholder": "Notes sur la performance de l'élève...",
+    "starRating": "Appréciation",
+    "saveRecitation": "Enregistrer la récitation",
+    "saved": "Enregistré avec succès"
   },
   "recitations": {
     "title": "Journal des récitations",
@@ -451,7 +488,8 @@
     "recentList": "Récitations récentes",
     "lastRecitationAt": "Dernière récitation",
     "deletedStudent": "Étudiant supprimé",
-    "selectStudent": "Sélectionner un étudiant"
+    "selectStudent": "Sélectionner un étudiant",
+    "invalidRange": "Plage de versets invalide pour cette sourate"
   },
   "liveSession": {
     "connecting": "Connexion...",
@@ -505,6 +543,35 @@
     "userLeftAnnounce": "{{name}} a quitté la session",
     "reciterChangedAnnounce": "{{name}} est maintenant le récitant",
     "gradeAnnouncement": "Votre évaluation : {{grade}}",
-    "micDeniedListener": "Micro refusé — vous pouvez seulement écouter."
+    "micDeniedListener": "Micro refusé — vous pouvez seulement écouter.",
+    "live": "En direct",
+    "reciting": "récite"
+  },
+  "annotation": {
+    "error": "Erreur",
+    "repeat": "Répéter",
+    "comment": "Note",
+    "good": "Bien",
+    "lahnJali": "Erreur majeure",
+    "lahnKhafi": "Erreur subtile",
+    "commentPlaceholder": "Écrire une note...",
+    "noRecitation": "Enregistrez d'abord une évaluation pour qu'une récitation existe et puisse recevoir des annotations.",
+    "toggleMode": "Mode correction"
+  },
+  "error": {
+    "harf": "Lettre",
+    "haraka": "Voyelle",
+    "kalima": "Mot",
+    "waqf_qabih": "Arrêt interdit",
+    "makharij": "Articulation",
+    "sifat": "Caractéristiques",
+    "tafkhim": "Lourd/léger",
+    "madd": "Allongement",
+    "ghunnah": "Nasalisation",
+    "noon_sakin": "Règles noun",
+    "meem_sakin": "Règles mim",
+    "waqf_ibtida": "Arrêt/reprise",
+    "shadda": "Accentuation",
+    "other": "Autre"
   }
 }

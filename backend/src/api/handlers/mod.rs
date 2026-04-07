@@ -3,6 +3,7 @@
 
 pub mod auth;
 pub mod enrollments;
+pub mod error_annotations;
 pub mod recitations;
 pub mod rooms;
 pub mod schedules;

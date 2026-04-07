@@ -14,6 +14,8 @@ import { Input } from "../../components/ui/Input";
 import { RoomCard } from "../../components/rooms/RoomCard";
 import { RoomFormModal } from "../../components/rooms/RoomFormModal";
 import { ArchiveRoomModal } from "../../components/rooms/ArchiveRoomModal";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -127,28 +129,54 @@ export function RoomsPage() {
     }
   }
 
-  return (
-    <div className="space-y-6">
-      {stats ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-          {[
-            { label: t("rooms.statsTotalLabel"), value: stats.total },
-            { label: t("rooms.statsActiveLabel"), value: stats.active },
-            { label: t("rooms.statsInactiveLabel"), value: stats.inactive },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm"
-            >
-              <p className="text-sm text-[var(--color-text-muted)]">{s.label}</p>
-              <p className="mt-1 text-3xl font-bold" style={{ color: "var(--color-gold)" }}>
-                {s.value}
-              </p>
-            </div>
-          ))}
+  const statsRow = stats ? (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+      {[
+        { label: t("rooms.statsTotalLabel"), value: stats.total },
+        { label: t("rooms.statsActiveLabel"), value: stats.active },
+        { label: t("rooms.statsInactiveLabel"), value: stats.inactive },
+      ].map((s) => (
+        <div
+          key={s.label}
+          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm"
+        >
+          <p className="text-sm text-[var(--color-text-muted)]">{s.label}</p>
+          <p className="mt-1 text-3xl font-bold" style={{ color: "var(--color-gold)" }}>
+            {s.value}
+          </p>
         </div>
-      ) : null}
+      ))}
+    </div>
+  ) : null;
 
+  return (
+    <PageShell
+      stats={statsRow}
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("rooms.title") },
+      ]}
+      title={t("rooms.title")}
+      actions={
+        isAdmin || canAddRoom(user) ? (
+          <>
+            {isAdmin ? (
+              <Button type="button" variant="secondary" asChild>
+                <Link to="/rooms/archived">{t("nav.archivedRooms")}</Link>
+              </Button>
+            ) : null}
+            {canAddRoom(user) ? (
+              <Button type="button" variant="primary" onClick={openCreate}>
+                <span className="inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  {t("rooms.addRoom")}
+                </span>
+              </Button>
+            ) : null}
+          </>
+        ) : undefined
+      }
+    >
       {joinMessage ? (
         <div
           className="rounded-xl border border-gray-200 bg-[var(--color-bg)] px-4 py-3 text-sm text-[var(--color-text)]"
@@ -158,26 +186,7 @@ export function RoomsPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-[var(--color-text)]">{t("rooms.title")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {isAdmin ? (
-            <Button type="button" variant="secondary" asChild>
-              <Link to="/rooms/archived">{t("nav.archivedRooms")}</Link>
-            </Button>
-          ) : null}
-          {canAddRoom(user) ? (
-            <Button type="button" variant="primary" onClick={openCreate}>
-              <span className="inline-flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                {t("rooms.addRoom")}
-              </span>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="rounded-2xl bg-[var(--color-surface)] p-4 shadow-sm">
+      <PageCard>
         <Input
           label={t("common.search")}
           name="search"
@@ -185,7 +194,7 @@ export function RoomsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
           {(
             [
               ["all", t("common.all")],
@@ -207,7 +216,7 @@ export function RoomsPage() {
             </button>
           ))}
         </div>
-      </div>
+      </PageCard>
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -255,6 +264,6 @@ export function RoomsPage() {
         }}
         onArchived={() => void refreshAll()}
       />
-    </div>
+    </PageShell>
   );
 }

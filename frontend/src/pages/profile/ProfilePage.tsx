@@ -8,7 +8,8 @@ import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { BackLink } from "../../components/navigation/BackLink";
+import { PageCard } from "../../components/layout/PageCard";
+import { PageShell } from "../../components/layout/PageShell";
 
 export function ProfilePage() {
   const { t } = useTranslation();
@@ -91,19 +92,17 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-10">
-      <div>
-        <BackLink to="/">{t("nav.home")}</BackLink>
-        <h1
-          className="mt-4 text-2xl font-bold text-[var(--color-text)] md:text-3xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("profile.title")}
-        </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("profile.subtitle")}</p>
-      </div>
-
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+    <PageShell
+      className="mx-auto max-w-lg"
+      breadcrumb={[
+        { label: t("nav.home"), to: "/" },
+        { label: t("profile.title") },
+      ]}
+      title={t("profile.title")}
+      description={t("profile.subtitle")}
+      contentClassName="space-y-10"
+    >
+      <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("profile.accountSection")}</h2>
         <form onSubmit={handleProfile} className="space-y-4">
           <Input
@@ -137,9 +136,9 @@ export function ProfilePage() {
             {profileLoading ? t("common.loading") : t("profile.saveProfile")}
           </Button>
         </form>
-      </section>
+      </PageCard>
 
-      <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+      <PageCard>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("profile.passwordSection")}</h2>
         <form onSubmit={handlePassword} className="space-y-4">
           <Input
@@ -180,7 +179,7 @@ export function ProfilePage() {
             {passwordLoading ? t("common.loading") : t("profile.changePassword")}
           </Button>
         </form>
-      </section>
-    </div>
+      </PageCard>
+    </PageShell>
   );
 }

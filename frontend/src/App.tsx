@@ -18,6 +18,7 @@ import { ArchivedRoomsPage } from "./pages/rooms/ArchivedRoomsPage";
 import { RoomDetailPage } from "./pages/rooms/RoomDetailPage";
 import { CalendarPage } from "./pages/sessions/CalendarPage";
 import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
+import { StudentRecitationPage } from "./pages/sessions/StudentRecitationPage";
 import { LiveSessionPage } from "./pages/sessions/LiveSessionPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
@@ -81,6 +82,10 @@ const router = createBrowserRouter([
       { path: "rooms/:id", element: <RoomDetailPage /> },
       { path: "calendar", element: <CalendarPage /> },
       { path: "sessions/:id", element: <SessionDetailPage /> },
+      {
+        path: "sessions/:sessionId/students/:studentId",
+        element: <StudentRecitationPage />,
+      },
       { path: "recitations", element: <RecitationsPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "students/:id/progress", element: <StudentProgressPage /> },
