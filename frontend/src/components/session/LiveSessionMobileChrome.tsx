@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { cn } from "@/lib/utils";
-import { MEET_ICON_BTN_BASE } from "./sessionMeetButtonStyles";
+import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "./sessionMeetButtonStyles";
 
 export interface LiveSessionMobileTopBarProps {
   surahLabel: string;
@@ -49,12 +49,9 @@ export function LiveSessionMobileTopBar({
         onClick={onOpenMenu}
         title={t("liveSession.tooltip.openMenu")}
         aria-label={t("common.openMenu")}
-        className={cn(
-          MEET_ICON_BTN_BASE,
-          "h-9 w-9 shrink-0 bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
-        )}
+        className={MENU_ICON_BUTTON_CLASS}
       >
-        <Menu className="h-4 w-4" strokeWidth={2.25} />
+        <Menu className="h-5 w-5" strokeWidth={2.25} />
       </button>
       <p
         className="min-w-0 flex-1 truncate text-sm font-semibold text-[#2c5f7c]"

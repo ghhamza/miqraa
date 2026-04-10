@@ -198,6 +198,7 @@
   "mushaf": {
     "title": "Mushaf",
     "page": "Page",
+    "surah": "Surah",
     "juz": "Juz",
     "hizb": "Hizb",
     "riwaya": "Riwaya",
@@ -222,6 +223,15 @@
     "nextPage": "Next page",
     "jumpTitle": "Go to location",
     "jumpOpen": "Jump",
+    "navigator": {
+      "description": "Quick navigation to a surah, juz, hizb, or page.",
+      "searchSurah": "Search surah…",
+      "searchJuz": "Search juz…",
+      "searchHizb": "Search hizb…",
+      "searchPage": "Search page…",
+      "shortcutMac": "Tip: press ⌘K to open this navigator.",
+      "shortcutWin": "Tip: press Ctrl+K to open this navigator."
+    },
     "menuNavigationZone": "Quran Menu Navigation Zone",
     "loading": "Loading page...",
     "loadError": "Failed to load the page",
@@ -518,6 +528,7 @@
     "leaveConfirm": "Are you sure you want to leave the session?",
     "elapsed": "Elapsed",
     "participants": "Participants",
+    "participantsSheetDescription": "List of people in this session, microphone status, and teacher video.",
     "mute": "Mute",
     "unmute": "Unmute",
     "setReciter": "Set as reciter",

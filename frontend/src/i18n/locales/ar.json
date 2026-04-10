@@ -198,6 +198,7 @@
   "mushaf": {
     "title": "المصحف",
     "page": "صفحة",
+    "surah": "سورة",
     "juz": "جزء",
     "hizb": "حزب",
     "riwaya": "القراءة",
@@ -222,6 +223,15 @@
     "nextPage": "الصفحة التالية",
     "jumpTitle": "الانتقال إلى موضع",
     "jumpOpen": "انتقال",
+    "navigator": {
+      "description": "انتقال سريع إلى سورة أو جزء أو حزب أو صفحة.",
+      "searchSurah": "بحث عن سورة…",
+      "searchJuz": "بحث عن جزء…",
+      "searchHizb": "بحث عن حزب…",
+      "searchPage": "بحث عن صفحة…",
+      "shortcutMac": "نصيحة: ⌘K لفتح لوحة الانتقال.",
+      "shortcutWin": "نصيحة: Ctrl+K لفتح لوحة الانتقال."
+    },
     "menuNavigationZone": "منطقة قائمة التنقل في المصحف",
     "loading": "جارٍ تحميل الصفحة...",
     "loadError": "تعذّر تحميل الصفحة",
@@ -518,6 +528,7 @@
     "leaveConfirm": "هل تريد مغادرة الحصة؟",
     "elapsed": "الوقت المنقضي",
     "participants": "المشاركون",
+    "participantsSheetDescription": "قائمة المتواجدين في الحصة وحالة الميكروفون وكاميرا المعلّم.",
     "mute": "كتم الصوت",
     "unmute": "تشغيل الصوت",
     "setReciter": "تعيين كقارئ",

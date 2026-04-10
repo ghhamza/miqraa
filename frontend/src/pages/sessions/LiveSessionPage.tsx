@@ -11,6 +11,7 @@ import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useM
 import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
+import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
 import { MushafReader } from "../../components/mushaf/MushafReader";
 import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
 import {
@@ -41,8 +42,8 @@ import { ReconnectingOverlay } from "../../components/session/ReconnectingOverla
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { useWebRTCConnection } from "../../hooks/useWebRTCConnection";
 import { cn } from "@/lib/utils";
-import { MEET_ICON_BTN_BASE } from "../../components/session/sessionMeetButtonStyles";
-import { Info, Menu, MessageSquare, Users } from "lucide-react";
+import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
+import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users } from "lucide-react";
 
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -90,13 +91,13 @@ export function LiveSessionPage() {
   const [autoFollow, setAutoFollow] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
+  const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   const [gradeToast, setGradeToast] = useState<{ grade: string; notes?: string } | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const teacherVideoRef = useRef<HTMLVideoElement>(null);
   const hadServerCurrentAyahRef = useRef(false);
   const teacherSeededFromServer = useRef(false);
   const webrtcHandlersRef = useRef({
@@ -286,6 +287,23 @@ export function LiveSessionPage() {
     },
     [isTeacher, autoFollow, totalPages, sessionState.setCurrentPage],
   );
+
+  const canNavigate = isTeacher || (!isTeacher && !autoFollow);
+  const navigatorSide = i18n.language?.startsWith("ar") ? "right" : "left";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!sessionReady || anotherTab) return;
+      const el = e.target as HTMLElement;
+      if (el.closest("input,textarea,[contenteditable=true]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setNavigatorOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sessionReady, anotherTab]);
 
   useEffect(() => {
     if (!sessionReady || !isTeacher) return;
@@ -643,7 +661,7 @@ export function LiveSessionPage() {
             page={page}
             juzN={navCornerLabels.juzN}
             hizbN={navCornerLabels.hizbN}
-            onOpenMenu={() => window.alert(t("common.comingSoon"))}
+            onOpenMenu={() => setNavigatorOpen(true)}
           />
 
           <div
@@ -655,7 +673,7 @@ export function LiveSessionPage() {
               page={page}
               onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
               riwaya={riwaya}
-              canChangePage={isTeacher || (!isTeacher && !autoFollow)}
+              canChangePage={canNavigate}
               hideNavigation
               omitMenuStrip
               className="h-full min-h-0"
@@ -667,15 +685,12 @@ export function LiveSessionPage() {
                 >
                   <button
                     type="button"
-                    onClick={() => window.alert(t("common.comingSoon"))}
+                    onClick={() => setNavigatorOpen(true)}
                     title={t("liveSession.tooltip.openMenu")}
                     aria-label={t("common.openMenu")}
-                    className={cn(
-                      MEET_ICON_BTN_BASE,
-                      "h-9 w-9 shrink-0 bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
-                    )}
+                    className={MENU_ICON_BUTTON_CLASS}
                   >
-                    <Menu className="h-4 w-4" strokeWidth={2.25} />
+                    <Menu className="h-5 w-5" strokeWidth={2.25} />
                   </button>
                   <div className="min-w-0 flex-1 text-start leading-snug">
                     <p
@@ -745,10 +760,12 @@ export function LiveSessionPage() {
                 onClick={handleLeave}
                 title={t("liveSession.tooltip.leave")}
                 aria-label={t("liveSession.leave")}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-[#555] shadow-sm transition hover:bg-gray-50"
-                style={{ fontFamily: "var(--font-ui)" }}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
+                )}
               >
-                {t("liveSession.leave")}
+                <LogOut className="h-5 w-5" strokeWidth={2.25} />
               </button>
               {isTeacher ? (
                 <button
@@ -756,10 +773,12 @@ export function LiveSessionPage() {
                   onClick={() => setEndSessionOpen(true)}
                   title={t("liveSession.tooltip.endSession")}
                   aria-label={t("liveSession.endSession")}
-                  className="rounded-lg bg-[#EF5350] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#E53935]"
-                  style={{ fontFamily: "var(--font-ui)" }}
+                  className={cn(
+                    MEET_ICON_BTN_BASE,
+                    "bg-gradient-to-b from-[#EF5350] to-[#E53935] text-white hover:from-[#E53935] hover:to-[#C62828]",
+                  )}
                 >
-                  {t("liveSession.endSession")}
+                  <PhoneOff className="h-5 w-5" strokeWidth={2.25} />
                 </button>
               ) : null}
             </div>
@@ -832,6 +851,17 @@ export function LiveSessionPage() {
         </div>
       </main>
 
+      <MushafNavigatorSheet
+        open={navigatorOpen}
+        onOpenChange={setNavigatorOpen}
+        riwaya={riwaya}
+        page={page}
+        totalPages={totalPages}
+        canNavigate={canNavigate}
+        onNavigateToPage={goPage}
+        side={navigatorSide}
+      />
+
       <LiveSessionOverflowSheet
         open={mobileOverflowOpen}
         onOpenChange={setMobileOverflowOpen}
@@ -852,7 +882,6 @@ export function LiveSessionPage() {
         activeReciterId={sessionState.state.activeReciterId}
         isTeacher={sessionState.isTeacher}
         onSetReciter={sessionState.setReciter}
-        teacherVideoRef={teacherVideoRef}
         gradingPanel={
           sessionState.isTeacher && id ? (
             <GradingPanel
