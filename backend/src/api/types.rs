@@ -60,6 +60,7 @@ pub struct RoomPublic {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub riwaya: String,
+    pub halaqah_type: String,
     pub enrolled_count: i64,
     pub is_public: bool,
     pub enrollment_open: bool,
@@ -160,6 +161,7 @@ pub struct SessionAttendanceRow {
     pub student_id: Uuid,
     pub student_name: String,
     pub attended: bool,
+    pub attendance_note: Option<String>,
     pub joined_at: Option<DateTime<Utc>>,
     pub left_at: Option<DateTime<Utc>>,
 }
@@ -189,6 +191,9 @@ pub struct RecitationPublic {
     pub recording_path: Option<String>,
     pub created_at: DateTime<Utc>,
     pub riwaya: String,
+    pub turn_type: String,
+    pub pages_count: Option<f64>,
+    pub star_rating: Option<i16>,
 }
 
 #[derive(Serialize)]
@@ -229,4 +234,31 @@ pub struct StudentProgressResponse {
     pub recent_recitations: i64,
     pub last_recitation_date: Option<DateTime<Utc>>,
     pub streak_days: i32,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct ErrorAnnotationPublic {
+    pub id: Uuid,
+    pub recitation_id: Uuid,
+    pub surah: i32,
+    pub ayah: i32,
+    pub word_position: Option<i32>,
+    pub error_severity: String,
+    pub error_category: String,
+    pub teacher_comment: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct ErrorSummary {
+    pub total_errors: i64,
+    pub jali_count: i64,
+    pub khafi_count: i64,
+    pub by_category: Vec<CategoryCount>,
+}
+
+#[derive(Serialize, FromRow)]
+pub struct CategoryCount {
+    pub category: String,
+    pub count: i64,
 }

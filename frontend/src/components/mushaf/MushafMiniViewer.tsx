@@ -85,9 +85,9 @@ export function MushafMiniViewer({
   }, [currentAyah]);
 
   const handleWordClick = useCallback(
-    (data: { surah: number; ayah: number; wordIndex: number }) => {
-      setActiveWord(data);
-      onWordSelect?.(data);
+    (data: { surah: number; ayah: number; wordIndex: number; rect?: DOMRect }) => {
+      setActiveWord({ surah: data.surah, ayah: data.ayah, wordIndex: data.wordIndex });
+      onWordSelect?.({ surah: data.surah, ayah: data.ayah, wordIndex: data.wordIndex });
       onAyahSelect?.({ surah: data.surah, ayah: data.ayah });
     },
     [onWordSelect, onAyahSelect],

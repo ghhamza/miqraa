@@ -14,6 +14,7 @@ export interface MushafCanvasProps {
   activeWord?: QCFPageRendererProps["activeWord"];
   onWordClick?: QCFPageRendererProps["onWordClick"];
   onAyahClick?: QCFPageRendererProps["onAyahClick"];
+  getWordAnnotationClass?: QCFPageRendererProps["getWordAnnotationClass"];
 }
 
 export function MushafCanvas({
@@ -23,6 +24,7 @@ export function MushafCanvas({
   activeWord,
   onWordClick,
   onAyahClick,
+  getWordAnnotationClass,
 }: MushafCanvasProps) {
   const { t } = useTranslation();
 
@@ -44,6 +46,7 @@ export function MushafCanvas({
       activeWord={activeWord}
       onWordClick={onWordClick}
       onAyahClick={onAyahClick}
+      getWordAnnotationClass={getWordAnnotationClass}
     />
   );
 }

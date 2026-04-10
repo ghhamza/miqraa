@@ -12,6 +12,8 @@ export interface WordData {
   wordPosition: number;
   glyph: string;
   charTypeName: string;
+  /** Which Mushaf page’s QCF woff2 contains this glyph (PUA); may differ from the page being viewed. */
+  glyphPageFont: number;
 }
 
 export interface LineData {
@@ -34,6 +36,7 @@ interface ApiWord {
   code_v2?: string;
   code_v1?: string;
   line_number: number;
+  /** Mushaf page font that owns this glyph (QCF PUA is per-page). */
   page_number: number;
 }
 
@@ -47,7 +50,7 @@ interface ApiResponse {
 }
 
 /** Bump when layout rules change so cached pages refetch. */
-const PAGE_CACHE_VER = 4;
+const PAGE_CACHE_VER = 7;
 const PAGE_CACHE = new Map<string, PageData>();
 
 /** Madani mushaf page count (Hafs 604 lines). */
@@ -97,6 +100,7 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
         wordPosition: w.position,
         glyph,
         charTypeName: w.char_type_name,
+        glyphPageFont: typeof w.page_number === "number" ? w.page_number : pageNumber,
       };
       const list = byLine.get(lineNum) ?? [];
       list.push(wd);
@@ -211,6 +215,16 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
       lines.push(cell);
     } else {
       lines.push(emptyAyahLine(ln, false));
+    }
+  }
+
+  /* Only 1–2 real words per line: avoid huge space-between gaps; 3+ words stay fully justified */
+  const SHORT_LINE_MAX_WORDS = 2;
+  for (const line of lines) {
+    if (line.lineType !== "ayah") continue;
+    const realWordCount = line.words.filter((w) => w.charTypeName.toLowerCase() !== "end").length;
+    if (realWordCount > 0 && realWordCount <= SHORT_LINE_MAX_WORDS && !line.isCentered) {
+      line.isCentered = true;
     }
   }
 

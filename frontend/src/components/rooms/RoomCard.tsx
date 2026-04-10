@@ -4,7 +4,15 @@
 import { useNavigate } from "react-router-dom";
 import { Archive, Pencil, RotateCcw, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Room } from "../../types";
+import type { HalaqahType, Room } from "../../types";
+
+const HALAQAH_I18N: Record<HalaqahType, string> = {
+  hifz: "rooms.halaqahHifz",
+  tilawa: "rooms.halaqahTilawa",
+  muraja: "rooms.halaqahMuraja",
+  tajweed: "rooms.halaqahTajweed",
+};
+import { halaqahBadgeClass } from "../../lib/halaqahUi";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -59,6 +67,11 @@ export function RoomCard({
             className={`inline-flex rounded-md border px-1.5 py-0.5 text-[0.65rem] font-semibold ${riwayaBadgeClass(room.riwaya)}`}
           >
             {t(`mushaf.${room.riwaya}`)}
+          </span>
+          <span
+            className={`inline-flex rounded-md border px-1.5 py-0.5 text-[0.65rem] font-semibold ${halaqahBadgeClass(room.halaqah_type)}`}
+          >
+            {t(HALAQAH_I18N[room.halaqah_type])}
           </span>
           {canManage && room.pending_count > 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-xs font-semibold text-[var(--color-gold)]">

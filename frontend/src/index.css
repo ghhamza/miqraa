@@ -198,14 +198,16 @@
 .mushaf-line {
   direction: rtl;
   width: 100%;
-  min-height: 1.2em;
-  line-height: 2;
+  min-height: 1em;
+  line-height: 1.65;
 }
-/* Surah title / basmalah blocks (not ayah rows) */
+
+/* Surah title / basmalah blocks */
 .mushaf-line--centered {
   text-align: center;
 }
-/* Ayah lines: flex avoids `text-align: justify` + space nodes (bad for RTL QCF). */
+
+/* Ayah lines */
 .mushaf-ayah-line {
   display: flex;
   flex-direction: row;
@@ -214,17 +216,22 @@
   width: 100%;
   min-width: 0;
 }
+
+/* Full-width lines: justify */
 .mushaf-ayah-line--justify {
   justify-content: space-between;
 }
+
+/* Very short lines only: pack to the right margin in RTL (flex-start = main-start = right); gap on the left */
 .mushaf-ayah-line--center {
-  justify-content: center;
-  column-gap: 0;
+  justify-content: flex-start;
+  column-gap: 0.15em;
 }
+
 .mushaf-word {
   flex-shrink: 0;
   cursor: pointer;
-  padding: 1px 0;
+  padding: 0;
   white-space: nowrap;
   color: var(--color-text);
   transition: color 0.15s ease;
@@ -262,4 +269,22 @@
 .mushaf-word--ayah-marker.mushaf-word--active:hover,
 .mushaf-word--ayah-marker.mushaf-word--active.mushaf-word--highlighted {
   color: inherit;
+}
+
+/* Error annotation highlights on Mushaf words */
+.mushaf-word--error-jali {
+  background-color: rgba(239, 83, 80, 0.2);
+  border-radius: 2px;
+  outline: 1px solid rgba(239, 83, 80, 0.4);
+}
+
+.mushaf-word--error-khafi {
+  background-color: rgba(245, 127, 23, 0.2);
+  border-radius: 2px;
+  outline: 1px solid rgba(245, 127, 23, 0.4);
+}
+
+.mushaf-word--good {
+  background-color: rgba(76, 175, 80, 0.15);
+  border-radius: 2px;
 }

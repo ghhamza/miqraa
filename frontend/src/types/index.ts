@@ -53,6 +53,8 @@ export type QuranRiwaya =
   | "doori_kisai"
   | "abu_harith";
 
+export type HalaqahType = "hifz" | "tilawa" | "muraja" | "tajweed";
+
 /** Room row from API (includes teacher display name). */
 export interface Room {
   id: string;
@@ -63,6 +65,7 @@ export interface Room {
   is_active: boolean;
   created_at: string;
   riwaya: QuranRiwaya;
+  halaqah_type: HalaqahType;
   enrolled_count: number;
   is_public: boolean;
   enrollment_open: boolean;
@@ -181,6 +184,7 @@ export interface SessionAttendance {
   student_id: string;
   student_name: string;
   attended: boolean;
+  attendance_note: string | null;
   joined_at: string | null;
   left_at: string | null;
 }
@@ -191,6 +195,8 @@ export interface SessionDetail extends SessionPublic {
 }
 
 export type RecitationGrade = "excellent" | "good" | "needs_work" | "weak";
+
+export type TurnType = "dars" | "tathbit" | "muraja";
 
 export interface RecitationPublic {
   id: string;
@@ -209,6 +215,46 @@ export interface RecitationPublic {
   recording_path: string | null;
   created_at: string;
   riwaya: QuranRiwaya;
+  turn_type: TurnType;
+  pages_count: number | null;
+  star_rating: number | null;
+}
+
+export type ErrorSeverity = "jali" | "khafi";
+
+export type ErrorCategory =
+  | "harf"
+  | "haraka"
+  | "kalima"
+  | "waqf_qabih"
+  | "makharij"
+  | "sifat"
+  | "tafkhim"
+  | "madd"
+  | "ghunnah"
+  | "noon_sakin"
+  | "meem_sakin"
+  | "waqf_ibtida"
+  | "shadda"
+  | "other";
+
+export interface ErrorAnnotation {
+  id: string;
+  recitation_id: string;
+  surah: number;
+  ayah: number;
+  word_position: number | null;
+  error_severity: ErrorSeverity;
+  error_category: ErrorCategory;
+  teacher_comment: string | null;
+  created_at: string;
+}
+
+export interface ErrorSummary {
+  total_errors: number;
+  jali_count: number;
+  khafi_count: number;
+  by_category: { category: string; count: number }[];
 }
 
 export interface RecitationStats {

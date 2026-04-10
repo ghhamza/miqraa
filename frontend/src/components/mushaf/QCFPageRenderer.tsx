@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
@@ -16,10 +17,12 @@ import { SurahNameSvg } from "./SurahNameSvg";
 export interface QCFPageRendererProps {
   pageNumber: number;
   riwaya: Riwaya;
-  onWordClick?: (data: { surah: number; ayah: number; wordIndex: number }) => void;
+  onWordClick?: (data: { surah: number; ayah: number; wordIndex: number; rect?: DOMRect }) => void;
   onAyahClick?: (data: { surah: number; ayah: number }) => void;
   highlightRange?: { surah: number; ayahStart: number; ayahEnd: number } | null;
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
+  /** CSS class for words that have annotations (e.g. mushaf-word--error-jali) */
+  getWordAnnotationClass?: (surah: number, ayah: number, wordPosition: number) => string;
 }
 
 function isHighlighted(
@@ -71,6 +74,7 @@ export function QCFPageRenderer({
   onAyahClick,
   highlightRange,
   activeWord,
+  getWordAnnotationClass,
 }: QCFPageRendererProps) {
   const { t } = useTranslation();
   const { data, loading, error, reload } = useQuranPage(pageNumber, riwaya);
@@ -78,13 +82,26 @@ export function QCFPageRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
   /** Default until we read a real column width (avoid fontSize=12 when width was 0 → huge flex gaps). */
   const [fontSizePx, setFontSizePx] = useState(28);
+  /** Last container width used to set font from ResizeObserver — ignore RO when only height changes (new page). */
+  const lastObservedWidthForFontRef = useRef<number | null>(null);
+  /** Reset width-based font on page navigation (avoid carrying over previous page’s vertical shrink). */
+  const layoutPageRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setFontReady(false);
     void (async () => {
       try {
-        await loadPageFont(pageNumber);
+        const pages = new Set<number>([pageNumber]);
+        if (data?.lines && data.pageNumber === pageNumber) {
+          for (const line of data.lines) {
+            for (const w of line.words) {
+              const p = w.glyphPageFont;
+              if (typeof p === "number" && p >= 1 && p <= 604) pages.add(p);
+            }
+          }
+        }
+        await Promise.all([...pages].map((p) => loadPageFont(p)));
         /* One frame after fonts are ready so the first paint uses QCF, not fallback metrics. */
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (!cancelled) setFontReady(true);
@@ -95,7 +112,7 @@ export function QCFPageRenderer({
     return () => {
       cancelled = true;
     };
-  }, [pageNumber]);
+  }, [pageNumber, data]);
 
   useEffect(() => {
     if (!fontReady || !containerRef.current) return;
@@ -107,23 +124,28 @@ export function QCFPageRenderer({
       /* Subpixel + padding: slightly conservative so justified QCF lines (flex, no shrink) stay in column */
       const w = Math.max(0, Math.floor(widthPx) - 2);
       if (w < MIN_WIDTH_PX) return -1;
-      return Math.max(12, Math.min(40, w / 16));
+      return Math.max(12, Math.min(48, w / 14.5));
+    }
+
+    function applyFontSizeIfWidthChanged(rawWidth: number): void {
+      if (lastObservedWidthForFontRef.current != null && Math.abs(rawWidth - lastObservedWidthForFontRef.current) < 1) {
+        return;
+      }
+      lastObservedWidthForFontRef.current = rawWidth;
+      const next = computeFontSize(rawWidth);
+      if (next < 0) return;
+      setFontSizePx(next);
     }
 
     function measureFromEl(): void {
-      const raw = el.clientWidth;
-      const next = computeFontSize(raw);
-      if (next < 0) return;
-      setFontSizePx(next);
+      applyFontSizeIfWidthChanged(el.clientWidth);
     }
 
     const ro = new ResizeObserver((entries) => {
       /* Read after layout; first frame often reports 0 in nested flex min-h-0 chains. */
       requestAnimationFrame(() => {
         const raw = entries[0]?.contentRect.width ?? el.clientWidth;
-        const next = computeFontSize(raw);
-        if (next < 0) return;
-        setFontSizePx(next);
+        applyFontSizeIfWidthChanged(raw);
       });
     });
     ro.observe(el);
@@ -135,6 +157,37 @@ export function QCFPageRenderer({
 
     return () => ro.disconnect();
   }, [fontReady, pageNumber]);
+
+  /** On page change, re-apply width-based font so we don’t keep the previous page’s shrink. */
+  useLayoutEffect(() => {
+    if (!fontReady || !data || !containerRef.current) return;
+    if (data.pageNumber !== pageNumber) return;
+    if (layoutPageRef.current === pageNumber) return;
+    const el = containerRef.current;
+    const w = Math.max(0, Math.floor(el.clientWidth) - 2);
+    if (w < 64) return;
+    const baseSize = Math.max(12, Math.min(48, w / 14.5));
+    layoutPageRef.current = pageNumber;
+    lastObservedWidthForFontRef.current = el.clientWidth;
+    flushSync(() => setFontSizePx(baseSize));
+  }, [fontReady, data, pageNumber]);
+
+  /** Shrink font until QCF column fits container height (no vertical scroll). */
+  useLayoutEffect(() => {
+    if (!fontReady || !data || !containerRef.current) return;
+    if (data.pageNumber !== pageNumber) return;
+    const el = containerRef.current;
+    const h = el.clientHeight;
+    const sh = el.scrollHeight;
+    if (h <= 0 || sh <= h + 2) return;
+    setFontSizePx((prev) => {
+      const p = Number.isFinite(prev) ? prev : 28;
+      if (p <= 12) return 12;
+      const scaled = Math.floor(p * (h / sh));
+      if (!Number.isFinite(scaled)) return p;
+      return Math.max(12, scaled < p ? scaled : p - 1);
+    });
+  }, [fontReady, data, pageNumber, fontSizePx]);
 
   useEffect(() => {
     if (fontReady) preloadAdjacentPages(pageNumber);
@@ -151,9 +204,9 @@ export function QCFPageRenderer({
   }, [highlightRange, fontReady, pageNumber]);
 
   const handleWordClick = useCallback(
-    (word: WordData) => {
-      const payload = { surah: word.surah, ayah: word.ayah, wordIndex: word.wordPosition };
-      onWordClick?.(payload);
+    (word: WordData, e: MouseEvent<HTMLSpanElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      onWordClick?.({ surah: word.surah, ayah: word.ayah, wordIndex: word.wordPosition, rect });
       onAyahClick?.({ surah: word.surah, ayah: word.ayah });
     },
     [onWordClick, onAyahClick],
@@ -187,15 +240,17 @@ export function QCFPageRenderer({
     );
   }
 
-  const pageFont = getPageFontFamily(pageNumber);
   const centerInColumn = isMushafOpeningCenterPage(pageNumber, riwaya);
 
   const lineProps = {
-    pageFont,
+    mushafPageNumber: pageNumber,
     highlightRange,
     activeWord,
+    getWordAnnotationClass,
     onWordClick: handleWordClick,
   };
+
+  const safeFontPx = Math.min(48, Math.max(12, Number.isFinite(fontSizePx) ? fontSizePx : 28));
 
   if (centerInColumn) {
     const { head, body } = partitionOpeningHeadBody(data.lines);
@@ -203,8 +258,8 @@ export function QCFPageRenderer({
     return (
       <div
         ref={containerRef}
-        className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-auto text-[var(--color-text)]"
-        style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
+        className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
+        style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
       >
         {head.length > 0 ? (
           <div className="w-full shrink-0">
@@ -225,11 +280,17 @@ export function QCFPageRenderer({
   return (
     <div
       ref={containerRef}
-      className="min-w-0 w-full overflow-x-auto text-[var(--color-text)]"
-      style={{ fontSize: fontSizePx, lineHeight: 2.0 }}
+      className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
+      style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
     >
+      {/* 15 QCF slots share height so the footer area doesn’t leave a dead band */}
       {data.lines.map((line) => (
-        <LineView key={line.lineNumber} line={line} {...lineProps} />
+        <div
+          key={line.lineNumber}
+          className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col justify-center"
+        >
+          <LineView line={line} {...lineProps} />
+        </div>
       ))}
     </div>
   );
@@ -237,16 +298,18 @@ export function QCFPageRenderer({
 
 function LineView({
   line,
-  pageFont,
+  mushafPageNumber,
   highlightRange,
   activeWord,
+  getWordAnnotationClass,
   onWordClick,
 }: {
   line: LineData;
-  pageFont: string;
+  mushafPageNumber: number;
   highlightRange?: { surah: number; ayahStart: number; ayahEnd: number } | null;
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
-  onWordClick: (w: WordData) => void;
+  getWordAnnotationClass?: (surah: number, ayah: number, wordPosition: number) => string;
+  onWordClick: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
 }) {
   if (line.lineType === "surah_name" && line.surahNumber != null) {
     const sn = line.surahNumber;
@@ -278,21 +341,24 @@ function LineView({
 
   return (
     <div className={ayahRowClass} dir="rtl">
-      {line.words.map((word) => (
-        <span
-          key={word.id}
-          className={`mushaf-word ${isVerseEndMarker(word) ? "mushaf-word--ayah-marker" : ""} ${
-            isHighlighted(word, highlightRange) ? "mushaf-word--highlighted" : ""
-          } ${isActiveWord(word, activeWord) ? "mushaf-word--active" : ""}`}
-          style={{ fontFamily: pageFont }}
-          data-surah={word.surah}
-          data-ayah={word.ayah}
-          data-word={word.wordPosition}
-          onClick={() => onWordClick(word)}
-        >
-          {word.glyph}
-        </span>
-      ))}
+      {line.words.map((word) => {
+        const annotationClass = getWordAnnotationClass?.(word.surah, word.ayah, word.wordPosition) ?? "";
+        return (
+          <span
+            key={word.id}
+            className={`mushaf-word ${isVerseEndMarker(word) ? "mushaf-word--ayah-marker" : ""} ${
+              isHighlighted(word, highlightRange) ? "mushaf-word--highlighted" : ""
+            } ${isActiveWord(word, activeWord) ? "mushaf-word--active" : ""} ${annotationClass}`}
+            style={{ fontFamily: getPageFontFamily(word.glyphPageFont ?? mushafPageNumber) }}
+            data-surah={word.surah}
+            data-ayah={word.ayah}
+            data-word={word.wordPosition}
+            onClick={(e) => onWordClick(word, e)}
+          >
+            {word.glyph}
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -33,6 +33,7 @@ pub struct ListRecitationsQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
     pub riwaya: Option<String>,
+    pub turn_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -46,6 +47,9 @@ pub struct CreateRecitationRequest {
     pub grade: Option<String>,
     pub teacher_notes: Option<String>,
     pub riwaya: Option<String>,
+    pub turn_type: Option<String>,
+    pub pages_count: Option<f64>,
+    pub star_rating: Option<i16>,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +59,9 @@ pub struct UpdateRecitationRequest {
     pub ayah_end: Option<i32>,
     pub grade: Option<String>,
     pub teacher_notes: Option<String>,
+    pub turn_type: Option<String>,
+    pub pages_count: Option<f64>,
+    pub star_rating: Option<i16>,
 }
 
 fn apply_list_role_scope(
@@ -85,7 +92,7 @@ async fn fetch_recitation_public(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -139,6 +146,21 @@ async fn can_access_student(
         return Ok(ok);
     }
     Ok(false)
+}
+
+fn parse_turn_type(s: &str) -> Result<&str, StatusCode> {
+    match s.trim() {
+        "dars" | "tathbit" | "muraja" => Ok(s.trim()),
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+fn validate_star_rating(r: i16) -> Result<i16, StatusCode> {
+    if (1..=5).contains(&r) {
+        Ok(r)
+    } else {
+        Err(StatusCode::BAD_REQUEST)
+    }
 }
 
 fn parse_grade(s: &str) -> Option<&'static str> {
@@ -224,6 +246,12 @@ fn push_recitation_list_filters<'a>(
             qb.push_bind(r);
         }
     }
+    if let Some(ref tt) = params.turn_type {
+        if parse_turn_type(tt).is_ok() {
+            qb.push(" AND rec.turn_type::text = ");
+            qb.push_bind(tt.trim());
+        }
+    }
     Ok(())
 }
 
@@ -253,7 +281,7 @@ pub async fn list_recitations(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -357,10 +385,16 @@ pub async fn create_recitation(
     };
 
     let grade_sql: Option<&str> = req.grade.as_ref().and_then(|s| parse_grade(s));
+    let turn_type = req.turn_type.as_deref().unwrap_or("dars");
+    parse_turn_type(turn_type)?;
+    let star_rating = match req.star_rating {
+        None => None,
+        Some(r) => Some(validate_star_rating(r)?),
+    };
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO recitations \
-         (student_id, room_id, session_id, surah, ayah_start, ayah_end, grade, teacher_notes, teacher_id, riwaya) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+         (student_id, room_id, session_id, surah, ayah_start, ayah_end, grade, teacher_notes, teacher_id, riwaya, turn_type, pages_count, star_rating) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::turn_type, $12, $13) \
          RETURNING id",
     )
     .bind(req.student_id)
@@ -373,6 +407,9 @@ pub async fn create_recitation(
     .bind(req.teacher_notes.as_ref())
     .bind(auth.id)
     .bind(&rec_riwaya)
+    .bind(turn_type)
+    .bind(req.pages_count)
+    .bind(star_rating)
     .fetch_one(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -413,14 +450,27 @@ pub async fn update_recitation(
         Some(s) => parse_grade(s),
     };
     let notes_val = req.teacher_notes.clone().or(existing.teacher_notes.clone());
+    let turn_type = match req.turn_type.as_deref() {
+        Some(s) => parse_turn_type(s)?.to_string(),
+        None => existing.turn_type.clone(),
+    };
+    let pages_count = req.pages_count.or(existing.pages_count);
+    let star_rating = match req.star_rating {
+        None => existing.star_rating,
+        Some(r) => Some(validate_star_rating(r)?),
+    };
     sqlx::query(
-        "UPDATE recitations SET surah = $1, ayah_start = $2, ayah_end = $3, grade = $4, teacher_notes = $5 WHERE id = $6",
+        "UPDATE recitations SET surah = $1, ayah_start = $2, ayah_end = $3, grade = $4, teacher_notes = $5, \
+         turn_type = $6::turn_type, pages_count = $7, star_rating = $8 WHERE id = $9",
     )
     .bind(surah)
     .bind(ayah_start)
     .bind(ayah_end)
     .bind(grade_val)
     .bind(notes_val.as_ref())
+    .bind(&turn_type)
+    .bind(pages_count)
+    .bind(star_rating)
     .bind(id)
     .execute(&state.db)
     .await
@@ -563,7 +613,7 @@ pub async fn list_by_student(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \

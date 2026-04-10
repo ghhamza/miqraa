@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { QuranRiwaya, Room, TeacherOption } from "../../types";
+import type { HalaqahType, QuranRiwaya, Room, TeacherOption } from "../../types";
 import { getAvailableRiwayat } from "../../lib/quranService";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -38,6 +38,7 @@ export function RoomFormModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
+  const [halaqahType, setHalaqahType] = useState<HalaqahType>("hifz");
   const [isPublic, setIsPublic] = useState(false);
   const [enrollmentOpen, setEnrollmentOpen] = useState(true);
   const [requiresApproval, setRequiresApproval] = useState(true);
@@ -51,6 +52,7 @@ export function RoomFormModal({
       setIsActive(room.is_active);
       setTeacherId("");
       setRiwaya(room.riwaya);
+      setHalaqahType(room.halaqah_type);
       setIsPublic(room.is_public);
       setEnrollmentOpen(room.enrollment_open);
       setRequiresApproval(room.requires_approval);
@@ -60,6 +62,7 @@ export function RoomFormModal({
       setIsActive(true);
       setTeacherId("");
       setRiwaya("hafs");
+      setHalaqahType("hifz");
       setIsPublic(false);
       setEnrollmentOpen(true);
       setRequiresApproval(true);
@@ -104,6 +107,7 @@ export function RoomFormModal({
           name: name.trim(),
           max_students: maxStudents,
           riwaya,
+          halaqah_type: halaqahType,
           is_public: isPublic,
           enrollment_open: enrollmentOpen,
           requires_approval: requiresApproval,
@@ -115,6 +119,7 @@ export function RoomFormModal({
           max_students: maxStudents,
           is_active: isActive,
           riwaya,
+          halaqah_type: halaqahType,
           is_public: isPublic,
           enrollment_open: enrollmentOpen,
           requires_approval: requiresApproval,
@@ -195,6 +200,30 @@ export function RoomFormModal({
               label: `${t(`mushaf.${r.id}`)} — ${r.nameAr}`,
             }))}
           />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[var(--color-text)]">
+            {t("rooms.halaqahType")}
+          </label>
+          <FormSelect
+            triggerClassName="w-full rounded-xl border border-gray-200 bg-[var(--color-surface)] py-2.5 text-start focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+            triggerStyle={{ color: "var(--color-text)" }}
+            value={halaqahType}
+            onValueChange={(v) => setHalaqahType(v as HalaqahType)}
+            options={(
+              [
+                ["hifz", "rooms.halaqahHifz"],
+                ["tilawa", "rooms.halaqahTilawa"],
+                ["muraja", "rooms.halaqahMuraja"],
+                ["tajweed", "rooms.halaqahTajweed"],
+              ] as const
+            ).map(([value, key]) => ({
+              value,
+              label: t(key),
+            }))}
+          />
+          <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">{t("rooms.halaqahTypeHint")}</p>
         </div>
 
         {mode === "edit" ? (

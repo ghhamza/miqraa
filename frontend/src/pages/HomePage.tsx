@@ -26,6 +26,7 @@ import { GradeDistributionBar } from "../components/recitations/GradeDistributio
 import { SurahProgressRing } from "../components/recitations/SurahProgressRing";
 import { useLocaleDate } from "../hooks/useLocaleDate";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
+import { PageShell } from "../components/layout/PageShell";
 
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -100,20 +101,12 @@ function AdminDashboard({ user }: { user: User }) {
   }, []);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1
-          className="text-3xl font-bold text-[var(--color-text)]"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("common.appName")}
-        </h1>
-        <p className="mt-2 text-xl text-[var(--color-text)]" style={{ fontFamily: "var(--font-ui)" }}>
-          {t("home.welcome", { name: user.name })}
-        </p>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("home.dashboardSubtitle")}</p>
-      </div>
-
+    <PageShell
+      title={t("common.appName")}
+      description={t("home.welcome", { name: user.name })}
+      meta={t("home.dashboardSubtitle")}
+      contentClassName="space-y-8"
+    >
       <div>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("home.adminStatsTitle")}</h2>
         {loading ? (
@@ -145,7 +138,7 @@ function AdminDashboard({ user }: { user: User }) {
       </div>
 
       <UpcomingSessionsWidget />
-    </div>
+    </PageShell>
   );
 }
 
@@ -216,18 +209,13 @@ function TeacherDashboard({ user }: { user: User }) {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1
-          className="text-3xl font-bold text-[var(--color-text)] md:text-4xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("home.teacherGreeting", { name: user.name })}
-        </h1>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">{dateLine}</p>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("home.teacherDashboard")}</p>
-      </div>
-
+    <PageShell
+      titleSize="hero"
+      title={t("home.teacherGreeting", { name: user.name })}
+      meta={dateLine}
+      description={t("home.teacherDashboard")}
+      contentClassName="space-y-8"
+    >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <button
           type="button"
@@ -333,7 +321,7 @@ function TeacherDashboard({ user }: { user: User }) {
       </section>
 
       <UpcomingSessionsWidget maxItems={3} showViewCalendarLink />
-    </div>
+    </PageShell>
   );
 }
 
@@ -405,18 +393,13 @@ function StudentDashboard({ user }: { user: User }) {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1
-          className="text-3xl font-bold text-[var(--color-text)] md:text-4xl"
-          style={{ fontFamily: "var(--font-quran)" }}
-        >
-          {t("home.welcome", { name: user.name })}
-        </h1>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">{dateLine}</p>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("home.welcomeSubtitle")}</p>
-      </div>
-
+    <PageShell
+      titleSize="hero"
+      title={t("home.welcome", { name: user.name })}
+      meta={dateLine}
+      description={t("home.welcomeSubtitle")}
+      contentClassName="space-y-8"
+    >
       {progress ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
@@ -537,6 +520,6 @@ function StudentDashboard({ user }: { user: User }) {
           </Link>
         </div>
       </section>
-    </div>
+    </PageShell>
   );
 }

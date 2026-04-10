@@ -106,6 +106,9 @@ export function AppLayout() {
 
   const sheetSide = isRtl ? "right" : "left";
 
+  /** Centered reading width on large viewports; mushaf stays edge-to-edge for the book layout. */
+  const contentShell = "mx-auto w-full min-w-0 max-w-7xl";
+
   const roomsLabel = (
     <span className="inline-flex items-center gap-2">
       <span>{t("nav.rooms")}</span>
@@ -165,7 +168,12 @@ export function AppLayout() {
   return (
     <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col bg-[var(--color-bg)]">
       <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-[var(--color-surface)] shadow-sm">
-        <div className="mx-auto flex w-full max-w-[100%] min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8">
+        <div
+          className={cn(
+            "flex min-w-0 flex-wrap items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6 lg:px-8",
+            contentShell,
+          )}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none md:items-stretch">
             <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
               <SheetTrigger asChild>
@@ -341,7 +349,13 @@ export function AppLayout() {
             : "p-3 sm:p-4 md:p-6 lg:p-8",
         )}
       >
-        <Outlet />
+        {isMushafRoute ? (
+          <Outlet />
+        ) : (
+          <div className={contentShell}>
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   );

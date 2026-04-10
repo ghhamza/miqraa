@@ -88,6 +88,7 @@ pub struct AttendanceUpdateRequest {
 pub struct AttendanceItem {
     pub student_id: Uuid,
     pub attended: bool,
+    pub attendance_note: Option<String>,
 }
 
 fn json_err(status: StatusCode, code: &'static str) -> (StatusCode, Json<serde_json::Value>) {
@@ -441,7 +442,7 @@ pub async fn get_session(
         return Err(StatusCode::FORBIDDEN);
     }
     let attendance: Vec<SessionAttendanceRow> = sqlx::query_as::<Postgres, SessionAttendanceRow>(
-        "SELECT sa.student_id, u.name AS student_name, sa.attended, sa.joined_at, sa.left_at \
+        "SELECT sa.student_id, u.name AS student_name, sa.attended, sa.attendance_note, sa.joined_at, sa.left_at \
          FROM session_attendance sa \
          INNER JOIN users u ON u.id = sa.student_id \
          WHERE sa.session_id = $1 \
@@ -835,10 +836,11 @@ pub async fn update_attendance(
     }
     for item in &req.attendance {
         let n = sqlx::query(
-            "UPDATE session_attendance SET attended = $1 \
-             WHERE session_id = $2 AND student_id = $3",
+            "UPDATE session_attendance SET attended = $1, attendance_note = $2 \
+             WHERE session_id = $3 AND student_id = $4",
         )
         .bind(item.attended)
+        .bind(item.attendance_note.as_ref())
         .bind(id)
         .bind(item.student_id)
         .execute(&state.db)
@@ -850,7 +852,7 @@ pub async fn update_attendance(
         }
     }
     let attendance: Vec<SessionAttendanceRow> = sqlx::query_as::<Postgres, SessionAttendanceRow>(
-        "SELECT sa.student_id, u.name AS student_name, sa.attended, sa.joined_at, sa.left_at \
+        "SELECT sa.student_id, u.name AS student_name, sa.attended, sa.attendance_note, sa.joined_at, sa.left_at \
          FROM session_attendance sa \
          INNER JOIN users u ON u.id = sa.student_id \
          WHERE sa.session_id = $1 \

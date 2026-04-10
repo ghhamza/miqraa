@@ -1,35 +1,78 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { Room, SessionDetail } from "../../types";
+import type { ErrorCategory, ErrorSeverity, Paginated, RecitationPublic, Room, SessionDetail } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
-import { useMushafInteraction } from "../../hooks/useMushafInteraction";
+import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
+import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
+import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
 import { MushafReader } from "../../components/mushaf/MushafReader";
-import { SessionTopBar } from "../../components/session/SessionTopBar";
-import { SessionBottomBar } from "../../components/session/SessionBottomBar";
+import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
+import {
+  LiveSessionMobileBottomBar,
+  LiveSessionMobileTopBar,
+  LiveSessionOverflowSheet,
+} from "../../components/session/LiveSessionMobileChrome";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
-import { getNextAyah, getPrevAyah, getSurahName, getTotalPages } from "../../lib/quranService";
+import {
+  findJuzStartingAtPage,
+  getHizbForAyah,
+  getJuz,
+  getJuzForAyah,
+  getNextAyah,
+  getPrevAyah,
+  getSurahAyahAtPageStart,
+  getSurahName,
+  getSurahRangeOnPage,
+  getTotalPages,
+} from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
-import { AyahControls } from "../../components/session/AyahControls";
 import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
+import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { useWebRTCConnection } from "../../hooks/useWebRTCConnection";
+import { cn } from "@/lib/utils";
+import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
+import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users } from "lucide-react";
 
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
+
+/** Desktop session chrome regions (`data-session-zone` for tests / layout hooks). */
+function SessionLayoutZone({
+  zoneId,
+  ariaLabel,
+  className,
+  children,
+}: {
+  zoneId: string;
+  ariaLabel: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={ariaLabel}
+      data-session-zone={zoneId}
+      className={cn("flex min-h-0 min-w-0 flex-col p-2", className)}
+    >
+      <div className="min-h-0 flex-1">{children}</div>
+    </section>
+  );
 }
 
 export function LiveSessionPage() {
@@ -47,13 +90,14 @@ export function LiveSessionPage() {
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
+  const [navigatorOpen, setNavigatorOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
   const [gradeToast, setGradeToast] = useState<{ grade: string; notes?: string } | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const teacherVideoRef = useRef<HTMLVideoElement>(null);
   const hadServerCurrentAyahRef = useRef(false);
   const teacherSeededFromServer = useRef(false);
   const webrtcHandlersRef = useRef({
@@ -63,6 +107,19 @@ export function LiveSessionPage() {
   const [anotherTab, setAnotherTab] = useState(false);
   const [announce, setAnnounce] = useState("");
   const [reconnectedToast, setReconnectedToast] = useState(false);
+  const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [currentRecitationId, setCurrentRecitationId] = useState<string | null>(null);
+
+  const {
+    loadAnnotations,
+    addError,
+    addComment,
+    getWordAnnotationClass,
+  } = useAnnotations(currentRecitationId);
+
+  const annotationTargetRef = useRef<AnnotationTarget | null>(null);
+  annotationTargetRef.current = annotationTarget;
 
   const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
   const totalPages = getTotalPages(riwaya);
@@ -231,6 +288,23 @@ export function LiveSessionPage() {
     [isTeacher, autoFollow, totalPages, sessionState.setCurrentPage],
   );
 
+  const canNavigate = isTeacher || (!isTeacher && !autoFollow);
+  const navigatorSide = i18n.language?.startsWith("ar") ? "right" : "left";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!sessionReady || anotherTab) return;
+      const el = e.target as HTMLElement;
+      if (el.closest("input,textarea,[contenteditable=true]")) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setNavigatorOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sessionReady, anotherTab]);
+
   useEffect(() => {
     if (!sessionReady || !isTeacher) return;
     const cp = sessionState.state.currentPage;
@@ -274,6 +348,71 @@ export function LiveSessionPage() {
     }
   }, [syncSurah, syncAyah, autoFollow, isTeacher, setHighlightRange, setActiveWord]);
 
+  const closeAnnotationToolbar = useCallback(() => setAnnotationTarget(null), []);
+
+  const handleLiveWordClick = useCallback(
+    (data: MushafWordClickData) => {
+      interaction.handleWordClick(data);
+      if (annotationMode && isTeacher && data.rect) {
+        setAnnotationTarget({
+          surah: data.surah,
+          ayah: data.ayah,
+          wordIndex: data.wordIndex,
+          rect: data.rect,
+        });
+      }
+    },
+    [interaction, annotationMode, isTeacher],
+  );
+
+  useEffect(() => {
+    if (!annotationMode) setAnnotationTarget(null);
+  }, [annotationMode]);
+
+  const handleMarkAnnotationError = useCallback(
+    async (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
+      if (!annotationTarget || !currentRecitationId) {
+        setAnnounce(t("annotation.noRecitation"));
+        return;
+      }
+      await addError(
+        currentRecitationId,
+        annotationTarget.surah,
+        annotationTarget.ayah,
+        annotationTarget.wordIndex,
+        severity,
+        category,
+        comment,
+      );
+    },
+    [annotationTarget, currentRecitationId, addError, t],
+  );
+
+  const handleAnnotationComment = useCallback(
+    async (comment: string) => {
+      if (!annotationTarget || !currentRecitationId) {
+        setAnnounce(t("annotation.noRecitation"));
+        return;
+      }
+      await addComment(
+        currentRecitationId,
+        annotationTarget.surah,
+        annotationTarget.ayah,
+        annotationTarget.wordIndex,
+        comment,
+      );
+    },
+    [annotationTarget, currentRecitationId, addComment, t],
+  );
+
+  const handleAnnotationRepeat = useCallback(
+    (surah: number, ayah: number) => {
+      interaction.setHighlightRange({ surah, ayahStart: ayah, ayahEnd: ayah });
+      sessionState.setCurrentAyah(surah, ayah);
+    },
+    [interaction, sessionState],
+  );
+
   const handleAutoFollowToggle = useCallback(() => {
     setAutoFollow((prev) => {
       if (prev) {
@@ -284,15 +423,18 @@ export function LiveSessionPage() {
     });
   }, [sessionState.state.currentPage]);
 
-  const surahLabel = useMemo(() => {
-    const ca = sessionState.state.currentAyah;
-    const hr = interaction.highlightRange;
-    const surahNum = ca?.surah ?? hr?.surah ?? null;
-    if (!surahNum) return "—";
-    return getSurahName(surahNum, loc);
-  }, [sessionState.state.currentAyah, interaction.highlightRange, loc]);
-
-  const sessionTitle = sessionDetail?.title?.trim() || sessionDetail?.room_name || "—";
+  const navCornerLabels = useMemo(() => {
+    const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
+    const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+    const juzAtPageStart = findJuzStartingAtPage(page, riwaya);
+    const juz = juzAtPageStart ?? getJuz(getJuzForAyah(s, a, riwaya));
+    const surahLabel =
+      startSurah === endSurah
+        ? getSurahName(startSurah, loc)
+        : `${getSurahName(startSurah, loc)} – ${getSurahName(endSurah, loc)}`;
+    const hizbN = getHizbForAyah(s, a, riwaya);
+    return { surahLabel, juzN: juz?.number ?? 0, hizbN };
+  }, [page, riwaya, loc]);
 
   useEffect(() => {
     if (!sessionDetail?.scheduled_at) return;
@@ -303,17 +445,41 @@ export function LiveSessionPage() {
     return () => clearInterval(idTimer);
   }, [sessionDetail?.scheduled_at]);
 
-  const activeReciterName = useMemo(() => {
-    const rid = sessionState.state.activeReciterId;
-    if (!rid) return null;
-    return sessionState.state.participants.find((p) => p.userId === rid)?.name ?? null;
-  }, [sessionState.state.activeReciterId, sessionState.state.participants]);
-
   const activeReciterParticipant = useMemo(() => {
     const rid = sessionState.state.activeReciterId;
     if (!rid) return null;
     return sessionState.state.participants.find((p) => p.userId === rid) ?? null;
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
+
+  useEffect(() => {
+    if (!currentRecitationId) return;
+    void loadAnnotations(currentRecitationId);
+  }, [currentRecitationId, loadAnnotations]);
+
+  useEffect(() => {
+    if (!id || !activeReciterParticipant?.userId || !isTeacher) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+          params: { session_id: id, limit: 50 },
+        });
+        if (cancelled) return;
+        const mine = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
+        mine.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setCurrentRecitationId(mine[0]?.id ?? null);
+      } catch {
+        if (!cancelled) setCurrentRecitationId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, activeReciterParticipant?.userId, isTeacher]);
+
+  useEffect(() => {
+    setAnnotationTarget(null);
+  }, [activeReciterParticipant?.userId]);
 
   const canToggleMute = sessionState.isTeacher || sessionState.isActiveReciter;
 
@@ -350,8 +516,8 @@ export function LiveSessionPage() {
     }
   }, [id, navigate, sessionState, t, disconnectWebrtc]);
 
+  /** Current ayah for teacher nav (keyboard N/P); UI strip removed until product decides. */
   const currentAyahForNav = sessionState.state.currentAyah;
-  const ayahNavDisabled = !isTeacher || !currentAyahForNav;
 
   const stepAyah = useCallback(
     (direction: "next" | "prev") => {
@@ -371,6 +537,14 @@ export function LiveSessionPage() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") {
         e.preventDefault();
+        if (annotationTargetRef.current) {
+          setAnnotationTarget(null);
+          return;
+        }
+        if (mobileOverflowOpen) {
+          setMobileOverflowOpen(false);
+          return;
+        }
         setDrawerOpen(false);
         return;
       }
@@ -394,7 +568,7 @@ export function LiveSessionPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canToggleMute, sessionState, isTeacher, stepAyah]);
+  }, [canToggleMute, sessionState, isTeacher, stepAyah, mobileOverflowOpen]);
 
   if (!id) {
     return null;
@@ -436,7 +610,7 @@ export function LiveSessionPage() {
 
   return (
     <div
-      className="relative flex min-h-0 h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[var(--color-bg)]"
+      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-white"
       dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
     >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -444,23 +618,16 @@ export function LiveSessionPage() {
       </div>
       {!webrtc.browserSupported ? (
         <div
-          className="fixed top-[max(3.5rem,env(safe-area-inset-top))] left-0 right-0 z-[45] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
+          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[60] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
           role="alert"
         >
           {t("liveSession.browserNotSupported")}
         </div>
       ) : null}
-      {webrtc.micDenied ? (
-        <div
-          className="fixed top-[max(3.5rem,env(safe-area-inset-top))] left-0 right-0 z-[44] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
-          role="status"
-        >
-          {t("liveSession.micDeniedListener")}
-        </div>
-      ) : null}
+      
       {reconnectedToast ? (
         <div
-          className="fixed top-[max(4.5rem,env(safe-area-inset-top))] left-1/2 z-[55] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
+          className="fixed top-[max(3rem,env(safe-area-inset-top))] left-1/2 z-[60] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
           role="status"
         >
           {t("liveSession.reconnected")}
@@ -474,62 +641,238 @@ export function LiveSessionPage() {
         />
       ) : null}
 
-      <div className="fixed top-0 left-0 right-0 z-30 border-b border-gray-100 bg-[var(--color-surface)]/95 shadow-sm backdrop-blur-sm">
-        <SessionTopBar
-          connectionStatus={sessionState.wsStatus}
-          networkQuality={webrtc.networkQuality}
-          surahLabel={surahLabel}
-          sessionTitle={sessionTitle}
-          elapsedLabel={formatElapsed(elapsedMs)}
-          onLeave={handleLeave}
-          showEndSession={isTeacher}
-          onEndSession={() => setEndSessionOpen(true)}
-        />
-      </div>
-
       <main
-        className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(9rem,env(safe-area-inset-bottom))] md:pb-24"
+        className={
+          webrtc.browserSupported
+            ? "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-[max(env(safe-area-inset-top),0.5rem)]"
+            : "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
+        }
         aria-label="Mushaf content"
       >
-        <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
-        <MushafReader
-          page={page}
-          onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
-          riwaya={riwaya}
-          canChangePage={isTeacher || (!isTeacher && !autoFollow)}
-          mobileBottomClassName="bottom-[5.5rem] z-[25]"
+        <div
+          className={cn(
+            "grid min-h-0 flex-1",
+            "grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 px-1",
+            "md:grid-cols-3 md:grid-rows-[minmax(0,1fr)_minmax(0,auto)] md:gap-2 md:px-2",
+          )}
         >
-          <MushafCanvas
+          <LiveSessionMobileTopBar
+            surahLabel={navCornerLabels.surahLabel}
             page={page}
-            riwaya={riwaya}
-            highlightRange={interaction.highlightRange}
-            activeWord={interaction.activeWord}
-            onWordClick={interaction.handleWordClick}
-            onAyahClick={interaction.handleAyahClick}
+            juzN={navCornerLabels.juzN}
+            hizbN={navCornerLabels.hizbN}
+            onOpenMenu={() => setNavigatorOpen(true)}
           />
-        </MushafReader>
+
+          <div
+            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md bg-white md:col-span-3 md:row-start-1"
+            aria-label={t("mushaf.title")}
+          >
+            <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
+            <MushafReader
+              page={page}
+              onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
+              riwaya={riwaya}
+              canChangePage={canNavigate}
+              hideNavigation
+              omitMenuStrip
+              className="h-full min-h-0"
+              immersiveHeader={
+                <nav
+                  className="hidden min-h-9 w-full flex-row flex-wrap items-start justify-start gap-2 md:flex"
+                  aria-label={t("mushaf.menuNavigationZone")}
+                  data-testid="quran-menu-navigation-zone"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setNavigatorOpen(true)}
+                    title={t("liveSession.tooltip.openMenu")}
+                    aria-label={t("common.openMenu")}
+                    className={MENU_ICON_BUTTON_CLASS}
+                  >
+                    <Menu className="h-5 w-5" strokeWidth={2.25} />
+                  </button>
+                  <div className="min-w-0 flex-1 text-start leading-snug">
+                    <p
+                      className="truncate text-sm font-semibold text-[#2c5f7c]"
+                      style={{ fontFamily: "var(--font-ui)" }}
+                    >
+                      {navCornerLabels.surahLabel}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                      <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
+                      {navCornerLabels.juzN > 0 ? (
+                        <>
+                          <span className="text-muted-foreground/60" aria-hidden>
+                            ·
+                          </span>
+                          <span className="text-muted-foreground">{t("mushaf.juzN", { n: navCornerLabels.juzN })}</span>
+                        </>
+                      ) : null}
+                      {navCornerLabels.hizbN > 0 ? (
+                        <>
+                          <span className="text-muted-foreground/60" aria-hidden>
+                            /
+                          </span>
+                          <span className="text-muted-foreground">
+                            {t("mushaf.hizb")} {navCornerLabels.hizbN}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                </nav>
+              }
+            >
+              <MushafCanvas
+                page={page}
+                riwaya={riwaya}
+                highlightRange={interaction.highlightRange}
+                activeWord={interaction.activeWord}
+                onWordClick={isTeacher ? handleLiveWordClick : interaction.handleWordClick}
+                onAyahClick={interaction.handleAyahClick}
+                getWordAnnotationClass={isTeacher ? getWordAnnotationClass : undefined}
+              />
+            </MushafReader>
+          </div>
+
+          <LiveSessionMobileBottomBar
+            isTeacher={isTeacher}
+            isMuted={sessionState.isMuted}
+            canToggleMute={canToggleMute}
+            onToggleMute={sessionState.toggleMute}
+            annotationMode={annotationMode}
+            onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+            onOpenParticipants={() => setDrawerOpen(true)}
+            onOpenMore={() => setMobileOverflowOpen(true)}
+            onLeave={handleLeave}
+            onEndSession={() => setEndSessionOpen(true)}
+          />
+
+          <SessionLayoutZone
+            zoneId="bl"
+            ariaLabel={t("liveSession.layoutZoneBottomLeft")}
+            className="hidden min-h-[3rem] md:col-start-1 md:row-start-2 md:flex"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-start gap-2">
+              <button
+                type="button"
+                onClick={handleLeave}
+                title={t("liveSession.tooltip.leave")}
+                aria-label={t("liveSession.leave")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
+                )}
+              >
+                <LogOut className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+              {isTeacher ? (
+                <button
+                  type="button"
+                  onClick={() => setEndSessionOpen(true)}
+                  title={t("liveSession.tooltip.endSession")}
+                  aria-label={t("liveSession.endSession")}
+                  className={cn(
+                    MEET_ICON_BTN_BASE,
+                    "bg-gradient-to-b from-[#EF5350] to-[#E53935] text-white hover:from-[#E53935] hover:to-[#C62828]",
+                  )}
+                >
+                  <PhoneOff className="h-5 w-5" strokeWidth={2.25} />
+                </button>
+              ) : null}
+            </div>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="bm"
+            ariaLabel={t("liveSession.layoutZoneBottomMiddle")}
+            className="hidden md:col-start-2 md:row-start-2 md:flex"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
+              <SessionControlsCorner
+                isMuted={sessionState.isMuted}
+                canToggleMute={canToggleMute}
+                onToggleMute={sessionState.toggleMute}
+                isTeacher={isTeacher}
+                annotationMode={annotationMode}
+                onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+              />
+              {!isTeacher ? (
+                <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
+              ) : null}
+            </div>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="br"
+            ariaLabel={t("liveSession.layoutZoneBottomRight")}
+            className="hidden md:col-start-3 md:row-start-2 md:flex"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.tooltip.sessionInfo")}
+                aria-label={t("liveSession.sessionInfo")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-sky-50 to-sky-100/90 text-sky-700 hover:from-sky-100 hover:to-sky-200/90",
+                )}
+              >
+                <Info className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                title={t("liveSession.tooltip.participants")}
+                aria-label={t("liveSession.participants")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
+                )}
+              >
+                <Users className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.tooltip.chat")}
+                aria-label={t("liveSession.chat")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-violet-50 to-violet-100/90 text-violet-700 hover:from-violet-100 hover:to-violet-200/90",
+                )}
+              >
+                <MessageSquare className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+            </div>
+          </SessionLayoutZone>
+        </div>
       </main>
 
-      {!isTeacher ? <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} /> : null}
+      <MushafNavigatorSheet
+        open={navigatorOpen}
+        onOpenChange={setNavigatorOpen}
+        riwaya={riwaya}
+        page={page}
+        totalPages={totalPages}
+        canNavigate={canNavigate}
+        onNavigateToPage={goPage}
+        side={navigatorSide}
+      />
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-100 bg-[#FFFFFF]/95 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur-sm">
-        <SessionBottomBar
-          activeReciterName={activeReciterName}
-          canToggleMute={canToggleMute}
-          isMuted={sessionState.isMuted}
-          onToggleMute={sessionState.toggleMute}
-          onOpenParticipants={() => setDrawerOpen(true)}
-          ayahControls={
-            isTeacher ? (
-              <AyahControls
-                disabled={ayahNavDisabled}
-                onNext={() => stepAyah("next")}
-                onPrev={() => stepAyah("prev")}
-              />
-            ) : undefined
-          }
-        />
-      </div>
+      <LiveSessionOverflowSheet
+        open={mobileOverflowOpen}
+        onOpenChange={setMobileOverflowOpen}
+        connectionStatus={sessionState.wsStatus}
+        networkQuality={webrtc.networkQuality}
+        participantCount={sessionState.state.participants.length}
+        elapsedLabel={formatElapsed(elapsedMs)}
+        isTeacher={isTeacher}
+        autoFollow={autoFollow}
+        onAutoFollowToggle={handleAutoFollowToggle}
+      />
 
       <ParticipantDrawer
         open={drawerOpen}
@@ -539,7 +882,6 @@ export function LiveSessionPage() {
         activeReciterId={sessionState.state.activeReciterId}
         isTeacher={sessionState.isTeacher}
         onSetReciter={sessionState.setReciter}
-        teacherVideoRef={teacherVideoRef}
         gradingPanel={
           sessionState.isTeacher && id ? (
             <GradingPanel
@@ -553,6 +895,7 @@ export function LiveSessionPage() {
               onGradeSubmitted={(studentId, grade, notes) => {
                 sessionState.sendGradeNotification(studentId, grade, notes);
               }}
+              onRecitationCreated={(rec) => setCurrentRecitationId(rec.id)}
             />
           ) : undefined
         }
@@ -606,6 +949,17 @@ export function LiveSessionPage() {
           </Button>
         </div>
       </Modal>
+
+      {isTeacher ? (
+        <AnnotationToolbar
+          target={annotationTarget}
+          onMarkError={handleMarkAnnotationError}
+          onRepeat={handleAnnotationRepeat}
+          onComment={handleAnnotationComment}
+          onGood={closeAnnotationToolbar}
+          onClose={closeAnnotationToolbar}
+        />
+      ) : null}
     </div>
   );
 }
