@@ -19,16 +19,14 @@ export interface MushafReaderProps {
   canChangePage?: boolean;
   /** Live session immersive: hide surah/juz/page dropdowns; page chevrons stay. */
   hideNavigation?: boolean;
-  /** Live session: offset mobile turn strip above session footer. */
-  mobileBottomClassName?: string;
-  /** Live session / notches: offset mobile top strip from viewport top. */
-  mobileTopClassName?: string;
   /** e.g. live session: `h-full min-h-0` so the reader fills the viewport. */
   className?: string;
   /** e.g. live session: mic / participants row, centered under the mushaf page (not viewport-fixed). */
   bottomAccessory?: ReactNode;
   /** Strip above the mushaf page (e.g. surah/juz shortcuts). Omit to show the default placeholder. */
   menuNavigationZone?: ReactNode;
+  /** Live session: menu strip is placed in page layout (top-middle); omit the internal nav block. */
+  omitMenuStrip?: boolean;
   children: ReactNode;
 }
 
@@ -42,11 +40,10 @@ export function MushafReader({
   riwaya,
   canChangePage = true,
   hideNavigation = false,
-  mobileBottomClassName,
-  mobileTopClassName,
   className,
   bottomAccessory,
   menuNavigationZone,
+  omitMenuStrip = false,
   children,
 }: MushafReaderProps) {
   const { t } = useTranslation();
@@ -127,34 +124,28 @@ export function MushafReader({
         className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-3 sm:px-4 md:px-5 lg:px-6"
         aria-label="Mushaf content"
       >
-        <div
-          className={cn(
-            "relative flex min-h-0 flex-1 flex-col",
-            /* Space for fixed mobile turn strips */
-            "max-md:pt-[calc(3.5rem+env(safe-area-inset-top))] max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]",
-          )}
-        >
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <MushafPageTurnButtons
             page={page}
             totalPages={totalPages}
             onPageChange={onPageChange}
             disabled={navDisabled}
-            mobileBottomClassName={mobileBottomClassName}
-            mobileTopClassName={mobileTopClassName}
             onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
             showDesktopJump={!hideNavigation}
           />
-          <nav
-            className="flex w-full max-w-full shrink-0 flex-col items-stretch gap-2  py-2"
-            aria-label={t("mushaf.menuNavigationZone")}
-            data-testid="quran-menu-navigation-zone"
-          >
-            {menuNavigationZone !== undefined ? (
-              menuNavigationZone
-            ) : (
-              <p className="text-center text-xs text-muted-foreground sm:text-sm">{t("mushaf.menuNavigationZone")}</p>
-            )}
-          </nav>
+          {!omitMenuStrip ? (
+            <nav
+              className="flex w-full max-w-full shrink-0 flex-col items-stretch gap-2  py-2"
+              aria-label={t("mushaf.menuNavigationZone")}
+              data-testid="quran-menu-navigation-zone"
+            >
+              {menuNavigationZone !== undefined ? (
+                menuNavigationZone
+              ) : (
+                <p className="text-center text-xs text-muted-foreground sm:text-sm">{t("mushaf.menuNavigationZone")}</p>
+              )}
+            </nav>
+          ) : null}
           {/* Container for 5:7 page only — excludes menu nav above; cqi/cqh = mushaf column only */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden [container-type:size]">
             <MushafBookLayout page={page} riwaya={riwaya}>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -13,13 +13,13 @@ import { useSessionState } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafReader } from "../../components/mushaf/MushafReader";
 import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
-import { SessionNavCorner } from "../../components/session/SessionNavCorner";
 import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import {
   findJuzStartingAtPage,
+  getHizbForAyah,
   getJuz,
   getJuzForAyah,
   getNextAyah,
@@ -36,12 +36,41 @@ import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { useWebRTCConnection } from "../../hooks/useWebRTCConnection";
+import { cn } from "@/lib/utils";
+import { MEET_ICON_BTN_BASE } from "../../components/session/sessionMeetButtonStyles";
+import { Info, Menu, MessageSquare, Users } from "lucide-react";
 
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
+
+/** Live session layout scaffolding (dashed regions; titles removed — `ariaLabel` for assistive tech only). */
+function SessionLayoutZone({
+  zoneId,
+  ariaLabel,
+  className,
+  children,
+}: {
+  zoneId: string;
+  ariaLabel: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={ariaLabel}
+      data-session-zone={zoneId}
+      className={cn(
+        "flex min-h-0 min-w-0 flex-col rounded-md border-2 border-dashed border-gray-400/70 p-2 shadow-sm",
+        className,
+      )}
+    >
+      <div className="min-h-0 flex-1">{children}</div>
+    </section>
+  );
 }
 
 export function LiveSessionPage() {
@@ -374,17 +403,6 @@ export function LiveSessionPage() {
     });
   }, [sessionState.state.currentPage]);
 
-  const ayahNavLabel = useMemo(() => {
-    const ca = sessionState.state.currentAyah;
-    const hr = interaction.highlightRange;
-    const surahNum = ca?.surah ?? hr?.surah ?? null;
-    const ayahNum = ca?.ayah ?? hr?.ayahStart ?? null;
-    if (!surahNum) return "—";
-    const name = getSurahName(surahNum, loc);
-    if (ayahNum != null) return `${name} · ${ayahNum}`;
-    return name;
-  }, [sessionState.state.currentAyah, interaction.highlightRange, loc]);
-
   const navCornerLabels = useMemo(() => {
     const { startSurah, endSurah } = getSurahRangeOnPage(page, riwaya);
     const [s, a] = getSurahAyahAtPageStart(page, riwaya);
@@ -394,7 +412,8 @@ export function LiveSessionPage() {
       startSurah === endSurah
         ? getSurahName(startSurah, loc)
         : `${getSurahName(startSurah, loc)} – ${getSurahName(endSurah, loc)}`;
-    return { surahLabel, juzN: juz?.number ?? 0 };
+    const hizbN = getHizbForAyah(s, a, riwaya);
+    return { surahLabel, juzN: juz?.number ?? 0, hizbN };
   }, [page, riwaya, loc]);
 
   useEffect(() => {
@@ -483,8 +502,8 @@ export function LiveSessionPage() {
     }
   }, [id, navigate, sessionState, t, disconnectWebrtc]);
 
+  /** Current ayah for teacher nav (keyboard N/P); UI strip removed until product decides. */
   const currentAyahForNav = sessionState.state.currentAyah;
-  const ayahNavDisabled = !isTeacher || !currentAyahForNav;
 
   const stepAyah = useCallback(
     (direction: "next" | "prev") => {
@@ -612,75 +631,209 @@ export function LiveSessionPage() {
         }
         aria-label="Mushaf content"
       >
-        <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <MushafReader
-            page={page}
-            onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
-            riwaya={riwaya}
-            canChangePage={isTeacher || (!isTeacher && !autoFollow)}
-            hideNavigation
-            className="h-full min-h-0"
-            mobileBottomClassName="bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[25]"
-            mobileTopClassName="top-[max(env(safe-area-inset-top),0.5rem)] z-[25]"
-            bottomAccessory={
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <SessionControlsCorner
-                  isMuted={sessionState.isMuted}
-                  canToggleMute={canToggleMute}
-                  onToggleMute={sessionState.toggleMute}
-                  isTeacher={isTeacher}
-                  annotationMode={annotationMode}
-                  onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
-                  onOpenParticipants={() => setDrawerOpen(true)}
-                />
-                {!isTeacher ? (
-                  <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
-                ) : null}
-              </div>
-            }
+        <div
+          className={cn(
+            "grid min-h-0 flex-1 gap-1.5 px-1.5",
+            "grid-cols-1 auto-rows-auto",
+            "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto_auto_auto]",
+            "md:grid-cols-3 md:grid-rows-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)] md:gap-2 md:px-2",
+          )}
+        >
+          <SessionLayoutZone
+            zoneId="tl"
+            ariaLabel={t("liveSession.layoutZoneTopLeft")}
+            className="bg-amber-100/95 md:col-start-1 md:row-start-1"
           >
-            <MushafCanvas
-              page={page}
-              riwaya={riwaya}
-              highlightRange={interaction.highlightRange}
-              activeWord={interaction.activeWord}
-              onWordClick={isTeacher ? handleLiveWordClick : interaction.handleWordClick}
-              onAyahClick={interaction.handleAyahClick}
-              getWordAnnotationClass={isTeacher ? getWordAnnotationClass : undefined}
+            <SessionStatusCorner
+              connectionStatus={sessionState.wsStatus}
+              networkQuality={webrtc.networkQuality}
+              halaqahType={room.halaqah_type}
+              activeReciterName={activeReciterName}
+              elapsedLabel={formatElapsed(elapsedMs)}
             />
-          </MushafReader>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="tm"
+            ariaLabel={t("liveSession.layoutZoneTopMiddle")}
+            className="bg-sky-100/95 md:col-start-2 md:row-start-1"
+          >
+            <nav
+              className="flex w-full min-h-9 flex-row flex-wrap items-start justify-start gap-2 px-0.5 py-0.5"
+              aria-label={t("mushaf.menuNavigationZone")}
+              data-testid="quran-menu-navigation-zone"
+            >
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("common.openMenu")}
+                aria-label={t("common.openMenu")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "h-9 w-9 bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
+                )}
+              >
+                <Menu className="h-4 w-4" strokeWidth={2.25} />
+              </button>
+              <div className="min-w-0 flex-1 text-start leading-snug">
+                <p
+                  className="truncate text-sm font-semibold text-[#2c5f7c]"
+                  style={{ fontFamily: "var(--font-ui)" }}
+                >
+                  {navCornerLabels.surahLabel}
+                </p>
+                <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                  <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
+                  {navCornerLabels.juzN > 0 ? (
+                    <>
+                      <span className="text-muted-foreground/60" aria-hidden>
+                        ·
+                      </span>
+                      <span className="text-muted-foreground">{t("mushaf.juzN", { n: navCornerLabels.juzN })}</span>
+                    </>
+                  ) : null}
+                  {navCornerLabels.hizbN > 0 ? (
+                    <>
+                      <span className="text-muted-foreground/60" aria-hidden>
+                        /
+                      </span>
+                      <span className="text-muted-foreground">
+                        {t("mushaf.hizb")} {navCornerLabels.hizbN}
+                      </span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            </nav>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="tr"
+            ariaLabel={t("liveSession.layoutZoneTopRight")}
+            className="min-h-8 bg-emerald-100/95 md:col-start-3 md:row-start-1"
+          >
+            {null}
+          </SessionLayoutZone>
+
+          <div
+            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-gray-200 bg-white md:col-span-3 md:row-start-2"
+            aria-label={t("mushaf.title")}
+          >
+            <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
+            <MushafReader
+              page={page}
+              onPageChange={isTeacher ? goPage : autoFollow ? noopPage : goPage}
+              riwaya={riwaya}
+              canChangePage={isTeacher || (!isTeacher && !autoFollow)}
+              hideNavigation
+              omitMenuStrip
+              className="h-full min-h-0"
+            >
+              <MushafCanvas
+                page={page}
+                riwaya={riwaya}
+                highlightRange={interaction.highlightRange}
+                activeWord={interaction.activeWord}
+                onWordClick={isTeacher ? handleLiveWordClick : interaction.handleWordClick}
+                onAyahClick={interaction.handleAyahClick}
+                getWordAnnotationClass={isTeacher ? getWordAnnotationClass : undefined}
+              />
+            </MushafReader>
+          </div>
+
+          <SessionLayoutZone
+            zoneId="bl"
+            ariaLabel={t("liveSession.layoutZoneBottomLeft")}
+            className="min-h-[3rem] bg-violet-100/95 md:col-start-1 md:row-start-3"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-start gap-2">
+              <button
+                type="button"
+                onClick={handleLeave}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-[#555] shadow-sm transition hover:bg-gray-50"
+                style={{ fontFamily: "var(--font-ui)" }}
+              >
+                {t("liveSession.leave")}
+              </button>
+              {isTeacher ? (
+                <button
+                  type="button"
+                  onClick={() => setEndSessionOpen(true)}
+                  className="rounded-lg bg-[#EF5350] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#E53935]"
+                  style={{ fontFamily: "var(--font-ui)" }}
+                >
+                  {t("liveSession.endSession")}
+                </button>
+              ) : null}
+            </div>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="bm"
+            ariaLabel={t("liveSession.layoutZoneBottomMiddle")}
+            className="bg-orange-100/95 md:col-start-2 md:row-start-3"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
+              <SessionControlsCorner
+                isMuted={sessionState.isMuted}
+                canToggleMute={canToggleMute}
+                onToggleMute={sessionState.toggleMute}
+                isTeacher={isTeacher}
+                annotationMode={annotationMode}
+                onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+              />
+              {!isTeacher ? (
+                <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
+              ) : null}
+            </div>
+          </SessionLayoutZone>
+
+          <SessionLayoutZone
+            zoneId="br"
+            ariaLabel={t("liveSession.layoutZoneBottomRight")}
+            className="bg-rose-100/95 md:col-start-3 md:row-start-3"
+          >
+            <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.sessionInfo")}
+                aria-label={t("liveSession.sessionInfo")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-sky-50 to-sky-100/90 text-sky-700 hover:from-sky-100 hover:to-sky-200/90",
+                )}
+              >
+                <Info className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                title={t("liveSession.participants")}
+                aria-label={t("liveSession.participants")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90",
+                )}
+              >
+                <Users className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+              <button
+                type="button"
+                onClick={() => window.alert(t("common.comingSoon"))}
+                title={t("liveSession.chat")}
+                aria-label={t("liveSession.chat")}
+                className={cn(
+                  MEET_ICON_BTN_BASE,
+                  "bg-gradient-to-b from-violet-50 to-violet-100/90 text-violet-700 hover:from-violet-100 hover:to-violet-200/90",
+                )}
+              >
+                <MessageSquare className="h-5 w-5" strokeWidth={2.25} />
+              </button>
+            </div>
+          </SessionLayoutZone>
         </div>
       </main>
-
-      <button
-        type="button"
-        onClick={handleLeave}
-        className="absolute end-2 z-20 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-[#555] shadow-sm transition hover:bg-gray-50 bottom-[max(0.5rem,env(safe-area-inset-bottom))]"
-        style={{ fontFamily: "var(--font-ui)" }}
-      >
-        {t("liveSession.leave")}
-      </button>
-
-      <SessionStatusCorner
-        connectionStatus={sessionState.wsStatus}
-        networkQuality={webrtc.networkQuality}
-        halaqahType={room.halaqah_type}
-        activeReciterName={activeReciterName}
-      />
-
-      <SessionNavCorner
-        elapsedLabel={formatElapsed(elapsedMs)}
-        isTeacher={isTeacher}
-        onEndSession={isTeacher ? () => setEndSessionOpen(true) : undefined}
-        surahLabel={navCornerLabels.surahLabel}
-        juzLabel={navCornerLabels.juzN > 0 ? t("mushaf.juzN", { n: navCornerLabels.juzN }) : "—"}
-        pageLabel={t("mushaf.pageN", { n: page })}
-        ayahLabel={ayahNavLabel}
-        ayahNavDisabled={ayahNavDisabled}
-        onAyahPrev={() => stepAyah("prev")}
-        onAyahNext={() => stepAyah("next")}
-      />
 
       <ParticipantDrawer
         open={drawerOpen}
