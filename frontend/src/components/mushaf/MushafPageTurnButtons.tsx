@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
+import type { CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, ListTree } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +18,8 @@ interface MushafPageTurnButtonsProps {
    * Desktop edge chevrons are unchanged.
    */
   mobileBottomClassName?: string;
+  /** Mobile top strip (same controls as bottom); offset when UI sits below status/session chrome. */
+  mobileTopClassName?: string;
   /** Opens surah / juz / page jump UI (bottom sheet). */
   onOpenJump?: () => void;
   /**
@@ -37,6 +40,7 @@ export function MushafPageTurnButtons({
   onPageChange,
   disabled = false,
   mobileBottomClassName,
+  mobileTopClassName,
   onOpenJump,
   showDesktopJump = true,
 }: MushafPageTurnButtonsProps) {
@@ -46,8 +50,63 @@ export function MushafPageTurnButtons({
     "rounded-xl border border-gray-200 bg-[var(--color-surface)] p-2 text-[var(--color-text)] shadow-sm hover:bg-gray-50 disabled:opacity-40";
   const navDisabled = disabled;
 
+  const mobileStrip = (
+    position: "top" | "bottom",
+    edgeClassName: string,
+    safeStyle: CSSProperties,
+  ) => (
+    <div
+      className={cn(
+        "fixed inset-x-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-gray-200 bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-sm md:hidden",
+        position === "top" ? "border-b" : "border-t",
+        edgeClassName,
+      )}
+      style={safeStyle}
+    >
+      <div className="flex justify-start">
+        <button
+          type="button"
+          className={btnClass}
+          aria-label={t("mushaf.nextPage")}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={navDisabled || page >= totalPages}
+        >
+          <ChevronLeft className="h-6 w-6" aria-hidden />
+        </button>
+      </div>
+      <div className="flex justify-center">
+        {onOpenJump ? (
+          <button
+            type="button"
+            className={btnClass}
+            aria-label={t("mushaf.jumpOpen")}
+            onClick={onOpenJump}
+          >
+            <ListTree className="h-6 w-6" aria-hidden />
+          </button>
+        ) : (
+          <span className="w-px shrink-0" aria-hidden />
+        )}
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className={btnClass}
+          aria-label={t("mushaf.prevPage")}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={navDisabled || page <= 1}
+        >
+          <ChevronRight className="h-6 w-6" aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
+      {mobileStrip("top", mobileTopClassName ?? "top-0", {
+        paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+      })}
       {/* md+: next (left) / jump / previous (right) — outside the white page column (parent must be `relative`) */}
       <div className="pointer-events-none absolute inset-y-0 left-0 right-0 z-20 hidden md:block">
         <button
@@ -89,51 +148,9 @@ export function MushafPageTurnButtons({
         </button>
       </div>
 
-      {/* Small screens: left = next, right = previous */}
-      <div
-        className={cn(
-          "fixed inset-x-0 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-gray-200 bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-sm md:hidden",
-          mobileBottomClassName ?? "bottom-0",
-        )}
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
-      >
-        <div className="flex justify-start">
-          <button
-            type="button"
-            className={btnClass}
-            aria-label={t("mushaf.nextPage")}
-            onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={navDisabled || page >= totalPages}
-          >
-            <ChevronLeft className="h-6 w-6" aria-hidden />
-          </button>
-        </div>
-        <div className="flex justify-center">
-          {onOpenJump ? (
-            <button
-              type="button"
-              className={btnClass}
-              aria-label={t("mushaf.jumpOpen")}
-              onClick={onOpenJump}
-            >
-              <ListTree className="h-6 w-6" aria-hidden />
-            </button>
-          ) : (
-            <span className="w-px shrink-0" aria-hidden />
-          )}
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className={btnClass}
-            aria-label={t("mushaf.prevPage")}
-            onClick={() => onPageChange(Math.max(1, page - 1))}
-            disabled={navDisabled || page <= 1}
-          >
-            <ChevronRight className="h-6 w-6" aria-hidden />
-          </button>
-        </div>
-      </div>
+      {mobileStrip("bottom", mobileBottomClassName ?? "bottom-0", {
+        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+      })}
     </>
   );
 }

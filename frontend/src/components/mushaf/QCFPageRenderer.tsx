@@ -280,11 +280,17 @@ export function QCFPageRenderer({
   return (
     <div
       ref={containerRef}
-      className="flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
+      className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
       style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
     >
+      {/* 15 QCF slots share height so the footer area doesn’t leave a dead band */}
       {data.lines.map((line) => (
-        <LineView key={line.lineNumber} line={line} {...lineProps} />
+        <div
+          key={line.lineNumber}
+          className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col justify-center"
+        >
+          <LineView line={line} {...lineProps} />
+        </div>
       ))}
     </div>
   );

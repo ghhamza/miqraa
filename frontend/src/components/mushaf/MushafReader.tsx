@@ -21,8 +21,12 @@ export interface MushafReaderProps {
   hideNavigation?: boolean;
   /** Live session: offset mobile turn strip above session footer. */
   mobileBottomClassName?: string;
+  /** Live session / notches: offset mobile top strip from viewport top. */
+  mobileTopClassName?: string;
   /** e.g. live session: `h-full min-h-0` so the reader fills the viewport. */
   className?: string;
+  /** e.g. live session: mic / participants row, centered under the mushaf page (not viewport-fixed). */
+  bottomAccessory?: ReactNode;
   children: ReactNode;
 }
 
@@ -37,7 +41,9 @@ export function MushafReader({
   canChangePage = true,
   hideNavigation = false,
   mobileBottomClassName,
+  mobileTopClassName,
   className,
+  bottomAccessory,
   children,
 }: MushafReaderProps) {
   const { t } = useTranslation();
@@ -118,19 +124,36 @@ export function MushafReader({
         className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-3 sm:px-4 md:px-5 lg:px-6"
         aria-label="Mushaf content"
       >
-        <div className="relative min-h-0 flex-1 flex flex-col">
+        <div
+          className={cn(
+            "relative flex min-h-0 flex-1 flex-col",
+            /* Space for fixed mobile turn strips */
+            "max-md:pt-[calc(3.5rem+env(safe-area-inset-top))] max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]",
+          )}
+        >
           <MushafPageTurnButtons
             page={page}
             totalPages={totalPages}
             onPageChange={onPageChange}
             disabled={navDisabled}
             mobileBottomClassName={mobileBottomClassName}
+            mobileTopClassName={mobileTopClassName}
             onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
             showDesktopJump={!hideNavigation}
           />
-          <MushafBookLayout page={page} riwaya={riwaya}>
-            {children}
-          </MushafBookLayout>
+          <div className="flex w-full max-w-full shrink-0 flex-col items-left justify-center gap-2">
+              Quran Menu Navigation Zone
+            </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
+            <MushafBookLayout page={page} riwaya={riwaya}>
+              {children}
+            </MushafBookLayout>
+          </div>
+          {bottomAccessory ? (
+            <div className="flex w-full max-w-full shrink-0 flex-col items-center justify-center gap-2 px-2">
+              {bottomAccessory}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

@@ -573,7 +573,7 @@ export function LiveSessionPage() {
 
   return (
     <div
-      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-[#FDF6E3]"
+      className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-white"
       dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}
     >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -587,14 +587,7 @@ export function LiveSessionPage() {
           {t("liveSession.browserNotSupported")}
         </div>
       ) : null}
-      {webrtc.micDenied ? (
-        <div
-          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[59] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
-          role="status"
-        >
-          {t("liveSession.micDeniedListener")}
-        </div>
-      ) : null}
+      
       {reconnectedToast ? (
         <div
           className="fixed top-[max(3rem,env(safe-area-inset-top))] left-1/2 z-[60] -translate-x-1/2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-900 shadow-md"
@@ -612,7 +605,11 @@ export function LiveSessionPage() {
       ) : null}
 
       <main
-        className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
+        className={
+          webrtc.browserSupported
+            ? "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-[max(env(safe-area-inset-top),0.5rem)]"
+            : "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden py-[max(calc(3rem+4px),env(safe-area-inset-top),env(safe-area-inset-bottom))]"
+        }
         aria-label="Mushaf content"
       >
         <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
@@ -624,7 +621,24 @@ export function LiveSessionPage() {
             canChangePage={isTeacher || (!isTeacher && !autoFollow)}
             hideNavigation
             className="h-full min-h-0"
-            mobileBottomClassName="bottom-[max(calc(3rem+4px),env(safe-area-inset-bottom))] z-[25]"
+            mobileBottomClassName="bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[25]"
+            mobileTopClassName="top-[max(env(safe-area-inset-top),0.5rem)] z-[25]"
+            bottomAccessory={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <SessionControlsCorner
+                  isMuted={sessionState.isMuted}
+                  canToggleMute={canToggleMute}
+                  onToggleMute={sessionState.toggleMute}
+                  isTeacher={isTeacher}
+                  annotationMode={annotationMode}
+                  onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+                  onOpenParticipants={() => setDrawerOpen(true)}
+                />
+                {!isTeacher ? (
+                  <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
+                ) : null}
+              </div>
+            }
           >
             <MushafCanvas
               page={page}
@@ -638,21 +652,6 @@ export function LiveSessionPage() {
           </MushafReader>
         </div>
       </main>
-
-      <div className="absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100%-5.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 px-2">
-        <SessionControlsCorner
-          isMuted={sessionState.isMuted}
-          canToggleMute={canToggleMute}
-          onToggleMute={sessionState.toggleMute}
-          isTeacher={isTeacher}
-          annotationMode={annotationMode}
-          onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
-          onOpenParticipants={() => setDrawerOpen(true)}
-        />
-        {!isTeacher ? (
-          <AutoFollowBadge enabled={autoFollow} onToggle={handleAutoFollowToggle} inline />
-        ) : null}
-      </div>
 
       <button
         type="button"
