@@ -12,8 +12,12 @@ import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafReader } from "../../components/mushaf/MushafReader";
-import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
 import { SessionControlsCorner } from "../../components/session/SessionControlsCorner";
+import {
+  LiveSessionMobileBottomBar,
+  LiveSessionMobileTopBar,
+  LiveSessionOverflowSheet,
+} from "../../components/session/LiveSessionMobileChrome";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
@@ -47,7 +51,7 @@ function formatElapsed(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
 }
 
-/** Live session layout scaffolding (dashed regions; titles removed — `ariaLabel` for assistive tech only). */
+/** Desktop session chrome regions (`data-session-zone` for tests / layout hooks). */
 function SessionLayoutZone({
   zoneId,
   ariaLabel,
@@ -63,10 +67,7 @@ function SessionLayoutZone({
     <section
       aria-label={ariaLabel}
       data-session-zone={zoneId}
-      className={cn(
-        "flex min-h-0 min-w-0 flex-col rounded-md border-2 border-dashed border-gray-400/70 p-2 shadow-sm",
-        className,
-      )}
+      className={cn("flex min-h-0 min-w-0 flex-col p-2", className)}
     >
       <div className="min-h-0 flex-1">{children}</div>
     </section>
@@ -88,6 +89,7 @@ export function LiveSessionPage() {
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileOverflowOpen, setMobileOverflowOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [endSessionOpen, setEndSessionOpen] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
@@ -425,12 +427,6 @@ export function LiveSessionPage() {
     return () => clearInterval(idTimer);
   }, [sessionDetail?.scheduled_at]);
 
-  const activeReciterName = useMemo(() => {
-    const rid = sessionState.state.activeReciterId;
-    if (!rid) return null;
-    return sessionState.state.participants.find((p) => p.userId === rid)?.name ?? null;
-  }, [sessionState.state.activeReciterId, sessionState.state.participants]);
-
   const activeReciterParticipant = useMemo(() => {
     const rid = sessionState.state.activeReciterId;
     if (!rid) return null;
@@ -527,6 +523,10 @@ export function LiveSessionPage() {
           setAnnotationTarget(null);
           return;
         }
+        if (mobileOverflowOpen) {
+          setMobileOverflowOpen(false);
+          return;
+        }
         setDrawerOpen(false);
         return;
       }
@@ -550,7 +550,7 @@ export function LiveSessionPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canToggleMute, sessionState, isTeacher, stepAyah]);
+  }, [canToggleMute, sessionState, isTeacher, stepAyah, mobileOverflowOpen]);
 
   if (!id) {
     return null;
@@ -633,90 +633,21 @@ export function LiveSessionPage() {
       >
         <div
           className={cn(
-            "grid min-h-0 flex-1 gap-1.5 px-1.5",
-            "grid-cols-1 auto-rows-auto",
-            "grid-rows-[auto_auto_auto_minmax(0,1fr)_auto_auto_auto]",
-            "md:grid-cols-3 md:grid-rows-[minmax(0,auto)_minmax(0,1fr)_minmax(0,auto)] md:gap-2 md:px-2",
+            "grid min-h-0 flex-1",
+            "grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 px-1",
+            "md:grid-cols-3 md:grid-rows-[minmax(0,1fr)_minmax(0,auto)] md:gap-2 md:px-2",
           )}
         >
-          <SessionLayoutZone
-            zoneId="tl"
-            ariaLabel={t("liveSession.layoutZoneTopLeft")}
-            className="bg-amber-100/95 md:col-start-1 md:row-start-1"
-          >
-            <SessionStatusCorner
-              connectionStatus={sessionState.wsStatus}
-              networkQuality={webrtc.networkQuality}
-              halaqahType={room.halaqah_type}
-              activeReciterName={activeReciterName}
-              elapsedLabel={formatElapsed(elapsedMs)}
-            />
-          </SessionLayoutZone>
-
-          <SessionLayoutZone
-            zoneId="tm"
-            ariaLabel={t("liveSession.layoutZoneTopMiddle")}
-            className="bg-sky-100/95 md:col-start-2 md:row-start-1"
-          >
-            <nav
-              className="flex w-full min-h-9 flex-row flex-wrap items-start justify-start gap-2 px-0.5 py-0.5"
-              aria-label={t("mushaf.menuNavigationZone")}
-              data-testid="quran-menu-navigation-zone"
-            >
-              <button
-                type="button"
-                onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("common.openMenu")}
-                aria-label={t("common.openMenu")}
-                className={cn(
-                  MEET_ICON_BTN_BASE,
-                  "h-9 w-9 bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
-                )}
-              >
-                <Menu className="h-4 w-4" strokeWidth={2.25} />
-              </button>
-              <div className="min-w-0 flex-1 text-start leading-snug">
-                <p
-                  className="truncate text-sm font-semibold text-[#2c5f7c]"
-                  style={{ fontFamily: "var(--font-ui)" }}
-                >
-                  {navCornerLabels.surahLabel}
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                  <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
-                  {navCornerLabels.juzN > 0 ? (
-                    <>
-                      <span className="text-muted-foreground/60" aria-hidden>
-                        ·
-                      </span>
-                      <span className="text-muted-foreground">{t("mushaf.juzN", { n: navCornerLabels.juzN })}</span>
-                    </>
-                  ) : null}
-                  {navCornerLabels.hizbN > 0 ? (
-                    <>
-                      <span className="text-muted-foreground/60" aria-hidden>
-                        /
-                      </span>
-                      <span className="text-muted-foreground">
-                        {t("mushaf.hizb")} {navCornerLabels.hizbN}
-                      </span>
-                    </>
-                  ) : null}
-                </p>
-              </div>
-            </nav>
-          </SessionLayoutZone>
-
-          <SessionLayoutZone
-            zoneId="tr"
-            ariaLabel={t("liveSession.layoutZoneTopRight")}
-            className="min-h-8 bg-emerald-100/95 md:col-start-3 md:row-start-1"
-          >
-            {null}
-          </SessionLayoutZone>
+          <LiveSessionMobileTopBar
+            surahLabel={navCornerLabels.surahLabel}
+            page={page}
+            juzN={navCornerLabels.juzN}
+            hizbN={navCornerLabels.hizbN}
+            onOpenMenu={() => window.alert(t("common.comingSoon"))}
+          />
 
           <div
-            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-gray-200 bg-white md:col-span-3 md:row-start-2"
+            className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md bg-white md:col-span-3 md:row-start-1"
             aria-label={t("mushaf.title")}
           >
             <ReconnectingOverlay visible={sessionState.wsStatus === "reconnecting"} />
@@ -728,6 +659,55 @@ export function LiveSessionPage() {
               hideNavigation
               omitMenuStrip
               className="h-full min-h-0"
+              immersiveHeader={
+                <nav
+                  className="hidden min-h-9 w-full flex-row flex-wrap items-start justify-start gap-2 md:flex"
+                  aria-label={t("mushaf.menuNavigationZone")}
+                  data-testid="quran-menu-navigation-zone"
+                >
+                  <button
+                    type="button"
+                    onClick={() => window.alert(t("common.comingSoon"))}
+                    title={t("liveSession.tooltip.openMenu")}
+                    aria-label={t("common.openMenu")}
+                    className={cn(
+                      MEET_ICON_BTN_BASE,
+                      "h-9 w-9 shrink-0 bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-700 hover:from-slate-200 hover:to-slate-300/90",
+                    )}
+                  >
+                    <Menu className="h-4 w-4" strokeWidth={2.25} />
+                  </button>
+                  <div className="min-w-0 flex-1 text-start leading-snug">
+                    <p
+                      className="truncate text-sm font-semibold text-[#2c5f7c]"
+                      style={{ fontFamily: "var(--font-ui)" }}
+                    >
+                      {navCornerLabels.surahLabel}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                      <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
+                      {navCornerLabels.juzN > 0 ? (
+                        <>
+                          <span className="text-muted-foreground/60" aria-hidden>
+                            ·
+                          </span>
+                          <span className="text-muted-foreground">{t("mushaf.juzN", { n: navCornerLabels.juzN })}</span>
+                        </>
+                      ) : null}
+                      {navCornerLabels.hizbN > 0 ? (
+                        <>
+                          <span className="text-muted-foreground/60" aria-hidden>
+                            /
+                          </span>
+                          <span className="text-muted-foreground">
+                            {t("mushaf.hizb")} {navCornerLabels.hizbN}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                </nav>
+              }
             >
               <MushafCanvas
                 page={page}
@@ -741,15 +721,30 @@ export function LiveSessionPage() {
             </MushafReader>
           </div>
 
+          <LiveSessionMobileBottomBar
+            isTeacher={isTeacher}
+            isMuted={sessionState.isMuted}
+            canToggleMute={canToggleMute}
+            onToggleMute={sessionState.toggleMute}
+            annotationMode={annotationMode}
+            onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
+            onOpenParticipants={() => setDrawerOpen(true)}
+            onOpenMore={() => setMobileOverflowOpen(true)}
+            onLeave={handleLeave}
+            onEndSession={() => setEndSessionOpen(true)}
+          />
+
           <SessionLayoutZone
             zoneId="bl"
             ariaLabel={t("liveSession.layoutZoneBottomLeft")}
-            className="min-h-[3rem] bg-violet-100/95 md:col-start-1 md:row-start-3"
+            className="hidden min-h-[3rem] md:col-start-1 md:row-start-2 md:flex"
           >
             <div className="flex min-h-10 flex-wrap items-center justify-start gap-2">
               <button
                 type="button"
                 onClick={handleLeave}
+                title={t("liveSession.tooltip.leave")}
+                aria-label={t("liveSession.leave")}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-[#555] shadow-sm transition hover:bg-gray-50"
                 style={{ fontFamily: "var(--font-ui)" }}
               >
@@ -759,6 +754,8 @@ export function LiveSessionPage() {
                 <button
                   type="button"
                   onClick={() => setEndSessionOpen(true)}
+                  title={t("liveSession.tooltip.endSession")}
+                  aria-label={t("liveSession.endSession")}
                   className="rounded-lg bg-[#EF5350] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#E53935]"
                   style={{ fontFamily: "var(--font-ui)" }}
                 >
@@ -771,7 +768,7 @@ export function LiveSessionPage() {
           <SessionLayoutZone
             zoneId="bm"
             ariaLabel={t("liveSession.layoutZoneBottomMiddle")}
-            className="bg-orange-100/95 md:col-start-2 md:row-start-3"
+            className="hidden md:col-start-2 md:row-start-2 md:flex"
           >
             <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
               <SessionControlsCorner
@@ -791,13 +788,13 @@ export function LiveSessionPage() {
           <SessionLayoutZone
             zoneId="br"
             ariaLabel={t("liveSession.layoutZoneBottomRight")}
-            className="bg-rose-100/95 md:col-start-3 md:row-start-3"
+            className="hidden md:col-start-3 md:row-start-2 md:flex"
           >
             <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.sessionInfo")}
+                title={t("liveSession.tooltip.sessionInfo")}
                 aria-label={t("liveSession.sessionInfo")}
                 className={cn(
                   MEET_ICON_BTN_BASE,
@@ -809,7 +806,7 @@ export function LiveSessionPage() {
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
-                title={t("liveSession.participants")}
+                title={t("liveSession.tooltip.participants")}
                 aria-label={t("liveSession.participants")}
                 className={cn(
                   MEET_ICON_BTN_BASE,
@@ -821,7 +818,7 @@ export function LiveSessionPage() {
               <button
                 type="button"
                 onClick={() => window.alert(t("common.comingSoon"))}
-                title={t("liveSession.chat")}
+                title={t("liveSession.tooltip.chat")}
                 aria-label={t("liveSession.chat")}
                 className={cn(
                   MEET_ICON_BTN_BASE,
@@ -834,6 +831,18 @@ export function LiveSessionPage() {
           </SessionLayoutZone>
         </div>
       </main>
+
+      <LiveSessionOverflowSheet
+        open={mobileOverflowOpen}
+        onOpenChange={setMobileOverflowOpen}
+        connectionStatus={sessionState.wsStatus}
+        networkQuality={webrtc.networkQuality}
+        participantCount={sessionState.state.participants.length}
+        elapsedLabel={formatElapsed(elapsedMs)}
+        isTeacher={isTeacher}
+        autoFollow={autoFollow}
+        onAutoFollowToggle={handleAutoFollowToggle}
+      />
 
       <ParticipantDrawer
         open={drawerOpen}

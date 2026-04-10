@@ -49,6 +49,8 @@ interface ConnectionStatusProps {
   className?: string;
   /** Light text for dark translucent bars (e.g. immersive live session). */
   variant?: "default" | "onDark";
+  /** Dot + signal bars only (no “Connected” / status text). */
+  iconsOnly?: boolean;
 }
 
 export function ConnectionStatus({
@@ -56,6 +58,7 @@ export function ConnectionStatus({
   networkQuality = null,
   className = "",
   variant = "default",
+  iconsOnly = false,
 }: ConnectionStatusProps) {
   const { t } = useTranslation();
   const cfg = DOT[status] ?? DOT.disconnected;
@@ -73,6 +76,20 @@ export function ConnectionStatus({
 
   const labelClass =
     variant === "onDark" ? "text-white/80" : "text-[var(--color-text-muted)]";
+
+  if (iconsOnly) {
+    return (
+      <div className={`flex items-center gap-1.5 ${className}`}>
+        <span className="sr-only">{t(labelKey)}</span>
+        <span
+          className="inline-block size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: cfg.color }}
+          aria-hidden
+        />
+        {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-center gap-2 text-sm ${className}`}>

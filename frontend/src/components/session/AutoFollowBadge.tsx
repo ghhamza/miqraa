@@ -19,6 +19,7 @@ export function AutoFollowBadge({ enabled, onToggle, inline = false }: AutoFollo
     <button
       type="button"
       onClick={onToggle}
+      title={t("liveSession.tooltip.autoFollowSwitch")}
       className={cn(
         "pointer-events-auto flex items-center gap-2 rounded-full border border-gray-200 bg-[var(--color-surface)] px-3 py-2 text-xs font-medium shadow-md backdrop-blur-sm",
         inline

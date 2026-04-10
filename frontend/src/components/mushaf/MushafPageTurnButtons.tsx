@@ -49,6 +49,7 @@ export function MushafPageTurnButtons({
           "pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 shadow-md",
         )}
         aria-label={t("mushaf.nextPage")}
+        title={t("mushaf.tooltip.nextPage")}
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={navDisabled || page >= totalPages}
       >
@@ -62,6 +63,7 @@ export function MushafPageTurnButtons({
             "pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-md",
           )}
           aria-label={t("mushaf.jumpOpen")}
+          title={t("mushaf.tooltip.jumpOpen")}
           onClick={onOpenJump}
         >
           <ListTree className="h-6 w-6" aria-hidden />
@@ -74,6 +76,7 @@ export function MushafPageTurnButtons({
           "pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 shadow-md",
         )}
         aria-label={t("mushaf.prevPage")}
+        title={t("mushaf.tooltip.prevPage")}
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={navDisabled || page <= 1}
       >

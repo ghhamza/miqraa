@@ -18,6 +18,7 @@
     "closeMenu": "Fermer le menu",
     "openMenu": "Menu",
     "close": "Fermer",
+    "closePanel": "Fermer ce panneau.",
     "archive": "Archiver",
     "restore": "Restaurer"
   },
@@ -242,7 +243,12 @@
     "autoFollow": "Suivi automatique",
     "autoFollowOn": "Suivi activé",
     "autoFollowOff": "Suivi désactivé",
-    "freeBrowse": "Navigation libre"
+    "freeBrowse": "Navigation libre",
+    "tooltip": {
+      "nextPage": "Page suivante du Mushaf (en RTL, flèche gauche).",
+      "prevPage": "Page précédente (en RTL, flèche droite).",
+      "jumpOpen": "Ouvrir le panneau pour aller à une sourate, un juz ou une page."
+    }
   },
   "enrollment": {
     "title": "Inscription",
@@ -557,7 +563,32 @@
     "gradeAnnouncement": "Votre évaluation : {{grade}}",
     "micDeniedListener": "Micro refusé — vous pouvez seulement écouter.",
     "live": "En direct",
-    "reciting": "récite"
+    "reciting": "récite",
+    "overflowMore": "Plus",
+    "mobileBottomBar": "Contrôles de session",
+    "endSessionShort": "Fin",
+    "sessionTimeLine": "Durée de session : {{time}}",
+    "participantCountLine": "{{count}} participants",
+    "autoFollowOverflow": "Suivre la page du professeur",
+    "tooltip": {
+      "openMenu": "Ouvrir le menu pour aller à une sourate, un juz ou une page (bientôt).",
+      "leave": "Quitter la session et revenir en arrière. Vous êtes déconnecté ; la classe continue pour les autres.",
+      "endSession": "Terminer la session en direct pour l’enseignant et tous les participants.",
+      "mute": "Couper votre micro pour que les autres ne vous entendent pas.",
+      "unmute": "Réactiver votre micro pour que les autres vous entendent.",
+      "micDisabled": "Le micro n’est disponible que pour l’enseignant et le récitant désigné.",
+      "annotationMode": "Activer ou désactiver le mode correction. Touchez les mots sur la page (enseignant).",
+      "raiseHand": "Indiquer à l’enseignant que vous voulez parler (bientôt).",
+      "pointerTool": "Outil pointeur pour les étudiants (bientôt).",
+      "record": "Enregistrer cette session (bientôt).",
+      "participants": "Ouvrir la liste des participants. L’enseignant peut désigner le récitant.",
+      "sessionInfo": "Détails de la session (bientôt).",
+      "chat": "Discussion avec les participants (bientôt).",
+      "camera": "Options caméra (bientôt).",
+      "overflowMore": "Plus d’options : état de connexion, outils et suivi.",
+      "autoFollowSwitch": "Activé : votre Mushaf suit la page de l’enseignant. Désactivé : navigation libre.",
+      "endSessionShort": "Terminer la session pour tous. Une confirmation sera demandée."
+    }
   },
   "annotation": {
     "error": "Erreur",

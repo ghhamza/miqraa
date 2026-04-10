@@ -4,7 +4,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import { MushafBookLayout } from "./MushafBookLayout";
+import { MushafBookLayout, MUSHAF_PAGE_INNER_PADDING_X, mushafPageCardWidthStyle } from "./MushafBookLayout";
 import { MushafNavigation } from "./MushafNavigation";
 import { MushafPageTurnButtons } from "./MushafPageTurnButtons";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -27,6 +27,11 @@ export interface MushafReaderProps {
   menuNavigationZone?: ReactNode;
   /** Live session: menu strip is placed in page layout (top-middle); omit the internal nav block. */
   omitMenuStrip?: boolean;
+  /**
+   * Rendered inside the padded mushaf column, above page turn controls — aligns with the book column
+   * (e.g. live session desktop: menu + surah row).
+   */
+  immersiveHeader?: ReactNode;
   children: ReactNode;
 }
 
@@ -44,6 +49,7 @@ export function MushafReader({
   bottomAccessory,
   menuNavigationZone,
   omitMenuStrip = false,
+  immersiveHeader,
   children,
 }: MushafReaderProps) {
   const { t } = useTranslation();
@@ -146,11 +152,18 @@ export function MushafReader({
               )}
             </nav>
           ) : null}
-          {/* Container for 5:7 page only — excludes menu nav above; cqi/cqh = mushaf column only */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden [container-type:size]">
-            <MushafBookLayout page={page} riwaya={riwaya}>
-              {children}
-            </MushafBookLayout>
+          {/* cqi/cqh = mushaf column; immersive header uses same card width + text gutters as the page */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden [container-type:size]">
+            {immersiveHeader ? (
+              <div className="mx-auto w-full max-w-3xl shrink-0" style={mushafPageCardWidthStyle}>
+                <div className={cn(MUSHAF_PAGE_INNER_PADDING_X, "pb-1 pt-0")}>{immersiveHeader}</div>
+              </div>
+            ) : null}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden">
+              <MushafBookLayout page={page} riwaya={riwaya}>
+                {children}
+              </MushafBookLayout>
+            </div>
           </div>
           {bottomAccessory ? (
             <div className="flex w-full max-w-full shrink-0 flex-col items-center justify-center gap-2 px-2">

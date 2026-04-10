@@ -34,7 +34,7 @@ export function SessionControlsCorner({
       <button
         type="button"
         onClick={showComingSoon}
-        title={t("liveSession.record")}
+        title={t("liveSession.tooltip.record")}
         aria-label={t("liveSession.record")}
         className={cn(
           MEET_ICON_BTN_BASE,
@@ -46,7 +46,7 @@ export function SessionControlsCorner({
       <button
         type="button"
         onClick={showComingSoon}
-        title={t("liveSession.raiseHand")}
+        title={t("liveSession.tooltip.raiseHand")}
         aria-label={t("liveSession.raiseHand")}
         className={cn(
           MEET_ICON_BTN_BASE,
@@ -59,7 +59,13 @@ export function SessionControlsCorner({
         type="button"
         disabled={!canToggleMute}
         onClick={onToggleMute}
-        title={isMuted ? t("liveSession.unmute") : t("liveSession.mute")}
+        title={
+          !canToggleMute
+            ? t("liveSession.tooltip.micDisabled")
+            : isMuted
+              ? t("liveSession.tooltip.unmute")
+              : t("liveSession.tooltip.mute")
+        }
         aria-label={isMuted ? t("liveSession.unmute") : t("liveSession.mute")}
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md ring-1 ring-black/10 transition hover:brightness-105 active:scale-[0.97] disabled:opacity-40",
@@ -74,7 +80,7 @@ export function SessionControlsCorner({
         <button
           type="button"
           onClick={onToggleAnnotation}
-          title={t("annotation.toggleMode")}
+          title={t("liveSession.tooltip.annotationMode")}
           aria-label={t("annotation.toggleMode")}
           className={cn(
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md ring-1 ring-black/10 transition hover:brightness-105 active:scale-[0.97]",
@@ -89,7 +95,7 @@ export function SessionControlsCorner({
         <button
           type="button"
           onClick={showComingSoon}
-          title={t("liveSession.pointerTool")}
+          title={t("liveSession.tooltip.pointerTool")}
           aria-label={t("liveSession.pointerTool")}
           className={cn(
             MEET_ICON_BTN_BASE,

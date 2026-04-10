@@ -18,6 +18,7 @@
     "closeMenu": "Close menu",
     "openMenu": "Menu",
     "close": "Close",
+    "closePanel": "Close this panel.",
     "archive": "Archive",
     "restore": "Restore"
   },
@@ -242,7 +243,12 @@
     "autoFollow": "Auto-follow",
     "autoFollowOn": "Following",
     "autoFollowOff": "Not following",
-    "freeBrowse": "Free browse"
+    "freeBrowse": "Free browse",
+    "tooltip": {
+      "nextPage": "Go to the next page of the Mushaf (in RTL layout this is the left arrow).",
+      "prevPage": "Go to the previous page (in RTL layout this is the right arrow).",
+      "jumpOpen": "Open the panel to jump to a surah, juz, or page number."
+    }
   },
   "enrollment": {
     "title": "Enrollment",
@@ -557,7 +563,32 @@
     "gradeAnnouncement": "Your grade: {{grade}}",
     "micDeniedListener": "Microphone permission was denied — you can listen only.",
     "live": "Live",
-    "reciting": "reciting"
+    "reciting": "reciting",
+    "overflowMore": "More",
+    "mobileBottomBar": "Session controls",
+    "endSessionShort": "End",
+    "sessionTimeLine": "Session time: {{time}}",
+    "participantCountLine": "{{count}} participants",
+    "autoFollowOverflow": "Follow teacher page",
+    "tooltip": {
+      "openMenu": "Open the menu to jump to a surah, juz, or page (coming soon).",
+      "leave": "Leave the session and go back. You disconnect from the call; the class continues for others.",
+      "endSession": "End the live session for the teacher and all participants.",
+      "mute": "Mute your microphone so others cannot hear you.",
+      "unmute": "Unmute your microphone so others can hear you.",
+      "micDisabled": "Microphone is only available for the teacher and the assigned reciter.",
+      "annotationMode": "Turn annotation mode on or off. Tap words on the page to give corrections (teacher).",
+      "raiseHand": "Signal the teacher that you want to speak (coming soon).",
+      "pointerTool": "Pointer tool for students (coming soon).",
+      "record": "Record this session (coming soon).",
+      "participants": "Open the participant list. Teachers can assign who is reciting.",
+      "sessionInfo": "View session details (coming soon).",
+      "chat": "Chat with participants (coming soon).",
+      "camera": "Camera options (coming soon).",
+      "overflowMore": "More options: full connection status, tools, and follow settings.",
+      "autoFollowSwitch": "When on, your Mushaf follows the teacher’s page. When off, you can browse on your own.",
+      "endSessionShort": "End the session for everyone. You will be asked to confirm."
+    }
   },
   "annotation": {
     "error": "Error",
