@@ -27,6 +27,8 @@ export interface MushafReaderProps {
   className?: string;
   /** e.g. live session: mic / participants row, centered under the mushaf page (not viewport-fixed). */
   bottomAccessory?: ReactNode;
+  /** Strip above the mushaf page (e.g. surah/juz shortcuts). Omit to show the default placeholder. */
+  menuNavigationZone?: ReactNode;
   children: ReactNode;
 }
 
@@ -44,6 +46,7 @@ export function MushafReader({
   mobileTopClassName,
   className,
   bottomAccessory,
+  menuNavigationZone,
   children,
 }: MushafReaderProps) {
   const { t } = useTranslation();
@@ -141,10 +144,19 @@ export function MushafReader({
             onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
             showDesktopJump={!hideNavigation}
           />
-          <div className="flex w-full max-w-full shrink-0 flex-col items-left justify-center gap-2">
-              Quran Menu Navigation Zone
-            </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
+          <nav
+            className="flex w-full max-w-full shrink-0 flex-col items-stretch gap-2  py-2"
+            aria-label={t("mushaf.menuNavigationZone")}
+            data-testid="quran-menu-navigation-zone"
+          >
+            {menuNavigationZone !== undefined ? (
+              menuNavigationZone
+            ) : (
+              <p className="text-center text-xs text-muted-foreground sm:text-sm">{t("mushaf.menuNavigationZone")}</p>
+            )}
+          </nav>
+          {/* Container for 5:7 page only — excludes menu nav above; cqi/cqh = mushaf column only */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden [container-type:size]">
             <MushafBookLayout page={page} riwaya={riwaya}>
               {children}
             </MushafBookLayout>
