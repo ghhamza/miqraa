@@ -462,6 +462,33 @@ async fn handle_client_message(
                 tracing::warn!(error = %me, "media set_active_reciter");
             }
         }
+        ClientMessage::ClearReciter => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can clear reciter")
+                    .await;
+                return;
+            }
+            if let Err(e) = state
+                .rooms
+                .clear_active_reciter(session_id, user_id)
+                .await
+            {
+                let m = match e {
+                    "forbidden" => "Forbidden",
+                    "no_session" => "Session not found",
+                    _ => "clear-reciter failed",
+                };
+                state.rooms.send_error(session_id, user_id, m).await;
+            } else if let Err(me) = state
+                .media_service
+                .set_active_reciter(session_id, None)
+                .await
+            {
+                tracing::warn!(error = %me, "media set_active_reciter after clear");
+            }
+        }
         ClientMessage::CurrentAyah { surah, ayah } => {
             if user_id != teacher_id {
                 state

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { type ReactNode } from "react";
-import { Crown, Mic, MicOff, X } from "lucide-react";
+import { Crown, Mic, MicOff, UserCheck, UserMinus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "../ui/Button";
@@ -25,6 +24,7 @@ interface ParticipantDrawerProps {
   activeReciterId: string | null;
   isTeacher: boolean;
   onSetReciter: (userId: string) => void;
+  onClearReciter: () => void;
   /** Teacher-only grading UI below the list */
   gradingPanel?: ReactNode;
   /** Same pattern as mushaf navigator: LTR → right edge, RTL → left edge. */
@@ -45,7 +45,7 @@ export function ParticipantDrawer({
   activeReciterId,
   isTeacher,
   onSetReciter,
-  gradingPanel,
+  onClearReciter,
   side: sideProp,
 }: ParticipantDrawerProps) {
   const { t, i18n } = useTranslation();
@@ -100,7 +100,7 @@ export function ParticipantDrawer({
                 <li key={p.userId}>
                   <div
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-md px-1 py-2.5 text-start text-sm transition-colors sm:px-0",
+                      "flex w-full items-center gap-3 rounded-md px-3 py-3 text-start text-sm transition-colors",
                       "hover:bg-muted/80",
                       isReciter && "bg-muted font-medium text-foreground",
                     )}
@@ -136,11 +136,22 @@ export function ParticipantDrawer({
                       <Button
                         type="button"
                         variant="outline"
-                        size="xs"
-                        className="shrink-0"
-                        onClick={() => onSetReciter(p.userId)}
+                        size="sm"
+                        className="min-w-0 shrink gap-1.5 px-2.5"
+                        onClick={() =>
+                          isReciter ? onClearReciter() : onSetReciter(p.userId)
+                        }
                       >
-                        {t("liveSession.setReciter")}
+                        {isReciter ? (
+                          <UserMinus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+                        ) : (
+                          <UserCheck className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+                        )}
+                        <span className="truncate">
+                          {isReciter
+                            ? t("liveSession.clearReciter")
+                            : t("liveSession.setReciter")}
+                        </span>
                       </Button>
                     ) : null}
                   </div>
@@ -148,10 +159,6 @@ export function ParticipantDrawer({
               );
             })}
           </ul>
-
-          {gradingPanel ? (
-            <div className="mt-5 border-t border-border pt-4">{gradingPanel}</div>
-          ) : null}
         </div>
       </SheetContent>
     </Sheet>

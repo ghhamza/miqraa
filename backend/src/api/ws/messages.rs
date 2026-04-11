@@ -27,6 +27,9 @@ pub enum ClientMessage {
     #[serde(rename = "set-reciter")]
     SetReciter { user_id: Uuid },
 
+    #[serde(rename = "clear-reciter")]
+    ClearReciter,
+
     #[serde(rename = "current-ayah")]
     CurrentAyah { surah: i32, ayah: i32 },
 

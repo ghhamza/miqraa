@@ -23,6 +23,7 @@ import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
 import { SurahPicker } from "./SurahPicker";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 
 interface RecitationFormModalProps {
   open: boolean;
@@ -57,7 +58,8 @@ export function RecitationFormModal({
   onClose,
   onSaved,
 }: RecitationFormModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const intlLocale = intlLocaleForAppLanguage(i18n.language);
   const user = useAuthStore((s) => s.user);
 
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -254,7 +256,7 @@ export function RecitationFormModal({
   const selectedRoomName = rooms.find((r) => r.id === roomId)?.name ?? defaultRoomName ?? "—";
   const selectedSession = sessions.find((s) => s.id === sessionId);
   const selectedSessionLabel = selectedSession
-    ? `${selectedSession.title?.trim() || selectedSession.room_name} · ${new Date(selectedSession.scheduled_at).toLocaleString()}`
+    ? `${selectedSession.title?.trim() || selectedSession.room_name} · ${new Date(selectedSession.scheduled_at).toLocaleString(intlLocale)}`
     : sessionReadOnly && defaultSessionSummary
       ? defaultSessionSummary
       : sessionId
@@ -397,7 +399,7 @@ export function RecitationFormModal({
                     { value: "", label: "—" },
                     ...sessions.map((s) => ({
                       value: s.id,
-                      label: `${s.title?.trim() || s.room_name} · ${new Date(s.scheduled_at).toLocaleString()}`,
+                      label: `${s.title?.trim() || s.room_name} · ${new Date(s.scheduled_at).toLocaleString(intlLocale)}`,
                     })),
                   ]}
                 />

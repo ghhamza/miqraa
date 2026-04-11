@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import type { GenerateResult, Schedule } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -42,7 +43,7 @@ function formatTimeLabel(m: number, locale: string): string {
 
 export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
+  const locale = intlLocaleForAppLanguage(i18n.language);
   const isRtl = (i18n.language || "ar").startsWith("ar");
 
   const [schedules, setSchedules] = useState<Schedule[]>([]);

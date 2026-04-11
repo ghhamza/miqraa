@@ -17,7 +17,7 @@ import type {
 import { useAuthStore } from "../../stores/authStore";
 import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
 import { useAnnotations } from "../../hooks/useAnnotations";
-import { useSessionState } from "../../hooks/useSessionState";
+import { useSessionState, type SessionParticipant } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
 import { MushafReader } from "../../components/mushaf/MushafReader";
@@ -29,6 +29,13 @@ import {
 } from "../../components/session/LiveSessionMobileChrome";
 import { ParticipantDrawer } from "../../components/session/ParticipantDrawer";
 import { Modal } from "../../components/ui/Modal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 import { Button } from "../../components/ui/Button";
 import {
   findJuzStartingAtPage,
@@ -130,6 +137,22 @@ export function LiveSessionPage() {
     annotations: ErrorAnnotation[];
     rect: DOMRect;
     pinned: boolean;
+  } | null>(null);
+
+  const [gradingDialogOpen, setGradingDialogOpen] = useState(false);
+  /** Bumps when the grading modal opens so GradingPanel remounts with fresh surah/ayah state. */
+  const [gradingDialogSeq, setGradingDialogSeq] = useState(0);
+  const [gradingDialogContext, setGradingDialogContext] = useState<{
+    participant: SessionParticipant;
+    currentAyah: { surah: number; ayah: number } | null;
+    highlightRange: { surah: number; ayahStart: number; ayahEnd: number } | null;
+  } | null>(null);
+  const skipGradingModalRef = useRef(false);
+  const prevActiveReciterIdRef = useRef<string | null>(null);
+  const gradingContextSnapshotRef = useRef<{
+    participant: SessionParticipant;
+    currentAyah: { surah: number; ayah: number } | null;
+    highlightRange: { surah: number; ayahStart: number; ayahEnd: number } | null;
   } | null>(null);
 
   const studentPopoverPinnedRef = useRef(false);
@@ -619,6 +642,44 @@ export function LiveSessionPage() {
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
 
   useEffect(() => {
+    if (activeReciterParticipant) {
+      const [pageSurah, pageAyah] = getSurahAyahAtPageStart(page, riwaya);
+      const fallbackAyah = { surah: pageSurah, ayah: pageAyah };
+      gradingContextSnapshotRef.current = {
+        participant: activeReciterParticipant,
+        currentAyah: sessionState.state.currentAyah ?? fallbackAyah,
+        highlightRange: interaction.highlightRange,
+      };
+    }
+  }, [
+    activeReciterParticipant,
+    sessionState.state.currentAyah,
+    interaction.highlightRange,
+    page,
+    riwaya,
+  ]);
+
+  useEffect(() => {
+    const cur = sessionState.state.activeReciterId;
+    const prev = prevActiveReciterIdRef.current;
+
+    if (prev && !cur && isTeacher && id) {
+      if (skipGradingModalRef.current) {
+        skipGradingModalRef.current = false;
+      } else {
+        const ctx = gradingContextSnapshotRef.current;
+        if (ctx && ctx.participant.userId === prev) {
+          setGradingDialogContext(ctx);
+          setGradingDialogOpen(true);
+          setGradingDialogSeq((n) => n + 1);
+        }
+      }
+    }
+
+    prevActiveReciterIdRef.current = cur;
+  }, [sessionState.state.activeReciterId, isTeacher, id]);
+
+  useEffect(() => {
     if (!currentRecitationId) return;
     void loadAnnotations(currentRecitationId);
   }, [currentRecitationId, loadAnnotations]);
@@ -682,6 +743,7 @@ export function LiveSessionPage() {
   const disconnectWebrtc = webrtc.disconnect;
 
   const confirmLeave = useCallback(() => {
+    skipGradingModalRef.current = true;
     disconnectWebrtc();
     sessionState.disconnect();
     setLeaveOpen(false);
@@ -690,6 +752,7 @@ export function LiveSessionPage() {
 
   const confirmEndSession = useCallback(async () => {
     if (!id) return;
+    skipGradingModalRef.current = true;
     setEndingSession(true);
     setEndError(null);
     try {
@@ -1078,24 +1141,54 @@ export function LiveSessionPage() {
         activeReciterId={sessionState.state.activeReciterId}
         isTeacher={sessionState.isTeacher}
         onSetReciter={sessionState.setReciter}
-        gradingPanel={
-          sessionState.isTeacher && id ? (
-            <GradingPanel
-              activeReciter={activeReciterParticipant}
-              currentAyah={sessionState.state.currentAyah}
-              highlightRange={interaction.highlightRange}
-              sessionId={id}
-              roomId={sessionDetail.room_id}
-              riwaya={riwaya}
-              locale={loc}
-              onGradeSubmitted={(studentId, grade, notes) => {
-                sessionState.sendGradeNotification(studentId, grade, notes);
-              }}
-              onRecitationCreated={(rec) => setCurrentRecitationId(rec.id)}
-            />
-          ) : undefined
-        }
+        onClearReciter={sessionState.clearReciter}
       />
+
+      {sessionState.isTeacher && id ? (
+        <Dialog
+          open={gradingDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setGradingDialogOpen(false);
+              setGradingDialogContext(null);
+            }
+          }}
+        >
+          {gradingDialogContext ? (
+            <DialogContent
+              className="max-h-[min(90dvh,800px)] gap-0 overflow-y-auto p-0 sm:max-w-lg"
+              showCloseButton
+            >
+              <div className="border-b border-border px-4 pt-4 pb-3 pe-12">
+                <DialogHeader className="gap-1 space-y-0 text-start">
+                  <DialogTitle className="text-start font-heading text-lg">
+                    {t("liveSession.gradeRecitation")}
+                  </DialogTitle>
+                  <DialogDescription className="text-start text-sm text-muted-foreground">
+                    {t("liveSession.gradeRecitationModalDescription")}
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <GradingPanel
+                key={`grading-${gradingDialogSeq}-${gradingDialogContext.participant.userId}`}
+                hideTitle
+                className="border-0 bg-transparent px-4 pb-4 pt-2"
+                activeReciter={gradingDialogContext.participant}
+                currentAyah={gradingDialogContext.currentAyah}
+                highlightRange={gradingDialogContext.highlightRange}
+                sessionId={id}
+                roomId={sessionDetail.room_id}
+                riwaya={riwaya}
+                locale={loc}
+                onGradeSubmitted={(studentId, grade, notes) => {
+                  sessionState.sendGradeNotification(studentId, grade, notes);
+                }}
+                onRecitationCreated={(rec) => setCurrentRecitationId(rec.id)}
+              />
+            </DialogContent>
+          ) : null}
+        </Dialog>
+      ) : null}
 
       <Modal open={leaveOpen} title={t("liveSession.leave")} onClose={() => setLeaveOpen(false)}>
         <p className="mb-6 text-sm text-[var(--color-text-muted)]">{t("liveSession.leaveConfirm")}</p>
@@ -1136,6 +1229,7 @@ export function LiveSessionPage() {
             type="button"
             variant="primary"
             onClick={() => {
+              skipGradingModalRef.current = true;
               disconnectWebrtc();
               sessionState.disconnect();
               blocker.proceed?.();

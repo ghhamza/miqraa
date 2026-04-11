@@ -481,7 +481,7 @@ export function SessionDetailPage() {
             </Button>
           ) : null}
         </div>
-        <RecentRecitationsList items={sessionRecitations} />
+        <RecentRecitationsList items={sessionRecitations} showStudent />
       </PageCard>
 
       <RecitationFormModal

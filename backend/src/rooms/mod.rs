@@ -278,6 +278,39 @@ impl RoomManager {
         Ok(())
     }
 
+    pub async fn clear_active_reciter(
+        &self,
+        session_id: Uuid,
+        requester_id: Uuid,
+    ) -> Result<(), &'static str> {
+        let mut guard = self.sessions.write().await;
+        let session = guard
+            .get_mut(&session_id)
+            .ok_or("no_session")?;
+
+        if !Self::is_teacher_user(session, requester_id) {
+            return Err("forbidden");
+        }
+
+        session.active_reciter_id = None;
+        Self::apply_classroom_mute_rules(session);
+
+        let reciter_msg = ServerMessage::ReciterChanged {
+            user_id: session.active_reciter_id,
+        };
+        for p in session.participants.values() {
+            let _ = Self::send_json(&p.tx, &reciter_msg);
+        }
+        for p in session.participants.values() {
+            let m = ServerMessage::MuteChanged {
+                user_id: p.user_id,
+                muted: p.is_muted,
+            };
+            let _ = Self::send_json(&p.tx, &m);
+        }
+        Ok(())
+    }
+
     pub async fn set_mute(
         &self,
         session_id: Uuid,

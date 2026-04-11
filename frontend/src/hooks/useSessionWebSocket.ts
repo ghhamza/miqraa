@@ -60,6 +60,7 @@ export interface UseSessionWebSocketReturn {
   status: SessionWsStatus;
   sendMute: (muted: boolean) => void;
   sendSetReciter: (userId: string) => void;
+  sendClearReciter: () => void;
   sendCurrentAyah: (surah: number, ayah: number) => void;
   sendClearAyah: () => void;
   sendCurrentPage: (page: number) => void;
@@ -137,6 +138,10 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     },
     [sendRaw],
   );
+
+  const sendClearReciter = useCallback(() => {
+    sendRaw({ type: "clear-reciter" });
+  }, [sendRaw]);
 
   const sendCurrentAyah = useCallback(
     (surah: number, ayah: number) => {
@@ -440,6 +445,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     status,
     sendMute,
     sendSetReciter,
+    sendClearReciter,
     sendCurrentAyah,
     sendClearAyah,
     sendCurrentPage,

@@ -3,10 +3,11 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 
 export function useLocaleDate() {
   const { i18n } = useTranslation();
-  const locale = i18n.language === "en" ? "en-US" : i18n.language === "fr" ? "fr-FR" : "ar-SA";
+  const locale = intlLocaleForAppLanguage(i18n.language);
 
   return useMemo(
     () => ({

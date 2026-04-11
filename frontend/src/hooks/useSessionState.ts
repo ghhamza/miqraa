@@ -72,6 +72,7 @@ export interface UseSessionStateReturn {
   isActiveReciter: boolean;
   isMuted: boolean;
   setReciter: (userId: string) => void;
+  clearReciter: () => void;
   toggleMute: () => void;
   setCurrentAyah: (surah: number, ayah: number) => void;
   clearCurrentAyah: () => void;
@@ -203,6 +204,10 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     [ws],
   );
 
+  const clearReciter = useCallback(() => {
+    ws.sendClearReciter();
+  }, [ws]);
+
   const toggleMute = useCallback(() => {
     ws.sendMute(!isMuted);
   }, [ws, isMuted]);
@@ -255,6 +260,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       isActiveReciter,
       isMuted,
       setReciter,
+      clearReciter,
       toggleMute,
       setCurrentAyah,
       clearCurrentAyah,
@@ -274,6 +280,7 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       isActiveReciter,
       isMuted,
       setReciter,
+      clearReciter,
       toggleMute,
       setCurrentAyah,
       clearCurrentAyah,

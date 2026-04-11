@@ -35,6 +35,7 @@ import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import {
   calendarGridEnd,
@@ -252,7 +253,7 @@ export function RoomDetailPage() {
     };
   }, [id, room, loadRoomRecitations]);
 
-  const locale = i18n.language === "en" ? "en-US" : i18n.language === "fr" ? "fr-FR" : "ar-SA";
+  const locale = intlLocaleForAppLanguage(i18n.language);
 
   const weekdayLabels = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
@@ -829,7 +830,7 @@ export function RoomDetailPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
           </div>
         ) : (
-          <RecentRecitationsList items={roomRecitations} />
+          <RecentRecitationsList items={roomRecitations} showStudent />
         )}
       </PageCard>
 

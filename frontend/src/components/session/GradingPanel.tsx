@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import { api, userFacingApiError } from "../../lib/api";
 import type { Paginated, RecitationGrade, RecitationPublic } from "../../types";
 import type { SessionParticipant } from "../../hooks/useSessionState";
-import { getSurahNameWithArabic } from "../../lib/quranService";
+import {
+  getAllSurahs,
+  getSurahAyahCount,
+  getSurahNameWithArabic,
+} from "../../lib/quranService";
+import type { Riwaya } from "../../lib/quranService";
+import { cn } from "@/lib/utils";
+import { FormSelect } from "@/components/ui/select";
 import { GradeBadge } from "../recitations/GradeBadge";
 
 const GRADE_ORDER: RecitationGrade[] = ["excellent", "good", "needs_work", "weak"];
@@ -29,6 +36,9 @@ export interface GradingPanelProps {
   onGradeSubmitted: (studentId: string, grade: string, notes?: string) => void;
   /** Fires after POST /recitations succeeds — use for linking error annotations to a recitation row. */
   onRecitationCreated?: (rec: RecitationPublic) => void;
+  /** When the title is shown elsewhere (e.g. Dialog header). */
+  hideTitle?: boolean;
+  className?: string;
 }
 
 export function GradingPanel({
@@ -41,11 +51,27 @@ export function GradingPanel({
   locale,
   onGradeSubmitted,
   onRecitationCreated,
+  hideTitle = false,
+  className,
 }: GradingPanelProps) {
-  const { t } = useTranslation();
-  const [surah, setSurah] = useState(1);
-  const [ayahStart, setAyahStart] = useState(1);
-  const [ayahEnd, setAyahEnd] = useState(1);
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === "ar";
+  const riwayaTyped = riwaya as Riwaya;
+  const [surah, setSurah] = useState(() => {
+    if (highlightRange) return highlightRange.surah;
+    if (currentAyah) return currentAyah.surah;
+    return 1;
+  });
+  const [ayahStart, setAyahStart] = useState(() => {
+    if (highlightRange) return highlightRange.ayahStart;
+    if (currentAyah) return currentAyah.ayah;
+    return 1;
+  });
+  const [ayahEnd, setAyahEnd] = useState(() => {
+    if (highlightRange) return highlightRange.ayahEnd;
+    if (currentAyah) return currentAyah.ayah;
+    return 1;
+  });
   const [notes, setNotes] = useState("");
   const [list, setList] = useState<RecitationPublic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +114,21 @@ export function GradingPanel({
     void loadList();
   }, [loadList]);
 
+  const surahSelectOptions = useMemo(
+    () =>
+      getAllSurahs().map((s) => ({
+        value: String(s.number),
+        label: `${s.number}. ${getSurahNameWithArabic(s.number, locale)}`,
+      })),
+    [locale],
+  );
+
+  /** Same box model as native inputs so the surah select lines up in the grid. */
+  const rangeFieldClass =
+    "box-border h-9 w-full min-h-9 rounded-lg border border-input bg-background px-2 text-xs leading-none text-foreground shadow-none outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-xs sm:leading-none";
+  const surahSelectTriggerClass = rangeFieldClass;
+  const surahSelectStyle = { fontFamily: "var(--font-ui)", color: "var(--color-text)" } as const;
+
   const submitGrade = async (grade: RecitationGrade) => {
     if (!activeReciter) return;
     setSubmitting(true);
@@ -120,8 +161,13 @@ export function GradingPanel({
   const disabled = !activeReciter;
 
   return (
-    <div className="border-t border-gray-100 bg-muted/20 px-4 py-4" style={{ fontFamily: "var(--font-ui)" }}>
-      <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t("liveSession.gradeRecitation")}</h3>
+    <div
+      className={cn("border-t border-gray-100 bg-muted/20 px-4 py-4", className)}
+      style={{ fontFamily: "var(--font-ui)" }}
+    >
+      {!hideTitle ? (
+        <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t("liveSession.gradeRecitation")}</h3>
+      ) : null}
 
       {disabled ? (
         <p className="text-sm text-[var(--color-text-muted)]">{t("liveSession.setReciterFirst")}</p>
@@ -134,34 +180,44 @@ export function GradingPanel({
           <p className="mb-2 text-xs text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-quran)" }}>
             {getSurahNameWithArabic(surah, locale)} · {t("liveSession.ayahRange")}: {ayahStart}–{ayahEnd}
           </p>
-          <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
-            <label className="col-span-1 flex flex-col gap-1">
-              <span className="text-[var(--color-text-muted)]">س / Surah</span>
-              <input
-                type="number"
-                min={1}
-                max={114}
-                className="rounded border border-gray-200 px-2 py-1"
-                value={surah}
-                onChange={(e) => setSurah(Number(e.target.value))}
+          <div className="mb-3 grid grid-cols-3 gap-2 text-xs items-end">
+            <label className="col-span-1 flex min-w-0 flex-col gap-1.5">
+              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.surah")}</span>
+              <FormSelect
+                value={String(surah)}
+                onValueChange={(v) => {
+                  const n = Number(v);
+                  if (n < 1 || n > 114) return;
+                  setSurah(n);
+                  const max = getSurahAyahCount(n, riwayaTyped);
+                  const clamp = (x: number) => Math.max(1, Math.min(x, max));
+                  setAyahStart((a) => clamp(a));
+                  setAyahEnd((a) => clamp(a));
+                }}
+                dir={isRtl ? "rtl" : "ltr"}
+                aria-label={t("recitations.selectSurah")}
+                triggerClassName={surahSelectTriggerClass}
+                triggerStyle={surahSelectStyle}
+                contentClassName="max-h-[min(22rem,70vh)]"
+                options={surahSelectOptions}
               />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</span>
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</span>
               <input
                 type="number"
                 min={1}
-                className="rounded border border-gray-200 px-2 py-1"
+                className={cn(rangeFieldClass, "tabular-nums")}
                 value={ayahStart}
                 onChange={(e) => setAyahStart(Number(e.target.value))}
               />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</span>
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="leading-tight text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</span>
               <input
                 type="number"
                 min={1}
-                className="rounded border border-gray-200 px-2 py-1"
+                className={cn(rangeFieldClass, "tabular-nums")}
                 value={ayahEnd}
                 onChange={(e) => setAyahEnd(Number(e.target.value))}
               />
