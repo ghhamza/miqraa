@@ -7,8 +7,13 @@
 //! - Opus / VP8 RTP passthrough — no transcoding
 
 pub mod media_service;
+pub mod mediasoup_sfu;
 pub mod webrtc_sfu;
 
 #[allow(unused_imports)]
-pub use media_service::{MediaError, MediaService, ParticipantRole, SfuServerEvent};
+pub use media_service::{
+    ConsumeParams, ConsumerInfo, DtlsParameters, MediaError, MediaService, ParticipantRole,
+    ProduceParams, RouterRtpCapabilities, SfuServerEvent, TransportDirection, WebRtcTransportParams,
+};
+pub use mediasoup_sfu::MediasoupMediaService;
 pub use webrtc_sfu::WebRtcSfu;

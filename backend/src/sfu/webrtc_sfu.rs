@@ -24,7 +24,10 @@ use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::TrackLocal;
 use webrtc::track::track_remote::TrackRemote;
 
-use crate::sfu::media_service::{MediaError, MediaService, ParticipantRole, SfuServerEvent};
+use crate::sfu::media_service::{
+    ConsumeParams, ConsumerInfo, DtlsParameters, MediaError, MediaService, ParticipantRole,
+    ProduceParams, RouterRtpCapabilities, SfuServerEvent, TransportDirection, WebRtcTransportParams,
+};
 
 fn create_api() -> webrtc::api::API {
     let mut media_engine = MediaEngine::default();
@@ -333,6 +336,82 @@ impl MediaService for WebRtcSfu {
         }
         Ok(())
     }
+
+    async fn get_router_rtp_capabilities(
+        &self,
+        _session_id: Uuid,
+    ) -> Result<RouterRtpCapabilities, MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn create_webrtc_transport(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _direction: TransportDirection,
+    ) -> Result<WebRtcTransportParams, MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn connect_webrtc_transport(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _transport_id: String,
+        _dtls_parameters: DtlsParameters,
+    ) -> Result<(), MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn produce(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _params: ProduceParams,
+    ) -> Result<String, MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn consume(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _params: ConsumeParams,
+    ) -> Result<ConsumerInfo, MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn resume_consumer(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _consumer_id: String,
+    ) -> Result<(), MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
+
+    async fn close_producer(
+        &self,
+        _session_id: Uuid,
+        _user_id: Uuid,
+        _producer_id: String,
+    ) -> Result<(), MediaError> {
+        Err(MediaError::Internal(
+            "mediasoup path not supported on webrtc-rs backend".into(),
+        ))
+    }
 }
 
 impl WebRtcSfuInner {
@@ -453,14 +532,9 @@ impl WebRtcSfuInner {
                 let remote = Arc::clone(&track);
                 let local_fwd = Arc::clone(&local);
                 let h = tokio::spawn(async move {
-                    loop {
-                        match remote.read_rtp().await {
-                            Ok((pkt, _)) => {
-                                if local_fwd.write_rtp_with_extensions(&pkt, &[]).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(_) => break,
+                    while let Ok((pkt, _)) = remote.read_rtp().await {
+                        if local_fwd.write_rtp_with_extensions(&pkt, &[]).await.is_err() {
+                            break;
                         }
                     }
                 });

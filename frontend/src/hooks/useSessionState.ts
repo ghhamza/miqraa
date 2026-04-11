@@ -62,6 +62,24 @@ export interface UseSessionStateOptions {
   /** After state merge — for a11y announcements */
   onParticipantJoined?: (user: ParticipantInfo) => void;
   onParticipantLeft?: (userId: string, name: string | undefined) => void;
+  onMsRtpCapabilities?: (rtpCapabilities: unknown) => void;
+  onMsTransportCreated?: (transport: {
+    id: string;
+    iceParameters: unknown;
+    iceCandidates: unknown;
+    dtlsParameters: unknown;
+  }) => void;
+  onMsTransportConnected?: (transportId: string) => void;
+  onMsProduced?: (producerId: string) => void;
+  onMsConsumed?: (consumer: {
+    id: string;
+    producerId: string;
+    kind: string;
+    rtpParameters: unknown;
+  }) => void;
+  onMsConsumerResumed?: (consumerId: string) => void;
+  onMsNewProducer?: (info: { producerId: string; userId: string; kind: string }) => void;
+  onMsProducerClosed?: (producerId: string) => void;
 }
 
 export interface UseSessionStateReturn {
@@ -93,6 +111,13 @@ export interface UseSessionStateReturn {
   sendRemoveAnnotation: (annotationId: string) => void;
   sendAnswer: (sdp: string) => void;
   sendIceCandidate: (candidate: string) => void;
+  sendMsGetRtpCapabilities: () => void;
+  sendMsCreateTransport: (direction: "send" | "recv") => void;
+  sendMsConnectTransport: (transportId: string, dtlsParameters: unknown) => void;
+  sendMsProduce: (transportId: string, kind: "audio", rtpParameters: unknown) => void;
+  sendMsConsume: (transportId: string, producerId: string, rtpCapabilities: unknown) => void;
+  sendMsResumeConsumer: (consumerId: string) => void;
+  sendMsCloseProducer: (producerId: string) => void;
   disconnect: () => void;
 }
 
@@ -114,6 +139,14 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onReconnected,
     onParticipantJoined,
     onParticipantLeft,
+    onMsRtpCapabilities,
+    onMsTransportCreated,
+    onMsTransportConnected,
+    onMsProduced,
+    onMsConsumed,
+    onMsConsumerResumed,
+    onMsNewProducer,
+    onMsProducerClosed,
   } = options;
 
   const [state, setState] = useState<SessionState>(() => emptyState(sessionId, ""));
@@ -188,6 +221,14 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     onAnotherTab,
     onJoinRejected,
     onReconnected,
+    onMsRtpCapabilities,
+    onMsTransportCreated,
+    onMsTransportConnected,
+    onMsProduced,
+    onMsConsumed,
+    onMsConsumerResumed,
+    onMsNewProducer,
+    onMsProducerClosed,
   });
 
   const me = state.participants.find((p) => p.userId === myUserId);
@@ -270,6 +311,13 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       sendRemoveAnnotation,
       sendAnswer: ws.sendAnswer,
       sendIceCandidate: ws.sendIceCandidate,
+      sendMsGetRtpCapabilities: ws.sendMsGetRtpCapabilities,
+      sendMsCreateTransport: ws.sendMsCreateTransport,
+      sendMsConnectTransport: ws.sendMsConnectTransport,
+      sendMsProduce: ws.sendMsProduce,
+      sendMsConsume: ws.sendMsConsume,
+      sendMsResumeConsumer: ws.sendMsResumeConsumer,
+      sendMsCloseProducer: ws.sendMsCloseProducer,
       disconnect: ws.disconnect,
     }),
     [
@@ -290,6 +338,13 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       sendRemoveAnnotation,
       ws.sendAnswer,
       ws.sendIceCandidate,
+      ws.sendMsGetRtpCapabilities,
+      ws.sendMsCreateTransport,
+      ws.sendMsConnectTransport,
+      ws.sendMsProduce,
+      ws.sendMsConsume,
+      ws.sendMsResumeConsumer,
+      ws.sendMsCloseProducer,
       ws.disconnect,
     ],
   );
