@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, MessageSquare, RefreshCw, ThumbsUp, X } from "lucide-react";
 import type { ErrorCategory, ErrorSeverity } from "../../types";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 export interface AnnotationTarget {
   surah: number;
@@ -17,7 +19,7 @@ export interface AnnotationTarget {
 export interface AnnotationToolbarProps {
   target: AnnotationTarget | null;
   onMarkError: (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => void;
-  onRepeat: (surah: number, ayah: number) => void;
+  onRepeat: () => void;
   onComment: (comment: string) => void;
   onGood: () => void;
   onClose: () => void;
@@ -43,6 +45,11 @@ const KHAFI_CATEGORIES: { key: ErrorCategory; labelKey: string }[] = [
   { key: "other", labelKey: "error.other" },
 ];
 
+const ANCHOR_STYLE: CSSProperties = {
+  position: "fixed",
+  pointerEvents: "none",
+};
+
 export function AnnotationToolbar({
   target,
   onMarkError,
@@ -54,23 +61,6 @@ export function AnnotationToolbar({
   const { t } = useTranslation();
   const [view, setView] = useState<"main" | "error" | "comment">("main");
   const [commentText, setCommentText] = useState("");
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setView("main");
-    setCommentText("");
-  }, [target?.surah, target?.ayah, target?.wordIndex]);
-
-  useEffect(() => {
-    if (!target) return;
-    const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [target, onClose]);
 
   const onCloseStable = useCallback(() => {
     onClose();
@@ -78,135 +68,156 @@ export function AnnotationToolbar({
 
   if (!target) return null;
 
-  const top = target.rect.top - 8;
-  const left = target.rect.left + target.rect.width / 2;
+  const r = target.rect;
 
   return (
-    <div
-      ref={popoverRef}
-      className="fixed z-[100] -translate-x-1/2 -translate-y-full"
-      style={{ top, left }}
+    <Popover
+      open
+      modal={false}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className="relative rounded-xl border border-gray-200 bg-[var(--color-surface)] p-2 shadow-lg">
-        <button
-          type="button"
-          className="absolute -top-2 -end-2 rounded-full bg-gray-200 p-0.5 text-gray-600 hover:bg-gray-300"
-          onClick={onCloseStable}
-          aria-label={t("common.close")}
-        >
-          <X className="h-3 w-3" />
-        </button>
+      <PopoverAnchor
+        style={{
+          ...ANCHOR_STYLE,
+          top: r.top,
+          left: r.left,
+          width: r.width,
+          height: r.height,
+        }}
+      />
+      <PopoverContent
+        side="top"
+        align="center"
+        sideOffset={8}
+        collisionPadding={12}
+        className={cn(
+          "z-[320] w-auto max-w-[min(100vw-2rem,28rem)] gap-0 border-gray-200 bg-[var(--color-surface)] p-0 shadow-lg",
+        )}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="relative rounded-xl p-2">
+          <button
+            type="button"
+            className="absolute -top-2 -end-2 rounded-full bg-gray-200 p-0.5 text-gray-600 hover:bg-gray-300"
+            onClick={onCloseStable}
+            aria-label={t("common.close")}
+          >
+            <X className="h-3 w-3" />
+          </button>
 
-        {view === "main" ? (
-          <div className="flex gap-1.5">
-            <ToolbarBtn
-              icon={<AlertTriangle className="h-4 w-4" />}
-              label={t("annotation.error")}
-              color="text-red-600 bg-red-50 hover:bg-red-100"
-              onClick={() => setView("error")}
-            />
-            <ToolbarBtn
-              icon={<RefreshCw className="h-4 w-4" />}
-              label={t("annotation.repeat")}
-              color="text-amber-600 bg-amber-50 hover:bg-amber-100"
-              onClick={() => {
-                onRepeat(target.surah, target.ayah);
-                onCloseStable();
-              }}
-            />
-            <ToolbarBtn
-              icon={<MessageSquare className="h-4 w-4" />}
-              label={t("annotation.comment")}
-              color="text-blue-600 bg-blue-50 hover:bg-blue-100"
-              onClick={() => setView("comment")}
-            />
-            <ToolbarBtn
-              icon={<ThumbsUp className="h-4 w-4" />}
-              label={t("annotation.good")}
-              color="text-green-700 bg-green-50 hover:bg-green-100"
-              onClick={() => {
-                onGood();
-                onCloseStable();
-              }}
-            />
-          </div>
-        ) : view === "error" ? (
-          <div className="max-h-[50vh] w-64 overflow-y-auto space-y-2">
-            <p className="text-xs font-semibold text-red-700">{t("annotation.lahnJali")}</p>
-            <div className="flex flex-wrap gap-1">
-              {JALI_CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800 transition hover:bg-red-100"
-                  onClick={() => {
-                    onMarkError("jali", c.key);
-                    onCloseStable();
-                  }}
-                >
-                  {t(c.labelKey)}
-                </button>
-              ))}
+          {view === "main" ? (
+            <div className="flex gap-1.5">
+              <ToolbarBtn
+                icon={<AlertTriangle className="h-4 w-4" />}
+                label={t("annotation.error")}
+                color="text-red-600 bg-red-50 hover:bg-red-100"
+                onClick={() => setView("error")}
+              />
+              <ToolbarBtn
+                icon={<RefreshCw className="h-4 w-4" />}
+                label={t("annotation.repeat")}
+                color="text-amber-600 bg-amber-50 hover:bg-amber-100"
+                onClick={() => {
+                  onRepeat();
+                  onCloseStable();
+                }}
+              />
+              <ToolbarBtn
+                icon={<MessageSquare className="h-4 w-4" />}
+                label={t("annotation.comment")}
+                color="text-blue-600 bg-blue-50 hover:bg-blue-100"
+                onClick={() => setView("comment")}
+              />
+              <ToolbarBtn
+                icon={<ThumbsUp className="h-4 w-4" />}
+                label={t("annotation.good")}
+                color="text-green-700 bg-green-50 hover:bg-green-100"
+                onClick={() => {
+                  onGood();
+                  onCloseStable();
+                }}
+              />
             </div>
-            <p className="mt-2 text-xs font-semibold text-amber-700">{t("annotation.lahnKhafi")}</p>
-            <div className="flex flex-wrap gap-1">
-              {KHAFI_CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800 transition hover:bg-amber-100"
-                  onClick={() => {
-                    onMarkError("khafi", c.key);
-                    onCloseStable();
-                  }}
-                >
-                  {t(c.labelKey)}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="mt-1 text-xs text-[var(--color-text-muted)] hover:underline"
-              onClick={() => setView("main")}
-            >
-              ← {t("common.back")}
-            </button>
-          </div>
-        ) : (
-          <div className="w-56 space-y-2">
-            <textarea
-              className="w-full rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-sm"
-              rows={2}
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder={t("annotation.commentPlaceholder")}
-              autoFocus
-            />
-            <div className="flex justify-end gap-1">
+          ) : view === "error" ? (
+            <div className="max-h-[50vh] w-64 overflow-y-auto space-y-2">
+              <p className="text-xs font-semibold text-red-700">{t("annotation.lahnJali")}</p>
+              <div className="flex flex-wrap gap-1">
+                {JALI_CATEGORIES.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800 transition hover:bg-red-100"
+                    onClick={() => {
+                      onMarkError("jali", c.key);
+                      onCloseStable();
+                    }}
+                  >
+                    {t(c.labelKey)}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs font-semibold text-amber-700">{t("annotation.lahnKhafi")}</p>
+              <div className="flex flex-wrap gap-1">
+                {KHAFI_CATEGORIES.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800 transition hover:bg-amber-100"
+                    onClick={() => {
+                      onMarkError("khafi", c.key);
+                      onCloseStable();
+                    }}
+                  >
+                    {t(c.labelKey)}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] hover:bg-gray-100"
+                className="mt-1 text-xs text-[var(--color-text-muted)] hover:underline"
                 onClick={() => setView("main")}
               >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                className="rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs text-white"
-                onClick={() => {
-                  if (commentText.trim()) {
-                    onComment(commentText.trim());
-                    onCloseStable();
-                  }
-                }}
-              >
-                {t("common.save")}
+                ← {t("common.back")}
               </button>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          ) : (
+            <div className="w-56 space-y-2">
+              <textarea
+                className="w-full rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-sm"
+                rows={2}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder={t("annotation.commentPlaceholder")}
+                autoFocus
+              />
+              <div className="flex justify-end gap-1">
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] hover:bg-gray-100"
+                  onClick={() => setView("main")}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md bg-[var(--color-primary)] px-2 py-1 text-xs text-white"
+                  onClick={() => {
+                    if (commentText.trim()) {
+                      onComment(commentText.trim());
+                      onCloseStable();
+                    }
+                  }}
+                >
+                  {t("common.save")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

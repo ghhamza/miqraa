@@ -271,7 +271,7 @@
   color: inherit;
 }
 
-/* Error annotation highlights on Mushaf words */
+/* Annotation highlights: pastel squares only (no underlines, no pseudo-element icons) */
 .mushaf-word--error-jali {
   background-color: rgba(239, 83, 80, 0.2);
   border-radius: 2px;
@@ -284,7 +284,28 @@
   outline: 1px solid rgba(245, 127, 23, 0.4);
 }
 
+.mushaf-word--repeat {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-radius: 4px;
+  animation: miqraa-pulse 1.8s ease-in-out infinite;
+}
+
+.mushaf-word--note {
+  background-color: rgba(59, 130, 246, 0.18);
+  border-radius: 4px;
+}
+
 .mushaf-word--good {
-  background-color: rgba(76, 175, 80, 0.15);
-  border-radius: 2px;
+  background-color: rgba(76, 175, 80, 0.18);
+  border-radius: 4px;
+}
+
+@keyframes miqraa-pulse {
+  0%,
+  100% {
+    background-color: rgba(59, 130, 246, 0.2);
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.45);
+  }
 }

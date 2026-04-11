@@ -3,9 +3,14 @@
 
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import type { ErrorAnnotation, ErrorCategory, ErrorSeverity } from "../types";
+import type {
+  AnnotationKind,
+  ErrorAnnotation,
+  ErrorCategory,
+  ErrorSeverity,
+} from "../types";
 
-export function useAnnotations(_recitationId: string | null) {
+export function useAnnotations(recitationId: string | null) {
   const [annotations, setAnnotations] = useState<ErrorAnnotation[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -20,6 +25,10 @@ export function useAnnotations(_recitationId: string | null) {
     }
   }, []);
 
+  // NOTE: In live sessions, prefer sendCreateAnnotation from useSessionWebSocket
+  // and receiveAnnotationFromWs to merge the broadcast. Calling addError while
+  // subscribed to WS broadcasts will NOT produce duplicates (HTTP doesn't broadcast),
+  // but mixing paths in the same view leads to inconsistent state.
   const addError = useCallback(
     async (
       recId: string,
@@ -29,6 +38,7 @@ export function useAnnotations(_recitationId: string | null) {
       severity: ErrorSeverity,
       category: ErrorCategory,
       comment?: string,
+      kind: AnnotationKind = "error",
     ) => {
       setSaving(true);
       try {
@@ -40,6 +50,7 @@ export function useAnnotations(_recitationId: string | null) {
           error_severity: severity,
           error_category: category,
           teacher_comment: comment ?? null,
+          annotation_kind: kind,
         });
         setAnnotations((prev) => [...prev, res.data]);
       } catch (e) {
@@ -59,9 +70,41 @@ export function useAnnotations(_recitationId: string | null) {
       wordPosition: number | null,
       comment: string,
     ) => {
-      return addError(recId, surah, ayah, wordPosition, "khafi", "other", comment);
+      return addError(recId, surah, ayah, wordPosition, "khafi", "other", comment, "note");
     },
     [addError],
+  );
+
+  const markRepeat = useCallback(
+    async (recId: string, surah: number, ayah: number, wordPosition: number | null) => {
+      return addError(recId, surah, ayah, wordPosition, "khafi", "other", undefined, "repeat");
+    },
+    [addError],
+  );
+
+  const markGood = useCallback(
+    async (recId: string, surah: number, ayah: number, wordPosition: number | null) => {
+      return addError(recId, surah, ayah, wordPosition, "khafi", "other", undefined, "good");
+    },
+    [addError],
+  );
+
+  const receiveAnnotationFromWs = useCallback(
+    (annotation: ErrorAnnotation) => {
+      setAnnotations((prev) => {
+        if (recitationId && annotation.recitation_id !== recitationId) return prev;
+        if (prev.some((a) => a.id === annotation.id)) return prev;
+        return [...prev, annotation];
+      });
+    },
+    [recitationId],
+  );
+
+  const removeAnnotationFromWs = useCallback(
+    (annotationId: string) => {
+      setAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
+    },
+    [],
   );
 
   const removeAnnotation = useCallback(async (annotationId: string) => {
@@ -74,21 +117,53 @@ export function useAnnotations(_recitationId: string | null) {
   }, []);
 
   const getWordAnnotationClass = useCallback((surah: number, ayah: number, wordPosition: number): string => {
-    const match = annotations.find(
+    const matches = annotations.filter(
       (a) =>
+        a.status === "open" &&
         a.surah === surah &&
         a.ayah === ayah &&
         (a.word_position === wordPosition || a.word_position === null),
     );
-    if (!match) return "";
-    if (match.error_severity === "jali") return "mushaf-word--error-jali";
-    if (match.error_severity === "khafi") return "mushaf-word--error-khafi";
+    if (matches.length === 0) return "";
+
+    // Priority: error > repeat > note > good
+    const error = matches.find((m) => m.annotation_kind === "error");
+    if (error) {
+      return error.error_severity === "jali"
+        ? "mushaf-word--error-jali"
+        : "mushaf-word--error-khafi";
+    }
+    const repeat = matches.find((m) => m.annotation_kind === "repeat");
+    if (repeat) return "mushaf-word--repeat";
+    const note = matches.find((m) => m.annotation_kind === "note");
+    if (note) return "mushaf-word--note";
+    const good = matches.find((m) => m.annotation_kind === "good");
+    if (good) return "mushaf-word--good";
     return "";
   }, [annotations]);
 
+  const getWordAnnotations = useCallback(
+    (surah: number, ayah: number, wordPosition: number): ErrorAnnotation[] => {
+      return annotations.filter(
+        (a) =>
+          a.status === "open" &&
+          a.surah === surah &&
+          a.ayah === ayah &&
+          (a.word_position === wordPosition || a.word_position === null),
+      );
+    },
+    [annotations],
+  );
+
   const ayahHasErrors = useCallback(
     (surah: number, ayah: number): boolean => {
-      return annotations.some((a) => a.surah === surah && a.ayah === ayah);
+      return annotations.some(
+        (a) =>
+          a.status === "open" &&
+          a.annotation_kind === "error" &&
+          a.surah === surah &&
+          a.ayah === ayah,
+      );
     },
     [annotations],
   );
@@ -99,8 +174,13 @@ export function useAnnotations(_recitationId: string | null) {
     loadAnnotations,
     addError,
     addComment,
+    markRepeat,
+    markGood,
     removeAnnotation,
+    receiveAnnotationFromWs,
+    removeAnnotationFromWs,
     getWordAnnotationClass,
+    getWordAnnotations,
     ayahHasErrors,
   };
 }

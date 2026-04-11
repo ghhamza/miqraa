@@ -5,7 +5,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import type { ErrorCategory, ErrorSeverity, Paginated, RecitationPublic, Room, SessionDetail } from "../../types";
+import type {
+  ErrorAnnotation,
+  ErrorCategory,
+  ErrorSeverity,
+  Paginated,
+  RecitationPublic,
+  Room,
+  SessionDetail,
+} from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
 import { useAnnotations } from "../../hooks/useAnnotations";
@@ -40,16 +48,24 @@ import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
+import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
 import { useWebRTCConnection } from "../../hooks/useWebRTCConnection";
 import { cn } from "@/lib/utils";
 import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
 import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users } from "lucide-react";
-
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
+
+function shouldShowStudentPopoverContent(found: ErrorAnnotation[]): boolean {
+  if (found.length === 0) return false;
+  const onlyRepeat =
+    found.every((a) => a.annotation_kind === "repeat") &&
+    !found.some((a) => a.teacher_comment?.trim());
+  return !onlyRepeat;
 }
 
 /** Desktop session chrome regions (`data-session-zone` for tests / layout hooks). */
@@ -110,16 +126,58 @@ export function LiveSessionPage() {
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
   const [currentRecitationId, setCurrentRecitationId] = useState<string | null>(null);
+  const [studentPopover, setStudentPopover] = useState<{
+    annotations: ErrorAnnotation[];
+    rect: DOMRect;
+    pinned: boolean;
+  } | null>(null);
+
+  const studentPopoverPinnedRef = useRef(false);
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHoverCloseTimer = useCallback(() => {
+    if (hoverCloseTimerRef.current != null) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleHoverClose = useCallback(() => {
+    cancelHoverCloseTimer();
+    hoverCloseTimerRef.current = window.setTimeout(() => {
+      hoverCloseTimerRef.current = null;
+      setStudentPopover((prev) => (prev?.pinned ? prev : null));
+    }, 200);
+  }, [cancelHoverCloseTimer]);
+
+  useLayoutEffect(() => {
+    studentPopoverPinnedRef.current = studentPopover?.pinned ?? false;
+  }, [studentPopover]);
+
+  useEffect(
+    () => () => {
+      cancelHoverCloseTimer();
+    },
+    [cancelHoverCloseTimer],
+  );
+
+  const closeStudentPopover = useCallback(() => {
+    cancelHoverCloseTimer();
+    studentPopoverPinnedRef.current = false;
+    setStudentPopover(null);
+  }, [cancelHoverCloseTimer]);
 
   const {
     loadAnnotations,
-    addError,
-    addComment,
     getWordAnnotationClass,
+    getWordAnnotations,
+    receiveAnnotationFromWs,
+    removeAnnotationFromWs,
   } = useAnnotations(currentRecitationId);
 
   const annotationTargetRef = useRef<AnnotationTarget | null>(null);
   annotationTargetRef.current = annotationTarget;
+  const isTeacherRef = useRef(false);
 
   const riwaya = (room?.riwaya ?? "hafs") as Riwaya;
   const totalPages = getTotalPages(riwaya);
@@ -186,6 +244,34 @@ export function LiveSessionPage() {
     enabled: sessionReady && !anotherTab,
     onSessionEnded: onSessionEndedNav,
     onGradeNotification,
+    onAnnotationAdded: (annotation) => {
+      receiveAnnotationFromWs(annotation);
+      if (isTeacherRef.current === false && annotation.annotation_kind === "repeat") {
+        setAnnounce(t("annotation.repeatRequested"));
+      }
+      setStudentPopover((prev) => {
+        if (!prev || prev.annotations.length === 0) return prev;
+        if (prev.annotations.some((a) => a.id === annotation.id)) return prev;
+        const first = prev.annotations[0];
+        if (
+          annotation.surah === first.surah &&
+          annotation.ayah === first.ayah &&
+          (annotation.word_position === first.word_position || annotation.word_position === null)
+        ) {
+          return { ...prev, annotations: [...prev.annotations, annotation] };
+        }
+        return prev;
+      });
+    },
+    onAnnotationRemoved: (annotationId) => {
+      removeAnnotationFromWs(annotationId);
+      setStudentPopover((prev) => {
+        if (!prev) return prev;
+        const next = prev.annotations.filter((a) => a.id !== annotationId);
+        if (next.length === 0) return null;
+        return { ...prev, annotations: next };
+      });
+    },
     onOffer: (sdp) => {
       void webrtcHandlersRef.current.handleOffer(sdp);
     },
@@ -207,6 +293,8 @@ export function LiveSessionPage() {
       if (name) setAnnounce(t("liveSession.userLeftAnnounce", { name }));
     },
   });
+
+  isTeacherRef.current = sessionState.isTeacher;
 
   const webrtc = useWebRTCConnection({
     enabled: sessionReady && !anotherTab,
@@ -266,6 +354,15 @@ export function LiveSessionPage() {
   }, [sessionState.state.activeReciterId, sessionState.state.participants, t]);
 
   const isTeacher = sessionState.isTeacher;
+
+  /** When a student is set as active reciter, turn on pen/annotation mode so the teacher can mark without an extra click. */
+  useEffect(() => {
+    if (!sessionReady || !isTeacher || !sessionDetail) return;
+    const rid = sessionState.state.activeReciterId;
+    const tid = sessionDetail.teacher_id;
+    if (!rid || rid === tid) return;
+    setAnnotationMode(true);
+  }, [sessionReady, isTeacher, sessionDetail, sessionState.state.activeReciterId]);
 
   const page = isTeacher
     ? teacherPage
@@ -333,6 +430,42 @@ export function LiveSessionPage() {
 
   const { setHighlightRange, setActiveWord } = interaction;
 
+  const handleStudentWordEnter = useCallback(
+    (data: MushafWordClickData) => {
+      if (studentPopoverPinnedRef.current) return;
+      if (!data.rect) return;
+      const found = getWordAnnotations(data.surah, data.ayah, data.wordIndex);
+      if (!shouldShowStudentPopoverContent(found)) return;
+      cancelHoverCloseTimer();
+      studentPopoverPinnedRef.current = false;
+      setStudentPopover({ annotations: found, rect: data.rect, pinned: false });
+    },
+    [getWordAnnotations, cancelHoverCloseTimer],
+  );
+
+  const handleStudentWordLeave = useCallback(() => {
+    if (studentPopoverPinnedRef.current) return;
+    scheduleHoverClose();
+  }, [scheduleHoverClose]);
+
+  const handleStudentWordClick = useCallback(
+    (data: MushafWordClickData) => {
+      const found = getWordAnnotations(data.surah, data.ayah, data.wordIndex);
+      if (found.length > 0 && data.rect) {
+        if (!shouldShowStudentPopoverContent(found)) {
+          interaction.handleWordClick(data);
+          return;
+        }
+        cancelHoverCloseTimer();
+        studentPopoverPinnedRef.current = true;
+        setStudentPopover({ annotations: found, rect: data.rect, pinned: true });
+        return;
+      }
+      interaction.handleWordClick(data);
+    },
+    [getWordAnnotations, interaction, cancelHoverCloseTimer],
+  );
+
   const syncSurah = sessionState.state.currentAyah?.surah;
   const syncAyah = sessionState.state.currentAyah?.ayah;
 
@@ -370,48 +503,82 @@ export function LiveSessionPage() {
   }, [annotationMode]);
 
   const handleMarkAnnotationError = useCallback(
-    async (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
+    (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
       if (!annotationTarget || !currentRecitationId) {
         setAnnounce(t("annotation.noRecitation"));
         return;
       }
-      await addError(
-        currentRecitationId,
-        annotationTarget.surah,
-        annotationTarget.ayah,
-        annotationTarget.wordIndex,
-        severity,
-        category,
-        comment,
-      );
+      sessionState.sendCreateAnnotation({
+        recitation_id: currentRecitationId,
+        surah: annotationTarget.surah,
+        ayah: annotationTarget.ayah,
+        word_position: annotationTarget.wordIndex,
+        error_severity: severity,
+        error_category: category,
+        teacher_comment: comment ?? null,
+        annotation_kind: "error",
+      });
+      closeAnnotationToolbar();
     },
-    [annotationTarget, currentRecitationId, addError, t],
+    [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t],
   );
 
   const handleAnnotationComment = useCallback(
-    async (comment: string) => {
+    (comment: string) => {
       if (!annotationTarget || !currentRecitationId) {
         setAnnounce(t("annotation.noRecitation"));
         return;
       }
-      await addComment(
-        currentRecitationId,
-        annotationTarget.surah,
-        annotationTarget.ayah,
-        annotationTarget.wordIndex,
-        comment,
-      );
+      sessionState.sendCreateAnnotation({
+        recitation_id: currentRecitationId,
+        surah: annotationTarget.surah,
+        ayah: annotationTarget.ayah,
+        word_position: annotationTarget.wordIndex,
+        error_severity: "khafi",
+        error_category: "other",
+        teacher_comment: comment,
+        annotation_kind: "note",
+      });
+      closeAnnotationToolbar();
     },
-    [annotationTarget, currentRecitationId, addComment, t],
+    [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t],
   );
 
-  const handleAnnotationRepeat = useCallback(
-    (surah: number, ayah: number) => {
-      interaction.setHighlightRange({ surah, ayahStart: ayah, ayahEnd: ayah });
-      sessionState.setCurrentAyah(surah, ayah);
-    },
-    [interaction, sessionState],
-  );
+  const handleAnnotationRepeat = useCallback(() => {
+    if (!annotationTarget || !currentRecitationId) {
+      setAnnounce(t("annotation.noRecitation"));
+      return;
+    }
+    sessionState.sendCreateAnnotation({
+      recitation_id: currentRecitationId,
+      surah: annotationTarget.surah,
+      ayah: annotationTarget.ayah,
+      word_position: annotationTarget.wordIndex,
+      error_severity: "khafi",
+      error_category: "other",
+      teacher_comment: null,
+      annotation_kind: "repeat",
+    });
+    closeAnnotationToolbar();
+  }, [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t]);
+
+  const handleAnnotationGood = useCallback(() => {
+    if (!annotationTarget || !currentRecitationId) {
+      setAnnounce(t("annotation.noRecitation"));
+      return;
+    }
+    sessionState.sendCreateAnnotation({
+      recitation_id: currentRecitationId,
+      surah: annotationTarget.surah,
+      ayah: annotationTarget.ayah,
+      word_position: annotationTarget.wordIndex,
+      error_severity: "khafi",
+      error_category: "other",
+      teacher_comment: null,
+      annotation_kind: "good",
+    });
+    closeAnnotationToolbar();
+  }, [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t]);
 
   const handleAutoFollowToggle = useCallback(() => {
     setAutoFollow((prev) => {
@@ -476,6 +643,31 @@ export function LiveSessionPage() {
       cancelled = true;
     };
   }, [id, activeReciterParticipant?.userId, isTeacher]);
+
+  useEffect(() => {
+    if (!id || !user?.id || isTeacher) return;
+    if (sessionState.state.activeReciterId !== user.id) {
+      setCurrentRecitationId(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+          params: { session_id: id, limit: 50 },
+        });
+        if (cancelled) return;
+        const mine = data.items.filter((r) => r.student_id === user.id);
+        mine.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setCurrentRecitationId(mine[0]?.id ?? null);
+      } catch {
+        if (!cancelled) setCurrentRecitationId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user?.id, isTeacher, sessionState.state.activeReciterId]);
 
   useEffect(() => {
     setAnnotationTarget(null);
@@ -724,15 +916,19 @@ export function LiveSessionPage() {
                 </nav>
               }
             >
-              <MushafCanvas
-                page={page}
-                riwaya={riwaya}
-                highlightRange={interaction.highlightRange}
-                activeWord={interaction.activeWord}
-                onWordClick={isTeacher ? handleLiveWordClick : interaction.handleWordClick}
-                onAyahClick={interaction.handleAyahClick}
-                getWordAnnotationClass={isTeacher ? getWordAnnotationClass : undefined}
-              />
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <MushafCanvas
+                  page={page}
+                  riwaya={riwaya}
+                  highlightRange={interaction.highlightRange}
+                  activeWord={interaction.activeWord}
+                  onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
+                  onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
+                  onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
+                  onAyahClick={interaction.handleAyahClick}
+                  getWordAnnotationClass={getWordAnnotationClass}
+                />
+              </div>
             </MushafReader>
           </div>
 
@@ -952,12 +1148,38 @@ export function LiveSessionPage() {
 
       {isTeacher ? (
         <AnnotationToolbar
+          key={
+            annotationTarget
+              ? `${annotationTarget.surah}-${annotationTarget.ayah}-${annotationTarget.wordIndex}`
+              : "none"
+          }
           target={annotationTarget}
           onMarkError={handleMarkAnnotationError}
           onRepeat={handleAnnotationRepeat}
           onComment={handleAnnotationComment}
-          onGood={closeAnnotationToolbar}
+          onGood={handleAnnotationGood}
           onClose={closeAnnotationToolbar}
+        />
+      ) : null}
+
+      {!isTeacher ? (
+        <StudentAnnotationPopover
+          key={
+            studentPopover?.rect && (studentPopover.annotations?.length ?? 0) > 0
+              ? `${[...(studentPopover.annotations ?? [])]
+                  .map((a) => a.id)
+                  .sort()
+                  .join("-")}-${Math.round(studentPopover.rect.top)}-${Math.round(studentPopover.rect.left)}`
+              : "closed"
+          }
+          annotations={studentPopover?.annotations ?? []}
+          rect={studentPopover?.rect ?? null}
+          onClose={closeStudentPopover}
+          onPopoverCardEnter={cancelHoverCloseTimer}
+          onPopoverCardLeave={() => {
+            if (studentPopoverPinnedRef.current) return;
+            scheduleHoverClose();
+          }}
         />
       ) : null}
     </div>

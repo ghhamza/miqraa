@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Hamza Ghandouri
 
 import { useCallback, useMemo, useState } from "react";
+import type { ErrorAnnotation } from "../types";
 import type { ParticipantInfo, RoomStateMessage } from "./useSessionWebSocket";
 import { useSessionWebSocket } from "./useSessionWebSocket";
 
@@ -51,6 +52,8 @@ export interface UseSessionStateOptions {
   enabled: boolean;
   onSessionEnded?: () => void;
   onGradeNotification?: (grade: string, notes?: string) => void;
+  onAnnotationAdded?: (annotation: ErrorAnnotation) => void;
+  onAnnotationRemoved?: (annotationId: string) => void;
   onOffer?: (sdp: string, from: string) => void;
   onIceCandidate?: (candidate: string, from: string) => void;
   onAnotherTab?: () => void;
@@ -76,6 +79,17 @@ export interface UseSessionStateReturn {
   setCurrentPage: (page: number) => void;
   /** Teacher only: notify a student of a grade (forwarded by server). */
   sendGradeNotification: (studentId: string, grade: string, notes?: string) => void;
+  sendCreateAnnotation: (payload: {
+    recitation_id: string;
+    surah: number;
+    ayah: number;
+    word_position: number | null;
+    error_severity: string;
+    error_category: string;
+    teacher_comment: string | null;
+    annotation_kind: string;
+  }) => void;
+  sendRemoveAnnotation: (annotationId: string) => void;
   sendAnswer: (sdp: string) => void;
   sendIceCandidate: (candidate: string) => void;
   disconnect: () => void;
@@ -90,6 +104,8 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     enabled,
     onSessionEnded,
     onGradeNotification,
+    onAnnotationAdded,
+    onAnnotationRemoved,
     onOffer,
     onIceCandidate,
     onAnotherTab,
@@ -164,6 +180,8 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     },
     onSessionEnded,
     onGradeNotification,
+    onAnnotationAdded,
+    onAnnotationRemoved,
     onOffer,
     onIceCandidate,
     onAnotherTab,
@@ -214,6 +232,20 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
     [ws],
   );
 
+  const sendCreateAnnotation = useCallback(
+    (payload: Parameters<UseSessionStateReturn["sendCreateAnnotation"]>[0]) => {
+      ws.sendCreateAnnotation(payload);
+    },
+    [ws],
+  );
+
+  const sendRemoveAnnotation = useCallback(
+    (annotationId: string) => {
+      ws.sendRemoveAnnotation(annotationId);
+    },
+    [ws],
+  );
+
   const derived = useMemo(
     () => ({
       state,
@@ -228,6 +260,8 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       clearCurrentAyah,
       setCurrentPage,
       sendGradeNotification,
+      sendCreateAnnotation,
+      sendRemoveAnnotation,
       sendAnswer: ws.sendAnswer,
       sendIceCandidate: ws.sendIceCandidate,
       disconnect: ws.disconnect,
@@ -245,6 +279,8 @@ export function useSessionState(options: UseSessionStateOptions): UseSessionStat
       clearCurrentAyah,
       setCurrentPage,
       sendGradeNotification,
+      sendCreateAnnotation,
+      sendRemoveAnnotation,
       ws.sendAnswer,
       ws.sendIceCandidate,
       ws.disconnect,

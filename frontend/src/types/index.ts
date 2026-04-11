@@ -238,6 +238,9 @@ export type ErrorCategory =
   | "shadda"
   | "other";
 
+export type AnnotationKind = "error" | "repeat" | "good" | "note";
+export type AnnotationStatus = "open" | "resolved" | "auto_resolved";
+
 export interface ErrorAnnotation {
   id: string;
   recitation_id: string;
@@ -247,6 +250,10 @@ export interface ErrorAnnotation {
   error_severity: ErrorSeverity;
   error_category: ErrorCategory;
   teacher_comment: string | null;
+  annotation_kind: AnnotationKind;
+  status: AnnotationStatus;
+  resolved_at: string | null;
+  resolved_by: string | null;
   created_at: string;
 }
 

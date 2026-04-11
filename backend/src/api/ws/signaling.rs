@@ -551,6 +551,151 @@ async fn handle_client_message(
                 .send_to(session_id, *student_id, &msg)
                 .await;
         }
+        ClientMessage::CreateAnnotation {
+            recitation_id,
+            surah,
+            ayah,
+            word_position,
+            error_severity,
+            error_category,
+            teacher_comment,
+            annotation_kind,
+        } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can create annotations")
+                    .await;
+                return;
+            }
+
+            let valid_sev = matches!(error_severity.as_str(), "jali" | "khafi");
+            let valid_cat = matches!(
+                error_category.as_str(),
+                "harf" | "haraka" | "kalima" | "waqf_qabih" | "makharij" | "sifat"
+                    | "tafkhim" | "madd" | "ghunnah" | "noon_sakin" | "meem_sakin"
+                    | "waqf_ibtida" | "shadda" | "other"
+            );
+            let valid_kind = matches!(
+                annotation_kind.as_str(),
+                "error" | "repeat" | "good" | "note"
+            );
+            if !valid_sev || !valid_cat || !valid_kind {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Invalid annotation payload")
+                    .await;
+                return;
+            }
+
+            let ctx = match crate::api::handlers::error_annotations_db::fetch_recitation_context(
+                &state.db,
+                *recitation_id,
+            )
+            .await
+            {
+                Ok(Some(ctx)) => ctx,
+                _ => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Recitation not found")
+                        .await;
+                    return;
+                }
+            };
+            if ctx.0 != Some(teacher_id) {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Not your recitation")
+                    .await;
+                return;
+            }
+
+            let input = crate::api::handlers::error_annotations_db::CreateAnnotationInput {
+                recitation_id: *recitation_id,
+                surah: *surah,
+                ayah: *ayah,
+                word_position: *word_position,
+                error_severity: error_severity.clone(),
+                error_category: error_category.clone(),
+                teacher_comment: teacher_comment.clone(),
+                annotation_kind: annotation_kind.clone(),
+            };
+
+            match crate::api::handlers::error_annotations_db::insert_annotation(&state.db, &input).await {
+                Ok(outcome) => {
+                    for id in &outcome.deleted_ids {
+                        let rm = ServerMessage::AnnotationRemoved {
+                            annotation_id: *id,
+                        };
+                        state.rooms.broadcast(session_id, &rm, None).await;
+                    }
+                    let msg = ServerMessage::AnnotationAdded {
+                        annotation: outcome.annotation,
+                    };
+                    state.rooms.broadcast(session_id, &msg, None).await;
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "insert annotation (ws) failed");
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Annotation save failed")
+                        .await;
+                }
+            }
+        }
+        ClientMessage::RemoveAnnotation { annotation_id } => {
+            if user_id != teacher_id {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Only the teacher can remove annotations")
+                    .await;
+                return;
+            }
+
+            let row = match crate::api::handlers::error_annotations_db::fetch_annotation_for_delete(
+                &state.db,
+                *annotation_id,
+            )
+            .await
+            {
+                Ok(Some(r)) => r,
+                _ => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Annotation not found")
+                        .await;
+                    return;
+                }
+            };
+            if row.1 != Some(teacher_id) {
+                state
+                    .rooms
+                    .send_error(session_id, user_id, "Not your annotation")
+                    .await;
+                return;
+            }
+
+            match crate::api::handlers::error_annotations_db::delete_annotation_row(
+                &state.db,
+                *annotation_id,
+            )
+            .await
+            {
+                Ok(n) if n > 0 => {
+                    let msg = ServerMessage::AnnotationRemoved {
+                        annotation_id: *annotation_id,
+                    };
+                    state.rooms.broadcast(session_id, &msg, None).await;
+                }
+                _ => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Annotation delete failed")
+                        .await;
+                }
+            }
+        }
         ClientMessage::Offer { .. } => {
             tracing::debug!(%session_id, %user_id, "ignoring client offer (SFU sends offers)");
         }

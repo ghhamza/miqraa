@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::types::ErrorAnnotationPublic;
+
 /// Client → server messages. `offer` / `target` are kept for wire compatibility; SFU path ignores offers.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -40,6 +42,21 @@ pub enum ClientMessage {
         grade: String,
         notes: Option<String>,
     },
+
+    #[serde(rename = "create-annotation")]
+    CreateAnnotation {
+        recitation_id: Uuid,
+        surah: i32,
+        ayah: i32,
+        word_position: Option<i32>,
+        error_severity: String,
+        error_category: String,
+        teacher_comment: Option<String>,
+        annotation_kind: String,
+    },
+
+    #[serde(rename = "remove-annotation")]
+    RemoveAnnotation { annotation_id: Uuid },
 
     #[serde(rename = "ping")]
     Ping,
@@ -101,6 +118,12 @@ pub enum ServerMessage {
 
     #[serde(rename = "grade-notification")]
     GradeNotification { grade: String, notes: Option<String> },
+
+    #[serde(rename = "annotation-added")]
+    AnnotationAdded { annotation: ErrorAnnotationPublic },
+
+    #[serde(rename = "annotation-removed")]
+    AnnotationRemoved { annotation_id: Uuid },
 }
 
 #[derive(Serialize, Clone)]
