@@ -22,6 +22,7 @@ import {
   toYmdLocal,
 } from "../../lib/calendarUtils";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { sessionNavigatePath } from "../../lib/sessionNav";
 
 type ViewMode = "month" | "week";
 
@@ -282,7 +283,7 @@ export function CalendarPage() {
                         key={s.id}
                         session={s}
                         compact
-                        onClick={() => navigate(`/sessions/${s.id}`)}
+                        onClick={() => navigate(sessionNavigatePath(s))}
                       />
                     ))}
                     {daySessions.length > 3 ? (
@@ -328,7 +329,7 @@ export function CalendarPage() {
                   </button>
                   <div className="flex flex-col gap-2">
                     {daySessions.map((s) => (
-                      <SessionBlock key={s.id} session={s} onClick={() => navigate(`/sessions/${s.id}`)} />
+                      <SessionBlock key={s.id} session={s} onClick={() => navigate(sessionNavigatePath(s))} />
                     ))}
                   </div>
                 </div>

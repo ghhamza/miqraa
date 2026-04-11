@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Hamza Ghandouri
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookOpen, LogOut, Menu, ScrollText, User } from "lucide-react";
@@ -35,6 +35,7 @@ import {
   SheetTrigger,
 } from "../ui/sheet";
 import { Avatar, AvatarFallback } from "../ui/avatar";
+import { LiveSessionBanner } from "./LiveSessionBanner";
 
 /** Up to two letters: first + last word, or first two chars of a single name. */
 function nameToInitials(name: string): string {
@@ -57,12 +58,37 @@ function roleBadgeVariant(role: string): "green" | "blue" | "gold" {
   return "green";
 }
 
-function navLinkClass({ isActive }: { isActive: boolean }) {
+/** Route-driven active styles (pathname), so highlight survives refresh and Radix menu merges. */
+function navLinkClassName(isActive: boolean) {
   return cn(
-    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors outline-none",
+    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors outline-none",
     isActive
-      ? "bg-primary/10 text-primary"
-      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      ? "bg-primary/25 font-semibold text-primary"
+      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
+  );
+}
+
+/** YouTube-style LIVE chip — colors from `.live-nav-chip` in `index.css` (beats Radix nav menu defaults). */
+function liveNavLinkClassName(isActive: boolean) {
+  return cn(
+    "live-nav-chip inline-flex min-h-8 min-w-[2.75rem] shrink-0 items-center justify-center rounded-sm px-3 py-1.5 text-xs font-bold shadow-sm outline-none transition-[box-shadow,transform] hover:scale-[1.02] active:scale-[0.98]",
+    isActive && "ring-2 ring-white/40 ring-offset-2 ring-offset-[var(--color-surface)]",
+  );
+}
+
+function LiveNavChipLabel() {
+  const { t, i18n } = useTranslation();
+  const base = (i18n.language || "ar").split("-")[0] ?? "ar";
+  const isLatin = base !== "ar";
+  return (
+    <span
+      className={cn(
+        "leading-none text-inherit",
+        isLatin ? "uppercase tracking-[0.12em]" : "font-extrabold tracking-tight",
+      )}
+    >
+      {t("nav.liveBadge")}
+    </span>
   );
 }
 
@@ -80,6 +106,20 @@ export function AppLayout() {
   const isRtl = localeBase === "ar";
   const isAdmin = user?.role === "admin";
   const roomsBadgeCount = user ? roomCount : null;
+
+  const navActive = useMemo(() => {
+    const p = location.pathname;
+    return {
+      home: p === "/" || p === "",
+      users: p.startsWith("/users"),
+      rooms: p.startsWith("/rooms"),
+      calendar: p === "/calendar",
+      mushaf: p.startsWith("/mushaf"),
+      recitations: p === "/recitations",
+      live: p === "/live",
+      profile: p === "/profile",
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change (incl. back/forward)
@@ -129,33 +169,71 @@ export function AppLayout() {
 
     return (
       <div className={cn(stack)}>
-        <NavLink to="/" end className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/"
+          end
+          className={cn(navLinkClassName(navActive.home), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           {t("nav.home")}
         </NavLink>
         {isAdmin ? (
-          <NavLink to="/users" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+          <NavLink
+            to="/users"
+            className={cn(navLinkClassName(navActive.users), linkWrap)}
+            onClick={() => setMobileNavOpen(false)}
+          >
             {t("nav.users")}
           </NavLink>
         ) : null}
-        <NavLink to="/rooms" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/rooms"
+          className={cn(navLinkClassName(navActive.rooms), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           {roomsLabel}
         </NavLink>
-        <NavLink to="/calendar" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/calendar"
+          className={cn(navLinkClassName(navActive.calendar), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           {t("nav.calendar")}
         </NavLink>
-        <NavLink to="/mushaf" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/mushaf"
+          className={cn(navLinkClassName(navActive.mushaf), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           <span className="inline-flex items-center gap-2">
             <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             {t("nav.mushaf")}
           </span>
         </NavLink>
-        <NavLink to="/recitations" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/recitations"
+          className={cn(navLinkClassName(navActive.recitations), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           <span className="inline-flex items-center gap-2">
             <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             {t("nav.recitations")}
           </span>
         </NavLink>
-        <NavLink to="/profile" className={cn(navLinkClass, linkWrap)} onClick={() => setMobileNavOpen(false)}>
+        <NavLink
+          to="/live"
+          className={cn(liveNavLinkClassName(navActive.live), linkWrap, orientation === "column" && "mt-2")}
+          aria-label={t("nav.live")}
+          title={t("nav.live")}
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <LiveNavChipLabel />
+        </NavLink>
+        <NavLink
+          to="/profile"
+          className={cn(navLinkClassName(navActive.profile), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
           <span className="inline-flex items-center gap-2">
             <User className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             {t("nav.profile")}
@@ -234,7 +312,7 @@ export function AppLayout() {
             <NavigationMenuList className="flex flex-wrap items-center justify-center gap-0.5">
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
-                  <NavLink to="/" end className={navLinkClass}>
+                  <NavLink to="/" end className={navLinkClassName(navActive.home)}>
                     {t("nav.home")}
                   </NavLink>
                 </NavigationMenuLink>
@@ -242,7 +320,7 @@ export function AppLayout() {
               {isAdmin ? (
                 <NavigationMenuItem>
                   <NavigationMenuLink asChild>
-                    <NavLink to="/users" className={navLinkClass}>
+                    <NavLink to="/users" className={navLinkClassName(navActive.users)}>
                       {t("nav.users")}
                     </NavLink>
                   </NavigationMenuLink>
@@ -250,21 +328,21 @@ export function AppLayout() {
               ) : null}
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
-                  <NavLink to="/rooms" className={navLinkClass}>
+                  <NavLink to="/rooms" className={navLinkClassName(navActive.rooms)}>
                     {roomsLabel}
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
-                  <NavLink to="/calendar" className={navLinkClass}>
+                  <NavLink to="/calendar" className={navLinkClassName(navActive.calendar)}>
                     {t("nav.calendar")}
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
-                  <NavLink to="/mushaf" className={navLinkClass}>
+                  <NavLink to="/mushaf" className={navLinkClassName(navActive.mushaf)}>
                     <span className="inline-flex items-center gap-2">
                       <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
                       {t("nav.mushaf")}
@@ -274,13 +352,23 @@ export function AppLayout() {
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
-                  <NavLink to="/recitations" className={navLinkClass}>
+                  <NavLink to="/recitations" className={navLinkClassName(navActive.recitations)}>
                     <span className="inline-flex items-center gap-2">
                       <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
                       {t("nav.recitations")}
                     </span>
                   </NavLink>
                 </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem className="ms-3">
+                <NavLink
+                  to="/live"
+                  className={liveNavLinkClassName(navActive.live)}
+                  aria-label={t("nav.live")}
+                  title={t("nav.live")}
+                >
+                  <LiveNavChipLabel />
+                </NavLink>
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
@@ -340,6 +428,8 @@ export function AppLayout() {
           </div>
         </div>
       </header>
+
+      <LiveSessionBanner />
 
       <main
         className={cn(

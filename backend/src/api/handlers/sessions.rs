@@ -12,15 +12,25 @@ use chrono::{Datelike, DateTime, Duration, NaiveDate, NaiveDateTime, TimeZone, U
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::postgres::PgConnection;
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::{
     CreateSessionsResponse, DeleteGroupResult, Paginated, SessionAttendanceRow, SessionDetailResponse,
-    SessionPublic, SessionStatsResponse,
+    SessionLivePublicItem, SessionPublic, SessionStatsResponse,
 };
 use crate::api::AppState;
+
+#[derive(FromRow)]
+struct SessionLivePublicRow {
+    #[sqlx(flatten)]
+    session: SessionPublic,
+    is_room_teacher: bool,
+    my_enrollment_status: Option<String>,
+    requires_approval: bool,
+    enrollment_open: bool,
+}
 
 #[derive(Deserialize)]
 pub struct ListSessionsQuery {
@@ -428,6 +438,43 @@ pub async fn upcoming(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
+}
+
+/// All `in_progress` sessions in **active public** rooms (discovery). Includes whether the caller is
+/// the room teacher and (for students) enrollment status in that room.
+pub async fn list_live_public_sessions(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<Json<Vec<SessionLivePublicItem>>, StatusCode> {
+    let rows = sqlx::query_as::<_, SessionLivePublicRow>(
+        r#"SELECT s.id, s.room_id, r.name AS room_name, r.teacher_id, s.title, s.scheduled_at, s.duration_minutes,
+                  s.status::text AS status, s.notes, s.recurrence_group_id, s.recurrence_rule, s.schedule_id, s.created_at,
+                  (r.teacher_id = $1) AS is_room_teacher,
+                  (SELECT e.status::text FROM enrollments e WHERE e.room_id = s.room_id AND e.student_id = $1 LIMIT 1) AS my_enrollment_status,
+                  r.requires_approval,
+                  r.enrollment_open
+           FROM sessions s
+           INNER JOIN rooms r ON r.id = s.room_id
+           WHERE s.status::text = 'in_progress' AND r.is_public = true AND r.is_active = true
+           ORDER BY s.scheduled_at ASC"#,
+    )
+    .bind(auth.id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let out: Vec<SessionLivePublicItem> = rows
+        .into_iter()
+        .map(|row| SessionLivePublicItem {
+            session: row.session,
+            is_room_teacher: row.is_room_teacher,
+            my_enrollment_status: row.my_enrollment_status,
+            requires_approval: row.requires_approval,
+            enrollment_open: row.enrollment_open,
+        })
+        .collect();
+
+    Ok(Json(out))
 }
 
 pub async fn get_session(

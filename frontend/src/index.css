@@ -309,3 +309,44 @@
     background-color: rgba(59, 130, 246, 0.45);
   }
 }
+
+@keyframes miqraa-live-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.miqraa-live-dot {
+  animation: miqraa-live-pulse 1.8s ease-in-out infinite;
+}
+
+/**
+ * Header "LIVE" chip — plain CSS so Radix `NavigationMenuLink` defaults
+ * (`hover:bg-muted`, `p-2`, `text-sm`) cannot wash out the red fill.
+ */
+.live-nav-chip {
+  background-color: #e62117 !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+.live-nav-chip:hover {
+  background-color: #cc0000 !important;
+  color: #ffffff !important;
+}
+
+.live-nav-chip:focus-visible {
+  background-color: #e62117 !important;
+  color: #ffffff !important;
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
+}
+
+.live-nav-chip[aria-current="page"] {
+  background-color: #b30000 !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
+}

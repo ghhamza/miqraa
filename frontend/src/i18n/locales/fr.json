@@ -59,7 +59,20 @@
     "recitations": "Récitations",
     "mushaf": "Mushaf",
     "archivedRooms": "Salles archivées",
-    "profile": "Profil"
+    "profile": "Profil",
+    "live": "Direct",
+    "liveBadge": "LIVE"
+  },
+  "livePage": {
+    "subtitle": "Parcourez les cours en direct dans les salles publiques. Si vous n’êtes pas inscrit, rejoignez d’abord la salle — vous pourrez ensuite entrer dans le direct.",
+    "liveNow": "En direct",
+    "liveNowHint": "Séances ouvertes dans des salles marquées publiques.",
+    "upcoming": "À venir",
+    "noLive": "Aucune séance en direct pour le moment.",
+    "noUpcoming": "Aucune séance à venir.",
+    "open": "Ouvrir",
+    "publicRoom": "Public",
+    "cannotJoinOtherTeacher": "Seul l’enseignant hôte ou les élèves inscrits peuvent rejoindre ce direct."
   },
   "profile": {
     "title": "Votre profil",
@@ -576,6 +589,17 @@
     "gradeAnnouncement": "Votre évaluation : {{grade}}",
     "micDeniedListener": "Micro refusé — vous pouvez seulement écouter.",
     "live": "En direct",
+    "badge": "EN DIRECT",
+    "banner": {
+      "title": "Une session est en direct",
+      "join": "Rejoindre",
+      "startedAgo": "Commencée il y a {{minutes}} min",
+      "dismiss": "Masquer"
+    },
+    "dashboard": {
+      "title": "En direct maintenant",
+      "join": "Rejoindre"
+    },
     "reciting": "récite",
     "overflowMore": "Plus",
     "mobileBottomBar": "Contrôles de session",

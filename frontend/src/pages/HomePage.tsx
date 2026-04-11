@@ -28,6 +28,8 @@ import { useLocaleDate } from "../hooks/useLocaleDate";
 import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
 import { PageShell } from "../components/layout/PageShell";
+import { LiveNowDashboardCard } from "../components/home/LiveNowDashboardCard";
+import { sessionNavigatePath } from "../lib/sessionNav";
 
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -108,6 +110,7 @@ function AdminDashboard({ user }: { user: User }) {
       meta={t("home.dashboardSubtitle")}
       contentClassName="space-y-8"
     >
+      <LiveNowDashboardCard />
       <div>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("home.adminStatsTitle")}</h2>
         {loading ? (
@@ -217,6 +220,7 @@ function TeacherDashboard({ user }: { user: User }) {
       description={t("home.teacherDashboard")}
       contentClassName="space-y-8"
     >
+      <LiveNowDashboardCard />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <button
           type="button"
@@ -290,7 +294,7 @@ function TeacherDashboard({ user }: { user: User }) {
           <p className="text-sm text-[var(--color-text-muted)]">{sessionTitle(todaySession)}</p>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">{mediumTime(todaySession.scheduled_at)}</p>
           <div className="mt-4">
-            <Button type="button" variant="primary" onClick={() => void navigate(`/sessions/${todaySession.id}`)}>
+            <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(todaySession))}>
               {t("sessions.start")}
             </Button>
           </div>
@@ -401,6 +405,7 @@ function StudentDashboard({ user }: { user: User }) {
       description={t("home.welcomeSubtitle")}
       contentClassName="space-y-8"
     >
+      <LiveNowDashboardCard />
       {progress ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
@@ -464,7 +469,7 @@ function StudentDashboard({ user }: { user: User }) {
             {sessionCountdownLabel(nextSession.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
           </p>
           <div className="mt-4">
-            <Button type="button" variant="primary" onClick={() => void navigate(`/sessions/${nextSession.id}`)}>
+            <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(nextSession))}>
               {t("sessions.start")}
             </Button>
           </div>

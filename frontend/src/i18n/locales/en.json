@@ -59,7 +59,20 @@
     "recitations": "Recitations",
     "mushaf": "Mushaf",
     "archivedRooms": "Archived rooms",
-    "profile": "Profile"
+    "profile": "Profile",
+    "live": "Live",
+    "liveBadge": "LIVE"
+  },
+  "livePage": {
+    "subtitle": "Browse live classes in public rooms. If you are not enrolled yet, join the room first — then you can enter the live session.",
+    "liveNow": "Live now",
+    "liveNowHint": "Open sessions in rooms marked public.",
+    "upcoming": "Upcoming",
+    "noLive": "No session is live right now.",
+    "noUpcoming": "No upcoming sessions.",
+    "open": "Open",
+    "publicRoom": "Public",
+    "cannotJoinOtherTeacher": "Only the host teacher or enrolled students can join this live session."
   },
   "profile": {
     "title": "Your profile",
@@ -576,6 +589,17 @@
     "gradeAnnouncement": "Your grade: {{grade}}",
     "micDeniedListener": "Microphone permission was denied — you can listen only.",
     "live": "Live",
+    "badge": "LIVE",
+    "banner": {
+      "title": "A session is live now",
+      "join": "Join",
+      "startedAgo": "Started {{minutes}} min ago",
+      "dismiss": "Dismiss"
+    },
+    "dashboard": {
+      "title": "Live now",
+      "join": "Join"
+    },
     "reciting": "reciting",
     "overflowMore": "More",
     "mobileBottomBar": "Session controls",
