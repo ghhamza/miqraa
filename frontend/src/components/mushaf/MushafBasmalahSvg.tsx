@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 /** Vector basmalah (matches printed Mushaf style; uses `currentColor` for fill). */
 export function MushafBasmalahSvg({ className }: { className?: string }) {
