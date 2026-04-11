@@ -25,6 +25,7 @@ import { RecentRecitationsList } from "../components/recitations/RecentRecitatio
 import { GradeDistributionBar } from "../components/recitations/GradeDistributionBar";
 import { SurahProgressRing } from "../components/recitations/SurahProgressRing";
 import { useLocaleDate } from "../hooks/useLocaleDate";
+import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
 import { PageShell } from "../components/layout/PageShell";
 
@@ -48,7 +49,7 @@ function findFirstSessionToday(sessions: SessionPublic[]): SessionPublic | null 
 function useTodayDateLine(): string {
   const { i18n } = useTranslation();
   return useMemo(() => {
-    const locale = i18n.language === "en" ? "en-US" : i18n.language === "fr" ? "fr-FR" : "ar-SA";
+    const locale = intlLocaleForAppLanguage(i18n.language);
     return new Intl.DateTimeFormat(locale, {
       weekday: "long",
       year: "numeric",
@@ -143,7 +144,7 @@ function AdminDashboard({ user }: { user: User }) {
 }
 
 function TeacherDashboard({ user }: { user: User }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
@@ -326,7 +327,7 @@ function TeacherDashboard({ user }: { user: User }) {
 }
 
 function StudentDashboard({ user }: { user: User }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
@@ -459,7 +460,9 @@ function StudentDashboard({ user }: { user: User }) {
           <p className="text-sm font-semibold text-[var(--color-primary)]">{t("home.nextSession")}</p>
           <p className="mt-1 font-medium text-[var(--color-text)]">{nextSession.room_name}</p>
           <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(nextSession.scheduled_at)}</p>
-          <p className="mt-1 text-xs text-[var(--color-primary)]">{sessionCountdownLabel(nextSession.scheduled_at, t)}</p>
+          <p className="mt-1 text-xs text-[var(--color-primary)]">
+            {sessionCountdownLabel(nextSession.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
+          </p>
           <div className="mt-4">
             <Button type="button" variant="primary" onClick={() => void navigate(`/sessions/${nextSession.id}`)}>
               {t("sessions.start")}

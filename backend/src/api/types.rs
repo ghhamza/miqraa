@@ -246,6 +246,10 @@ pub struct ErrorAnnotationPublic {
     pub error_severity: String,
     pub error_category: String,
     pub teacher_comment: Option<String>,
+    pub annotation_kind: String,
+    pub status: String,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub resolved_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 

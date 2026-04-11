@@ -532,6 +532,7 @@
     "mute": "كتم الصوت",
     "unmute": "تشغيل الصوت",
     "setReciter": "تعيين كقارئ",
+    "clearReciter": "إلغاء التعيين كقارئ",
     "activeReciter": "القارئ الحالي",
     "noReciter": "لم يتم تعيين قارئ",
     "teacherBadge": "معلّم",
@@ -550,6 +551,7 @@
     "following": "متابعة",
     "freeBrowse": "تصفح حر",
     "gradeRecitation": "تقييم التلاوة",
+    "gradeRecitationModalDescription": "قيّم التلاوة واطّلع على التقييمات في هذه الحصة.",
     "reciter": "القارئ",
     "ayahRange": "الآيات",
     "gradeNotes": "ملاحظات...",
@@ -602,6 +604,17 @@
     }
   },
   "annotation": {
+    "kind": {
+      "error": "خطأ",
+      "repeat": "أعد",
+      "good": "أحسنت",
+      "note": "ملاحظة"
+    },
+    "status": {
+      "open": "مفتوح",
+      "resolved": "تم التصحيح",
+      "auto_resolved": "تم تلقائياً"
+    },
     "error": "خطأ",
     "repeat": "أعد",
     "comment": "ملاحظة",
@@ -610,6 +623,23 @@
     "lahnKhafi": "لحن خفي",
     "commentPlaceholder": "اكتب ملاحظتك...",
     "noRecitation": "احفظ تقييماً أولاً ليُنشأ سجل تلاوة يُرفق به التعليق.",
+    "repeatRequested": "طلب المعلم إعادة التلاوة",
+    "studentPopover": {
+      "title": "ملاحظات"
+    },
+    "legend": {
+      "title": "دليل الألوان",
+      "open": "فتح دليل الألوان",
+      "error_jali": "لحن جلي",
+      "error_khafi": "لحن خفي",
+      "repeat": "طلب إعادة",
+      "note": "ملاحظة",
+      "good": "أحسنت"
+    },
+    "severity": {
+      "jali": "جلي",
+      "khafi": "خفي"
+    },
     "toggleMode": "وضع التصحيح"
   },
   "error": {

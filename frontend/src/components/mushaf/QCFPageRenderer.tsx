@@ -18,6 +18,9 @@ export interface QCFPageRendererProps {
   pageNumber: number;
   riwaya: Riwaya;
   onWordClick?: (data: { surah: number; ayah: number; wordIndex: number; rect?: DOMRect }) => void;
+  /** Live session student: preview annotations on hover (optional). */
+  onWordMouseEnter?: (data: { surah: number; ayah: number; wordIndex: number; rect?: DOMRect }) => void;
+  onWordMouseLeave?: (data: { surah: number; ayah: number; wordIndex: number }) => void;
   onAyahClick?: (data: { surah: number; ayah: number }) => void;
   highlightRange?: { surah: number; ayahStart: number; ayahEnd: number } | null;
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
@@ -71,6 +74,8 @@ export function QCFPageRenderer({
   pageNumber,
   riwaya,
   onWordClick,
+  onWordMouseEnter,
+  onWordMouseLeave,
   onAyahClick,
   highlightRange,
   activeWord,
@@ -212,6 +217,31 @@ export function QCFPageRenderer({
     [onWordClick, onAyahClick],
   );
 
+  const handleWordMouseEnter = useCallback(
+    (word: WordData, e: MouseEvent<HTMLSpanElement>) => {
+      if (!onWordMouseEnter) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      onWordMouseEnter({
+        surah: word.surah,
+        ayah: word.ayah,
+        wordIndex: word.wordPosition,
+        rect,
+      });
+    },
+    [onWordMouseEnter],
+  );
+
+  const handleWordMouseLeave = useCallback(
+    (word: WordData) => {
+      onWordMouseLeave?.({
+        surah: word.surah,
+        ayah: word.ayah,
+        wordIndex: word.wordPosition,
+      });
+    },
+    [onWordMouseLeave],
+  );
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
@@ -248,6 +278,8 @@ export function QCFPageRenderer({
     activeWord,
     getWordAnnotationClass,
     onWordClick: handleWordClick,
+    onWordMouseEnter: onWordMouseEnter ? handleWordMouseEnter : undefined,
+    onWordMouseLeave: onWordMouseLeave ? handleWordMouseLeave : undefined,
   };
 
   const safeFontPx = Math.min(48, Math.max(12, Number.isFinite(fontSizePx) ? fontSizePx : 28));
@@ -303,6 +335,8 @@ function LineView({
   activeWord,
   getWordAnnotationClass,
   onWordClick,
+  onWordMouseEnter,
+  onWordMouseLeave,
 }: {
   line: LineData;
   mushafPageNumber: number;
@@ -310,6 +344,8 @@ function LineView({
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
   getWordAnnotationClass?: (surah: number, ayah: number, wordPosition: number) => string;
   onWordClick: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
+  onWordMouseEnter?: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
+  onWordMouseLeave?: (w: WordData) => void;
 }) {
   if (line.lineType === "surah_name" && line.surahNumber != null) {
     const sn = line.surahNumber;
@@ -354,6 +390,8 @@ function LineView({
             data-ayah={word.ayah}
             data-word={word.wordPosition}
             onClick={(e) => onWordClick(word, e)}
+            onMouseEnter={onWordMouseEnter ? (e) => onWordMouseEnter(word, e) : undefined}
+            onMouseLeave={onWordMouseLeave ? () => onWordMouseLeave(word) : undefined}
           >
             {word.glyph}
           </span>

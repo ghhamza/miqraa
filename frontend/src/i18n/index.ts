@@ -16,7 +16,8 @@ import fr from "./locales/fr.json";
 function applyDocumentLanguage(lng: string) {
   const isRtl = lng === "ar";
   document.documentElement.dir = isRtl ? "rtl" : "ltr";
-  document.documentElement.lang = lng;
+  /** Prefer Western digits (0–9) in Arabic UI; matches `intlLocaleForAppLanguage`. */
+  document.documentElement.lang = lng === "ar" ? "ar-u-nu-latn" : lng;
 }
 
 const SUPPORTED = ["ar", "en", "fr"] as const;

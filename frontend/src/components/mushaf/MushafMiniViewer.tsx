@@ -9,15 +9,6 @@ import type { Riwaya } from "../../lib/quranService";
 import { cn } from "@/lib/utils";
 import { MushafCanvas } from "./MushafCanvas";
 
-const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
-
-function toArabicIndic(n: number): string {
-  return String(n)
-    .split("")
-    .map((d) => AR_DIGITS[Number(d)] ?? d)
-    .join("");
-}
-
 export interface MushafMiniViewerProps {
   currentAyah?: { surah: number; ayah: number } | null;
   riwaya?: Riwaya;
@@ -119,8 +110,8 @@ export function MushafMiniViewer({
         ? `سورة ${surahStart.nameAr} – سورة ${surahEnd.nameAr}`
         : "";
 
-  const pageStr = i18n.language === "ar" ? toArabicIndic(page) : String(page);
-  const totalStr = i18n.language === "ar" ? toArabicIndic(totalPages) : String(totalPages);
+  const pageStr = String(page);
+  const totalStr = String(totalPages);
 
   const dir = i18n.dir();
 

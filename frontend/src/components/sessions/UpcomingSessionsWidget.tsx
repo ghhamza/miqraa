@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { Badge } from "../ui/Badge";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 
 function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" {
   if (s === "cancelled") return "gray";
@@ -16,7 +17,11 @@ function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "b
   return "green";
 }
 
-export function sessionCountdownLabel(iso: string, t: (k: string, o?: Record<string, unknown>) => string): string {
+export function sessionCountdownLabel(
+  iso: string,
+  t: (k: string, o?: Record<string, unknown>) => string,
+  intlLocale: string,
+): string {
   const d = new Date(iso);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -31,7 +36,7 @@ export function sessionCountdownLabel(iso: string, t: (k: string, o?: Record<str
   }
   const days = Math.ceil(ms / 86400000);
   if (days >= 0 && days < 14) return t("sessions.countdownInDays", { days });
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(d);
+  return new Intl.DateTimeFormat(intlLocale, { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
 export interface UpcomingSessionsWidgetProps {
@@ -97,7 +102,9 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink }: Upcom
                 <div>
                   <p className="font-medium text-[var(--color-text)]">{s.room_name}</p>
                   <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(s.scheduled_at)}</p>
-                  <p className="mt-1 text-xs text-[var(--color-primary)]">{sessionCountdownLabel(s.scheduled_at, t)}</p>
+                  <p className="mt-1 text-xs text-[var(--color-primary)]">
+                    {sessionCountdownLabel(s.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
+                  </p>
                 </div>
                 <Badge variant={sessionStatusVariant(s.status)}>{t(`sessions.${statusKey(s.status)}`)}</Badge>
               </div>

@@ -532,6 +532,7 @@
     "mute": "Mute",
     "unmute": "Unmute",
     "setReciter": "Set as reciter",
+    "clearReciter": "Remove as reciter",
     "activeReciter": "Active reciter",
     "noReciter": "No reciter assigned",
     "teacherBadge": "Teacher",
@@ -550,6 +551,7 @@
     "following": "Following",
     "freeBrowse": "Free browse",
     "gradeRecitation": "Grade recitation",
+    "gradeRecitationModalDescription": "Evaluate the recitation and review grades from this session.",
     "reciter": "Reciter",
     "ayahRange": "Ayahs",
     "gradeNotes": "Notes...",
@@ -602,6 +604,17 @@
     }
   },
   "annotation": {
+    "kind": {
+      "error": "Error",
+      "repeat": "Repeat",
+      "good": "Well done",
+      "note": "Note"
+    },
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "auto_resolved": "Auto-resolved"
+    },
     "error": "Error",
     "repeat": "Repeat",
     "comment": "Note",
@@ -610,6 +623,23 @@
     "lahnKhafi": "Subtle error",
     "commentPlaceholder": "Write a note...",
     "noRecitation": "Save a grade first so there is a recitation to attach annotations to.",
+    "repeatRequested": "Teacher requested a repeat",
+    "studentPopover": {
+      "title": "Feedback"
+    },
+    "legend": {
+      "title": "Color guide",
+      "open": "Open color guide",
+      "error_jali": "Major error (Lahn Jali)",
+      "error_khafi": "Subtle error (Lahn Khafi)",
+      "repeat": "Repeat requested",
+      "note": "Note from teacher",
+      "good": "Well done"
+    },
+    "severity": {
+      "jali": "Major",
+      "khafi": "Subtle"
+    },
     "toggleMode": "Annotation mode"
   },
   "error": {

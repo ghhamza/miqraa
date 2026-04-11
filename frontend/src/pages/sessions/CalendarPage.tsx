@@ -21,6 +21,7 @@ import {
   startOfWeekMonday,
   toYmdLocal,
 } from "../../lib/calendarUtils";
+import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 
 type ViewMode = "month" | "week";
 
@@ -52,7 +53,7 @@ export function CalendarPage() {
   const [defaultRoom, setDefaultRoom] = useState<string | undefined>();
   const [presetMorning, setPresetMorning] = useState(false);
 
-  const locale = i18n.language === "en" ? "en-US" : i18n.language === "fr" ? "fr-FR" : "ar-SA";
+  const locale = intlLocaleForAppLanguage(i18n.language);
 
   const weekdayLabels = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });

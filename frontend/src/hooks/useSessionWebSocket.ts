@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionWebSocketUrl } from "../lib/wsUrl";
+import type { ErrorAnnotation } from "../types";
 
 export interface ParticipantInfo {
   user_id: string;
@@ -40,6 +41,10 @@ export interface UseSessionWebSocketOptions {
   onSessionEnded?: () => void;
   /** Student: private grade push from teacher */
   onGradeNotification?: (grade: string, notes?: string) => void;
+  /** An annotation was added (by the teacher, on any recitation in this session). */
+  onAnnotationAdded?: (annotation: ErrorAnnotation) => void;
+  /** An annotation was removed (by the teacher). */
+  onAnnotationRemoved?: (annotationId: string) => void;
   onError?: (message: string) => void;
   /** Server closed this socket because the same user joined elsewhere — do not reconnect. */
   onAnotherTab?: () => void;
@@ -55,6 +60,7 @@ export interface UseSessionWebSocketReturn {
   status: SessionWsStatus;
   sendMute: (muted: boolean) => void;
   sendSetReciter: (userId: string) => void;
+  sendClearReciter: () => void;
   sendCurrentAyah: (surah: number, ayah: number) => void;
   sendClearAyah: () => void;
   sendCurrentPage: (page: number) => void;
@@ -62,6 +68,17 @@ export interface UseSessionWebSocketReturn {
   sendIceCandidate: (candidate: string) => void;
   sendPing: () => void;
   sendGradeNotification: (studentId: string, grade: string, notes?: string) => void;
+  sendCreateAnnotation: (payload: {
+    recitation_id: string;
+    surah: number;
+    ayah: number;
+    word_position: number | null;
+    error_severity: string;
+    error_category: string;
+    teacher_comment: string | null;
+    annotation_kind: string;
+  }) => void;
+  sendRemoveAnnotation: (annotationId: string) => void;
   disconnect: () => void;
 }
 
@@ -122,6 +139,10 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     [sendRaw],
   );
 
+  const sendClearReciter = useCallback(() => {
+    sendRaw({ type: "clear-reciter" });
+  }, [sendRaw]);
+
   const sendCurrentAyah = useCallback(
     (surah: number, ayah: number) => {
       sendRaw({ type: "current-ayah", surah, ayah });
@@ -163,6 +184,36 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
       sendRaw({ type: "grade-notification", student_id: studentId, grade, notes: notes ?? null });
     },
     [sendRaw],
+  );
+
+  const sendCreateAnnotation: UseSessionWebSocketReturn["sendCreateAnnotation"] = useCallback(
+    (payload) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "create-annotation",
+            ...payload,
+          }),
+        );
+      }
+    },
+    [],
+  );
+
+  const sendRemoveAnnotation: UseSessionWebSocketReturn["sendRemoveAnnotation"] = useCallback(
+    (annotationId) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "remove-annotation",
+            annotation_id: annotationId,
+          }),
+        );
+      }
+    },
+    [],
   );
 
   const disconnect = useCallback(() => {
@@ -305,6 +356,20 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
             if (grade) o.onGradeNotification?.(grade, notes ?? undefined);
             break;
           }
+          case "annotation-added": {
+            const annotation = msg.annotation as ErrorAnnotation | undefined;
+            if (annotation && o.onAnnotationAdded) {
+              o.onAnnotationAdded(annotation);
+            }
+            break;
+          }
+          case "annotation-removed": {
+            const annotationId = msg.annotation_id as string | undefined;
+            if (annotationId && o.onAnnotationRemoved) {
+              o.onAnnotationRemoved(annotationId);
+            }
+            break;
+          }
           case "error": {
             const m = msg.message as string | undefined;
             if (!m) break;
@@ -380,6 +445,7 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     status,
     sendMute,
     sendSetReciter,
+    sendClearReciter,
     sendCurrentAyah,
     sendClearAyah,
     sendCurrentPage,
@@ -387,6 +453,8 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     sendIceCandidate,
     sendPing,
     sendGradeNotification,
+    sendCreateAnnotation,
+    sendRemoveAnnotation,
     disconnect,
   };
 }

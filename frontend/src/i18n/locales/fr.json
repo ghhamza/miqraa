@@ -532,6 +532,7 @@
     "mute": "Couper le micro",
     "unmute": "Activer le micro",
     "setReciter": "Désigner comme récitant",
+    "clearReciter": "Retirer le récitant",
     "activeReciter": "Récitant actif",
     "noReciter": "Aucun récitant désigné",
     "teacherBadge": "Enseignant",
@@ -550,6 +551,7 @@
     "following": "Suivi",
     "freeBrowse": "Navigation libre",
     "gradeRecitation": "Évaluer la récitation",
+    "gradeRecitationModalDescription": "Évaluez la récitation et consultez les notes de cette séance.",
     "reciter": "Récitant",
     "ayahRange": "Ayahs",
     "gradeNotes": "Notes...",
@@ -602,6 +604,17 @@
     }
   },
   "annotation": {
+    "kind": {
+      "error": "Erreur",
+      "repeat": "Répéter",
+      "good": "Bravo",
+      "note": "Note"
+    },
+    "status": {
+      "open": "Ouvert",
+      "resolved": "Corrigé",
+      "auto_resolved": "Auto-corrigé"
+    },
     "error": "Erreur",
     "repeat": "Répéter",
     "comment": "Note",
@@ -610,6 +623,23 @@
     "lahnKhafi": "Erreur subtile",
     "commentPlaceholder": "Écrire une note...",
     "noRecitation": "Enregistrez d'abord une évaluation pour qu'une récitation existe et puisse recevoir des annotations.",
+    "repeatRequested": "Le professeur demande de répéter",
+    "studentPopover": {
+      "title": "Commentaires"
+    },
+    "legend": {
+      "title": "Guide des couleurs",
+      "open": "Ouvrir le guide des couleurs",
+      "error_jali": "Erreur majeure (Lahn Jali)",
+      "error_khafi": "Erreur subtile (Lahn Khafi)",
+      "repeat": "Répétition demandée",
+      "note": "Note du professeur",
+      "good": "Bravo"
+    },
+    "severity": {
+      "jali": "Majeure",
+      "khafi": "Subtile"
+    },
     "toggleMode": "Mode correction"
   },
   "error": {

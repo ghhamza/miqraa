@@ -5,6 +5,7 @@ import { Repeat } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { cn } from "@/lib/utils";
 
 interface SessionBlockProps {
   session: SessionPublic;
@@ -17,7 +18,8 @@ function statusClasses(status: SessionPublic["status"]): string {
     case "scheduled":
       return "bg-[var(--color-primary)] text-white";
     case "in_progress":
-      return "animate-pulse bg-[var(--color-primary)] text-white ring-2 ring-[var(--color-primary-light)]";
+      /** Solid green like scheduled; live state is shown by the pulsing red dot only. */
+      return "bg-[var(--color-primary)] text-white";
     case "completed":
       return "bg-[#9E9E9E] text-white";
     case "cancelled":
@@ -32,6 +34,8 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
   const { mediumTime } = useLocaleDate();
   const timeStr = mediumTime(session.scheduled_at);
   const title = session.title?.trim() || t("sessions.untitledTitle");
+  const isLive = session.status === "in_progress";
+  const tooltip = `${title} — ${session.room_name} — ${timeStr}${isLive ? ` — ${t("sessions.inProgress")}` : ""}`;
 
   return (
     <button
@@ -40,11 +44,22 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
         e.stopPropagation();
         onClick?.();
       }}
-      title={`${title} — ${session.room_name} — ${timeStr}`}
-      className={`w-full rounded-lg px-1.5 py-1 text-start text-xs font-medium shadow-sm transition hover:opacity-95 ${statusClasses(
-        session.status,
-      )} ${compact ? "max-w-full truncate" : ""}`}
+      title={tooltip}
+      className={cn(
+        "relative w-full rounded-md px-1.5 py-1 text-start text-xs font-medium shadow-sm transition hover:opacity-95",
+        statusClasses(session.status),
+        compact ? "max-w-full truncate" : "",
+      )}
     >
+      {isLive ? (
+        <span
+          className={cn(
+            "pointer-events-none absolute z-10 rounded-full bg-[#EF5350] shadow-[0_0_0_3px_rgba(255,255,255,0.9)] animate-pulse",
+            compact ? "top-0.5 end-0.5 size-3" : "top-0.5 end-0.5 size-4",
+          )}
+          aria-hidden
+        />
+      ) : null}
       {!compact ? (
         <div className="space-y-0.5">
           <div className="flex items-center gap-1 truncate font-semibold">
