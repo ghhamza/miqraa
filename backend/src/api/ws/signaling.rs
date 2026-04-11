@@ -357,8 +357,16 @@ async fn handle_socket(
     while let Some(result) = stream.next().await {
         match result {
             Ok(Message::Text(text)) => {
-                let Ok(msg) = serde_json::from_str::<ClientMessage>(&text) else {
-                    continue;
+                let msg = match serde_json::from_str::<ClientMessage>(&text) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            text_preview = %text.chars().take(200).collect::<String>(),
+                            "websocket client message JSON parse failed"
+                        );
+                        continue;
+                    }
                 };
                 handle_client_message(
                     &state,
@@ -608,6 +616,13 @@ async fn handle_client_message(
                 "error" | "repeat" | "good" | "note"
             );
             if !valid_sev || !valid_cat || !valid_kind {
+                tracing::warn!(
+                    %session_id,
+                    %error_severity,
+                    %error_category,
+                    %annotation_kind,
+                    "create-annotation: invalid payload fields"
+                );
                 state
                     .rooms
                     .send_error(session_id, user_id, "Invalid annotation payload")
@@ -623,6 +638,11 @@ async fn handle_client_message(
             {
                 Ok(Some(ctx)) => ctx,
                 _ => {
+                    tracing::warn!(
+                        %session_id,
+                        %recitation_id,
+                        "create-annotation: recitation not found"
+                    );
                     state
                         .rooms
                         .send_error(session_id, user_id, "Recitation not found")
@@ -630,12 +650,35 @@ async fn handle_client_message(
                     return;
                 }
             };
-            if ctx.0 != Some(teacher_id) {
+            // Recitation must belong to this live session; teacher_id on row may be NULL on legacy rows.
+            if ctx.2 != Some(session_id) {
+                tracing::warn!(
+                    %session_id,
+                    rec_session = ?ctx.2,
+                    %recitation_id,
+                    "create-annotation: recitation session mismatch"
+                );
                 state
                     .rooms
-                    .send_error(session_id, user_id, "Not your recitation")
+                    .send_error(session_id, user_id, "Recitation not in this session")
                     .await;
                 return;
+            }
+            if let Some(row_teacher) = ctx.0 {
+                if row_teacher != teacher_id {
+                    tracing::warn!(
+                        %session_id,
+                        %recitation_id,
+                        row_teacher = %row_teacher,
+                        room_teacher = %teacher_id,
+                        "create-annotation: teacher mismatch on recitation row"
+                    );
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "Not your recitation")
+                        .await;
+                    return;
+                }
             }
 
             let input = crate::api::handlers::error_annotations_db::CreateAnnotationInput {
@@ -651,6 +694,12 @@ async fn handle_client_message(
 
             match crate::api::handlers::error_annotations_db::insert_annotation(&state.db, &input).await {
                 Ok(outcome) => {
+                    tracing::info!(
+                        %session_id,
+                        annotation_id = %outcome.annotation.id,
+                        %recitation_id,
+                        "annotation created (ws)"
+                    );
                     for id in &outcome.deleted_ids {
                         let rm = ServerMessage::AnnotationRemoved {
                             annotation_id: *id,

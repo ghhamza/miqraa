@@ -647,6 +647,9 @@
     "lahnKhafi": "لحن خفي",
     "commentPlaceholder": "اكتب ملاحظتك...",
     "noRecitation": "احفظ تقييماً أولاً ليُنشأ سجل تلاوة يُرفق به التعليق.",
+    "recitationCreated": "تم بدء التلاوة",
+    "noActiveReciter": "اختر قارئاً أولاً",
+    "creationFailed": "تعذر بدء التلاوة",
     "repeatRequested": "طلب المعلم إعادة التلاوة",
     "studentPopover": {
       "title": "ملاحظات"

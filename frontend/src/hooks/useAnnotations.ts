@@ -10,7 +10,7 @@ import type {
   ErrorSeverity,
 } from "../types";
 
-export function useAnnotations(recitationId: string | null) {
+export function useAnnotations(_recitationId: string | null) {
   const [annotations, setAnnotations] = useState<ErrorAnnotation[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -19,7 +19,16 @@ export function useAnnotations(recitationId: string | null) {
       const res = await api.get<ErrorAnnotation[]>("/error-annotations", {
         params: { recitation_id: recId },
       });
-      setAnnotations(res.data);
+      setAnnotations((prev) => {
+        const server = res.data;
+        const serverIds = new Set(server.map((a) => a.id));
+        /* Students only see their own recitations via HTTP; live session may show another student's
+         * recitation (active reciter). Server returns [] for them — keep WS-merged rows for this id. */
+        const keptFromWs = prev.filter(
+          (a) => a.recitation_id === recId && !serverIds.has(a.id),
+        );
+        return [...server, ...keptFromWs];
+      });
     } catch {
       /* annotations are non-critical */
     }
@@ -92,12 +101,11 @@ export function useAnnotations(recitationId: string | null) {
   const receiveAnnotationFromWs = useCallback(
     (annotation: ErrorAnnotation) => {
       setAnnotations((prev) => {
-        if (recitationId && annotation.recitation_id !== recitationId) return prev;
         if (prev.some((a) => a.id === annotation.id)) return prev;
         return [...prev, annotation];
       });
     },
-    [recitationId],
+    [],
   );
 
   const removeAnnotationFromWs = useCallback(

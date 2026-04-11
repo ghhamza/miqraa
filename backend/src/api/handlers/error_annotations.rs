@@ -164,11 +164,15 @@ pub async fn create_annotation(
     let ctx = fetch_recitation_context(&state.db, req.recitation_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let Some((teacher_id, _student_id, _session_id)) = ctx else {
+    let Some((row_teacher_id, _student_id, _session_id)) = ctx else {
         return Err(StatusCode::NOT_FOUND);
     };
-    if auth.role == "teacher" && Some(auth.id) != teacher_id {
-        return Err(StatusCode::FORBIDDEN);
+    if auth.role == "teacher" {
+        if let Some(tid) = row_teacher_id {
+            if tid != auth.id {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
     }
 
     let input = CreateAnnotationInput {

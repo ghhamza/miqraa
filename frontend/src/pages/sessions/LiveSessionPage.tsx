@@ -133,6 +133,10 @@ export function LiveSessionPage() {
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
   const [currentRecitationId, setCurrentRecitationId] = useState<string | null>(null);
+  /** Bumped when the active-reciter fetch starts and when grading creates a recitation; stale fetch completions must not overwrite `currentRecitationId`. */
+  const recitationFetchEpochRef = useRef(0);
+  /** Deduplicates concurrent `ensureRecitation` POSTs while the first is in flight. */
+  const ensureRecitationInFlightRef = useRef<Promise<string | null> | null>(null);
   const [studentPopover, setStudentPopover] = useState<{
     annotations: ErrorAnnotation[];
     rect: DOMRect;
@@ -525,84 +529,6 @@ export function LiveSessionPage() {
     if (!annotationMode) setAnnotationTarget(null);
   }, [annotationMode]);
 
-  const handleMarkAnnotationError = useCallback(
-    (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
-      if (!annotationTarget || !currentRecitationId) {
-        setAnnounce(t("annotation.noRecitation"));
-        return;
-      }
-      sessionState.sendCreateAnnotation({
-        recitation_id: currentRecitationId,
-        surah: annotationTarget.surah,
-        ayah: annotationTarget.ayah,
-        word_position: annotationTarget.wordIndex,
-        error_severity: severity,
-        error_category: category,
-        teacher_comment: comment ?? null,
-        annotation_kind: "error",
-      });
-      closeAnnotationToolbar();
-    },
-    [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t],
-  );
-
-  const handleAnnotationComment = useCallback(
-    (comment: string) => {
-      if (!annotationTarget || !currentRecitationId) {
-        setAnnounce(t("annotation.noRecitation"));
-        return;
-      }
-      sessionState.sendCreateAnnotation({
-        recitation_id: currentRecitationId,
-        surah: annotationTarget.surah,
-        ayah: annotationTarget.ayah,
-        word_position: annotationTarget.wordIndex,
-        error_severity: "khafi",
-        error_category: "other",
-        teacher_comment: comment,
-        annotation_kind: "note",
-      });
-      closeAnnotationToolbar();
-    },
-    [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t],
-  );
-
-  const handleAnnotationRepeat = useCallback(() => {
-    if (!annotationTarget || !currentRecitationId) {
-      setAnnounce(t("annotation.noRecitation"));
-      return;
-    }
-    sessionState.sendCreateAnnotation({
-      recitation_id: currentRecitationId,
-      surah: annotationTarget.surah,
-      ayah: annotationTarget.ayah,
-      word_position: annotationTarget.wordIndex,
-      error_severity: "khafi",
-      error_category: "other",
-      teacher_comment: null,
-      annotation_kind: "repeat",
-    });
-    closeAnnotationToolbar();
-  }, [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t]);
-
-  const handleAnnotationGood = useCallback(() => {
-    if (!annotationTarget || !currentRecitationId) {
-      setAnnounce(t("annotation.noRecitation"));
-      return;
-    }
-    sessionState.sendCreateAnnotation({
-      recitation_id: currentRecitationId,
-      surah: annotationTarget.surah,
-      ayah: annotationTarget.ayah,
-      word_position: annotationTarget.wordIndex,
-      error_severity: "khafi",
-      error_category: "other",
-      teacher_comment: null,
-      annotation_kind: "good",
-    });
-    closeAnnotationToolbar();
-  }, [annotationTarget, currentRecitationId, sessionState.sendCreateAnnotation, closeAnnotationToolbar, t]);
-
   const handleAutoFollowToggle = useCallback(() => {
     setAutoFollow((prev) => {
       if (prev) {
@@ -640,6 +566,174 @@ export function LiveSessionPage() {
     if (!rid) return null;
     return sessionState.state.participants.find((p) => p.userId === rid) ?? null;
   }, [sessionState.state.activeReciterId, sessionState.state.participants]);
+
+  const ensureRecitation = useCallback(async (): Promise<string | null> => {
+    if (currentRecitationId) return currentRecitationId;
+    if (!activeReciterParticipant?.userId) {
+      setAnnounce(t("annotation.noActiveReciter"));
+      return null;
+    }
+    if (!id || !sessionDetail?.room_id) {
+      setAnnounce(t("annotation.creationFailed"));
+      return null;
+    }
+    if (ensureRecitationInFlightRef.current) {
+      return ensureRecitationInFlightRef.current;
+    }
+    const p = (async () => {
+      try {
+        const hr = interaction.highlightRange;
+        let surah: number;
+        let ayah_start: number;
+        let ayah_end: number;
+        if (hr) {
+          surah = hr.surah;
+          ayah_start = hr.ayahStart;
+          ayah_end = Math.max(hr.ayahStart, hr.ayahEnd);
+        } else {
+          const [s, a] = getSurahAyahAtPageStart(page, riwaya);
+          surah = s;
+          ayah_start = a;
+          ayah_end = a;
+        }
+        const { data } = await api.post<RecitationPublic>("recitations", {
+          student_id: activeReciterParticipant.userId,
+          room_id: sessionDetail.room_id,
+          session_id: id,
+          surah,
+          ayah_start,
+          ayah_end,
+          riwaya,
+        });
+        recitationFetchEpochRef.current++;
+        setCurrentRecitationId(data.id);
+        setAnnounce(t("annotation.recitationCreated"));
+        return data.id;
+      } catch {
+        setAnnounce(t("annotation.creationFailed"));
+        return null;
+      }
+    })();
+    ensureRecitationInFlightRef.current = p;
+    return p.finally(() => {
+      ensureRecitationInFlightRef.current = null;
+    });
+  }, [
+    currentRecitationId,
+    activeReciterParticipant?.userId,
+    id,
+    sessionDetail?.room_id,
+    interaction.highlightRange,
+    page,
+    riwaya,
+    t,
+  ]);
+
+  const handleMarkAnnotationError = useCallback(
+    (severity: ErrorSeverity, category: ErrorCategory, comment?: string) => {
+      if (!annotationTarget) return;
+      void (async () => {
+        const recId = currentRecitationId ?? (await ensureRecitation());
+        if (!recId) return;
+        sessionState.sendCreateAnnotation({
+          recitation_id: recId,
+          surah: annotationTarget.surah,
+          ayah: annotationTarget.ayah,
+          word_position: annotationTarget.wordIndex,
+          error_severity: severity,
+          error_category: category,
+          teacher_comment: comment ?? null,
+          annotation_kind: "error",
+        });
+        closeAnnotationToolbar();
+      })();
+    },
+    [
+      annotationTarget,
+      currentRecitationId,
+      ensureRecitation,
+      sessionState.sendCreateAnnotation,
+      closeAnnotationToolbar,
+    ],
+  );
+
+  const handleAnnotationComment = useCallback(
+    (comment: string) => {
+      if (!annotationTarget) return;
+      void (async () => {
+        const recId = currentRecitationId ?? (await ensureRecitation());
+        if (!recId) return;
+        sessionState.sendCreateAnnotation({
+          recitation_id: recId,
+          surah: annotationTarget.surah,
+          ayah: annotationTarget.ayah,
+          word_position: annotationTarget.wordIndex,
+          error_severity: "khafi",
+          error_category: "other",
+          teacher_comment: comment,
+          annotation_kind: "note",
+        });
+        closeAnnotationToolbar();
+      })();
+    },
+    [
+      annotationTarget,
+      currentRecitationId,
+      ensureRecitation,
+      sessionState.sendCreateAnnotation,
+      closeAnnotationToolbar,
+    ],
+  );
+
+  const handleAnnotationRepeat = useCallback(() => {
+    if (!annotationTarget) return;
+    void (async () => {
+      const recId = currentRecitationId ?? (await ensureRecitation());
+      if (!recId) return;
+      sessionState.sendCreateAnnotation({
+        recitation_id: recId,
+        surah: annotationTarget.surah,
+        ayah: annotationTarget.ayah,
+        word_position: annotationTarget.wordIndex,
+        error_severity: "khafi",
+        error_category: "other",
+        teacher_comment: null,
+        annotation_kind: "repeat",
+      });
+      closeAnnotationToolbar();
+    })();
+  }, [
+    annotationTarget,
+    currentRecitationId,
+    ensureRecitation,
+    sessionState.sendCreateAnnotation,
+    closeAnnotationToolbar,
+  ]);
+
+  const handleAnnotationGood = useCallback(() => {
+    if (!annotationTarget) return;
+    void (async () => {
+      const recId = currentRecitationId ?? (await ensureRecitation());
+      if (!recId) return;
+      sessionState.sendCreateAnnotation({
+        recitation_id: recId,
+        surah: annotationTarget.surah,
+        ayah: annotationTarget.ayah,
+        word_position: annotationTarget.wordIndex,
+        error_severity: "khafi",
+        error_category: "other",
+        teacher_comment: null,
+        annotation_kind: "good",
+      });
+      closeAnnotationToolbar();
+    })();
+  }, [
+    annotationTarget,
+    currentRecitationId,
+    ensureRecitation,
+    sessionState.sendCreateAnnotation,
+    closeAnnotationToolbar,
+  ]);
 
   useEffect(() => {
     if (activeReciterParticipant) {
@@ -684,51 +778,38 @@ export function LiveSessionPage() {
     void loadAnnotations(currentRecitationId);
   }, [currentRecitationId, loadAnnotations]);
 
+  // Same recitation row for teacher and all students: the active reciter's latest for this session.
+  // Defensive `session_id === id` avoids picking legacy rows with NULL or a different session (WS create-annotation rejects those).
   useEffect(() => {
-    if (!id || !activeReciterParticipant?.userId || !isTeacher) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-          params: { session_id: id, limit: 50 },
-        });
-        if (cancelled) return;
-        const mine = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
-        mine.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setCurrentRecitationId(mine[0]?.id ?? null);
-      } catch {
-        if (!cancelled) setCurrentRecitationId(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, activeReciterParticipant?.userId, isTeacher]);
-
-  useEffect(() => {
-    if (!id || !user?.id || isTeacher) return;
-    if (sessionState.state.activeReciterId !== user.id) {
+    if (!id || !activeReciterParticipant?.userId) {
       setCurrentRecitationId(null);
       return;
     }
+    const epoch = ++recitationFetchEpochRef.current;
     let cancelled = false;
     void (async () => {
       try {
         const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
           params: { session_id: id, limit: 50 },
         });
-        if (cancelled) return;
-        const mine = data.items.filter((r) => r.student_id === user.id);
-        mine.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setCurrentRecitationId(mine[0]?.id ?? null);
+        if (cancelled || epoch !== recitationFetchEpochRef.current) return;
+        const forActiveStudent = data.items.filter((r) => r.student_id === activeReciterParticipant.userId);
+        const forSessionAndStudent = forActiveStudent.filter((r) => r.session_id === id);
+        forSessionAndStudent.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        if (forSessionAndStudent.length === 0 && forActiveStudent.length > 0 && isTeacher) {
+          setAnnounce(t("annotation.noRecitation"));
+        }
+        setCurrentRecitationId(forSessionAndStudent[0]?.id ?? null);
       } catch {
-        if (!cancelled) setCurrentRecitationId(null);
+        if (!cancelled && epoch === recitationFetchEpochRef.current) setCurrentRecitationId(null);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [id, user?.id, isTeacher, sessionState.state.activeReciterId]);
+  }, [id, activeReciterParticipant?.userId, isTeacher, t]);
 
   useEffect(() => {
     setAnnotationTarget(null);
@@ -1183,7 +1264,10 @@ export function LiveSessionPage() {
                 onGradeSubmitted={(studentId, grade, notes) => {
                   sessionState.sendGradeNotification(studentId, grade, notes);
                 }}
-                onRecitationCreated={(rec) => setCurrentRecitationId(rec.id)}
+                onRecitationCreated={(rec) => {
+                  recitationFetchEpochRef.current++;
+                  setCurrentRecitationId(rec.id);
+                }}
               />
             </DialogContent>
           ) : null}

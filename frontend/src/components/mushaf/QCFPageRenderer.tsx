@@ -163,25 +163,31 @@ export function QCFPageRenderer({
     return () => ro.disconnect();
   }, [fontReady, pageNumber]);
 
-  /** On page change, re-apply width-based font so we don’t keep the previous page’s shrink. */
+  /** On page change: width-based font, then shrink until column fits height. */
   useLayoutEffect(() => {
     if (!fontReady || !data || !containerRef.current) return;
     if (data.pageNumber !== pageNumber) return;
-    if (layoutPageRef.current === pageNumber) return;
     const el = containerRef.current;
-    const w = Math.max(0, Math.floor(el.clientWidth) - 2);
-    if (w < 64) return;
-    const baseSize = Math.max(12, Math.min(48, w / 14.5));
-    layoutPageRef.current = pageNumber;
-    lastObservedWidthForFontRef.current = el.clientWidth;
-    flushSync(() => setFontSizePx(baseSize));
-  }, [fontReady, data, pageNumber]);
 
-  /** Shrink font until QCF column fits container height (no vertical scroll). */
-  useLayoutEffect(() => {
-    if (!fontReady || !data || !containerRef.current) return;
-    if (data.pageNumber !== pageNumber) return;
-    const el = containerRef.current;
+    if (layoutPageRef.current !== pageNumber) {
+      const w = Math.max(0, Math.floor(el.clientWidth) - 2);
+      if (w < 64) return;
+      const baseSize = Math.max(12, Math.min(48, w / 14.5));
+      lastObservedWidthForFontRef.current = el.clientWidth;
+      const nextPage = pageNumber;
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        flushSync(() => {
+          layoutPageRef.current = nextPage;
+          setFontSizePx(baseSize);
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const h = el.clientHeight;
     const sh = el.scrollHeight;
     if (h <= 0 || sh <= h + 2) return;

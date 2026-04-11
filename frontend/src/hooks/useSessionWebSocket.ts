@@ -196,6 +196,11 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
             ...payload,
           }),
         );
+      } else {
+        console.warn(
+          "[session ws] sendCreateAnnotation skipped: socket not open (readyState=%s)",
+          ws?.readyState ?? "no socket",
+        );
       }
     },
     [],

@@ -647,6 +647,9 @@
     "lahnKhafi": "Erreur subtile",
     "commentPlaceholder": "Écrire une note...",
     "noRecitation": "Enregistrez d'abord une évaluation pour qu'une récitation existe et puisse recevoir des annotations.",
+    "recitationCreated": "Récitation démarrée",
+    "noActiveReciter": "Définissez d'abord un récitant",
+    "creationFailed": "Impossible de démarrer la récitation",
     "repeatRequested": "Le professeur demande de répéter",
     "studentPopover": {
       "title": "Commentaires"

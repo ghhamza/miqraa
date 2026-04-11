@@ -647,6 +647,9 @@
     "lahnKhafi": "Subtle error",
     "commentPlaceholder": "Write a note...",
     "noRecitation": "Save a grade first so there is a recitation to attach annotations to.",
+    "recitationCreated": "Recitation started",
+    "noActiveReciter": "Set an active reciter first",
+    "creationFailed": "Could not start recitation",
     "repeatRequested": "Teacher requested a repeat",
     "studentPopover": {
       "title": "Feedback"
