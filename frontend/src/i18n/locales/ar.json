@@ -59,7 +59,20 @@
     "recitations": "التلاوات",
     "mushaf": "المصحف",
     "archivedRooms": "الغرف المؤرشفة",
-    "profile": "الملف الشخصي"
+    "profile": "الملف الشخصي",
+    "live": "مباشر",
+    "liveBadge": "مباشر"
+  },
+  "livePage": {
+    "subtitle": "تصفّح الحصص المباشرة في الغرف العامة. إن لم تكن مسجّلاً، انضم للغرفة أولاً ثم يمكنك دخول البث.",
+    "liveNow": "مباشر الآن",
+    "liveNowHint": "حصص مفتوحة في غرف معلّمة كعامة.",
+    "upcoming": "القادمة",
+    "noLive": "لا توجد حصة مباشرة الآن.",
+    "noUpcoming": "لا توجد حصص قادمة.",
+    "open": "فتح",
+    "publicRoom": "عامة",
+    "cannotJoinOtherTeacher": "فقط معلّم الحلقة أو الطلاب المسجّلون يمكنهم دخول هذه الحصة المباشرة."
   },
   "profile": {
     "title": "ملفك الشخصي",
@@ -576,6 +589,17 @@
     "gradeAnnouncement": "تقييمك: {{grade}}",
     "micDeniedListener": "تم رفض إذن الميكروفون — يمكنك الاستماع فقط.",
     "live": "جارية",
+    "badge": "مباشر",
+    "banner": {
+      "title": "حصة مباشرة الآن",
+      "join": "انضم",
+      "startedAgo": "بدأت منذ {{minutes}} دقيقة",
+      "dismiss": "إخفاء"
+    },
+    "dashboard": {
+      "title": "مباشر الآن",
+      "join": "انضم"
+    },
     "reciting": "يقرأ الآن",
     "overflowMore": "المزيد",
     "mobileBottomBar": "أزرار الحصة",

@@ -145,6 +145,18 @@ pub struct SessionPublic {
     pub created_at: DateTime<Utc>,
 }
 
+/// In-progress sessions in active public rooms, with host / enrollment hints for the Live hub.
+#[derive(Debug, Serialize)]
+pub struct SessionLivePublicItem {
+    #[serde(flatten)]
+    pub session: SessionPublic,
+    pub is_room_teacher: bool,
+    /// Student's enrollment in this room: `approved` | `pending` | `rejected`, or `None` if not enrolled.
+    pub my_enrollment_status: Option<String>,
+    pub requires_approval: bool,
+    pub enrollment_open: bool,
+}
+
 #[derive(Serialize)]
 pub struct CreateSessionsResponse {
     pub sessions: Vec<SessionPublic>,

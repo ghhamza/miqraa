@@ -156,6 +156,15 @@ export interface SessionPublic {
   created_at: string;
 }
 
+/** GET /api/sessions/live-public — in-progress sessions in active public rooms. */
+export interface SessionLivePublicItem extends SessionPublic {
+  is_room_teacher: boolean;
+  /** Student enrollment in this room; null if not enrolled. */
+  my_enrollment_status: "approved" | "pending" | "rejected" | null;
+  requires_approval: boolean;
+  enrollment_open: boolean;
+}
+
 export interface CreateSessionsResponse {
   sessions: SessionPublic[];
   count: number;

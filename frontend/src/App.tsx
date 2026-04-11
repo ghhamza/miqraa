@@ -20,12 +20,14 @@ import { CalendarPage } from "./pages/sessions/CalendarPage";
 import { SessionDetailPage } from "./pages/sessions/SessionDetailPage";
 import { StudentRecitationPage } from "./pages/sessions/StudentRecitationPage";
 import { LiveSessionPage } from "./pages/sessions/LiveSessionPage";
+import { LiveSessionsPage } from "./pages/sessions/LiveSessionsPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { LiveSessionsProvider } from "./contexts/LiveSessionsContext";
 
 /** Radix `useDirection()` defaults to LTR unless this provider is set; it does not read `document.dir`. */
 function RadixDirectionProvider({ children }: { children: ReactNode }) {
@@ -88,6 +90,7 @@ const router = createBrowserRouter([
         element: <StudentRecitationPage />,
       },
       { path: "recitations", element: <RecitationsPage /> },
+      { path: "live", element: <LiveSessionsPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "students/:id/progress", element: <StudentProgressPage /> },
       { path: "mushaf", element: <Navigate to="/mushaf/1" replace /> },
@@ -110,9 +113,11 @@ export default function App() {
   return (
     <RadixDirectionProvider>
       <TooltipProvider delayDuration={300} skipDelayDuration={200}>
-        <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
-          <RouterWithAuth />
-        </div>
+        <LiveSessionsProvider>
+          <div className="flex min-h-[100dvh] w-full min-w-0 flex-1 flex-col">
+            <RouterWithAuth />
+          </div>
+        </LiveSessionsProvider>
       </TooltipProvider>
     </RadixDirectionProvider>
   );

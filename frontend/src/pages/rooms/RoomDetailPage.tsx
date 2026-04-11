@@ -37,6 +37,7 @@ import { RecentRecitationsList } from "../../components/recitations/RecentRecita
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
+import { sessionNavigatePath } from "../../lib/sessionNav";
 import {
   calendarGridEnd,
   calendarGridStart,
@@ -696,7 +697,7 @@ export function RoomDetailPage() {
                               key={s.id}
                               session={s}
                               compact
-                              onClick={() => navigate(`/sessions/${s.id}`)}
+                              onClick={() => navigate(sessionNavigatePath(s))}
                             />
                           ))}
                           {daySessions.length > 3 ? (
@@ -787,7 +788,7 @@ export function RoomDetailPage() {
                 {sessions.map((s) => (
                   <li key={s.id}>
                     <Link
-                      to={`/sessions/${s.id}`}
+                      to={sessionNavigatePath(s)}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-primary)]/30"
                     >
                       <div>

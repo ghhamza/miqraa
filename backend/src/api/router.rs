@@ -137,6 +137,10 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::sessions::upcoming),
         )
         .route(
+            "/api/sessions/live-public",
+            get(handlers::sessions::list_live_public_sessions),
+        )
+        .route(
             "/api/sessions/group/{group_id}",
             delete(handlers::sessions::delete_recurrence_group),
         )
