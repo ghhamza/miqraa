@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::{
     extract::{Path, Query, State},
@@ -442,7 +442,7 @@ pub async fn update_recitation(
     let surah = req.surah.unwrap_or(existing.surah);
     let ayah_start = req.ayah_start.unwrap_or(existing.ayah_start);
     let ayah_end = req.ayah_end.unwrap_or(existing.ayah_end);
-    if surah < 1 || surah > 114 || ayah_start < 1 || ayah_start > ayah_end {
+    if !(1..=114).contains(&surah) || ayah_start < 1 || ayah_start > ayah_end {
         return Err(StatusCode::BAD_REQUEST);
     }
     let grade_val: Option<&str> = match &req.grade {

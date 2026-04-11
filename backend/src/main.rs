@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use std::sync::Arc;
 
@@ -23,7 +23,8 @@ use chrono::Utc;
 use crate::api::ws::messages::ServerMessage;
 use crate::api::ws::signaling::on_session_ended;
 use crate::rooms::RoomManager;
-use crate::sfu::{MediaService, SfuServerEvent, WebRtcSfu};
+use crate::config::MediaBackend;
+use crate::sfu::{MediaService, MediasoupMediaService, SfuServerEvent, WebRtcSfu};
 
 #[derive(Parser)]
 #[command(name = "miqraa-backend")]
@@ -100,6 +101,8 @@ async fn run_server() -> Result<()> {
 
     let config = config::AppConfig::load()?;
 
+    tracing::info!(backend = ?config.media_backend, "initializing media service");
+
     tracing::debug!(
         stun_server = %config.stun_server,
         recordings_path = %config.recordings_path,
@@ -115,8 +118,17 @@ async fn run_server() -> Result<()> {
 
     let rooms = Arc::new(RoomManager::new());
     let (sfu_tx, mut sfu_rx) = tokio::sync::mpsc::unbounded_channel::<SfuServerEvent>();
-    let media_service: Arc<dyn MediaService> =
-        Arc::new(WebRtcSfu::new(sfu_tx, config.stun_server.clone()));
+    let media_service: Arc<dyn MediaService> = match config.media_backend {
+        MediaBackend::WebrtcRs => Arc::new(WebRtcSfu::new(sfu_tx, config.stun_server.clone())),
+        MediaBackend::Mediasoup => {
+            drop(sfu_tx);
+            Arc::new(MediasoupMediaService::new(
+                config.mediasoup_announced_ip.clone(),
+                config.mediasoup_rtc_min_port,
+                config.mediasoup_rtc_max_port,
+            ))
+        }
+    };
     let rooms_for_sfu = rooms.clone();
     tokio::spawn(async move {
         while let Some(ev) = sfu_rx.recv().await {

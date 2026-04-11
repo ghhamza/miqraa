@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionWebSocketUrl } from "../lib/wsUrl";
@@ -52,6 +52,24 @@ export interface UseSessionWebSocketOptions {
   onJoinRejected?: (message: string) => void;
   /** WebSocket recovered after reconnecting (for toast). */
   onReconnected?: () => void;
+  onMsRtpCapabilities?: (rtpCapabilities: unknown) => void;
+  onMsTransportCreated?: (transport: {
+    id: string;
+    iceParameters: unknown;
+    iceCandidates: unknown;
+    dtlsParameters: unknown;
+  }) => void;
+  onMsTransportConnected?: (transportId: string) => void;
+  onMsProduced?: (producerId: string) => void;
+  onMsConsumed?: (consumer: {
+    id: string;
+    producerId: string;
+    kind: string;
+    rtpParameters: unknown;
+  }) => void;
+  onMsConsumerResumed?: (consumerId: string) => void;
+  onMsNewProducer?: (info: { producerId: string; userId: string; kind: string }) => void;
+  onMsProducerClosed?: (producerId: string) => void;
 }
 
 export type SessionWsStatus = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
@@ -79,6 +97,13 @@ export interface UseSessionWebSocketReturn {
     annotation_kind: string;
   }) => void;
   sendRemoveAnnotation: (annotationId: string) => void;
+  sendMsGetRtpCapabilities: () => void;
+  sendMsCreateTransport: (direction: "send" | "recv") => void;
+  sendMsConnectTransport: (transportId: string, dtlsParameters: unknown) => void;
+  sendMsProduce: (transportId: string, kind: "audio", rtpParameters: unknown) => void;
+  sendMsConsume: (transportId: string, producerId: string, rtpCapabilities: unknown) => void;
+  sendMsResumeConsumer: (consumerId: string) => void;
+  sendMsCloseProducer: (producerId: string) => void;
   disconnect: () => void;
 }
 
@@ -90,6 +115,21 @@ function parseServerMessage(raw: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Recursively rename snake_case keys to camelCase for mediasoup-client JSON shapes from the server. */
+function jsonKeysToCamelCase(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(jsonKeysToCamelCase);
+  if (typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const camel = k.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
+      out[camel] = jsonKeysToCamelCase(v);
+    }
+    return out;
+  }
+  return value;
 }
 
 export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSessionWebSocketReturn {
@@ -220,6 +260,81 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     },
     [],
   );
+
+  const sendMsGetRtpCapabilities = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ms-get-rtp-capabilities" }));
+    }
+  }, []);
+
+  const sendMsCreateTransport = useCallback((direction: "send" | "recv") => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ms-create-transport", direction }));
+    }
+  }, []);
+
+  const sendMsConnectTransport = useCallback((transportId: string, dtlsParameters: unknown) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "ms-connect-transport",
+          transport_id: transportId,
+          dtls_parameters: dtlsParameters,
+        }),
+      );
+    }
+  }, []);
+
+  const sendMsProduce = useCallback(
+    (transportId: string, kind: "audio", rtpParameters: unknown) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "ms-produce",
+            transport_id: transportId,
+            kind,
+            rtp_parameters: rtpParameters,
+          }),
+        );
+      }
+    },
+    [],
+  );
+
+  const sendMsConsume = useCallback(
+    (transportId: string, producerId: string, rtpCapabilities: unknown) => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "ms-consume",
+            transport_id: transportId,
+            producer_id: producerId,
+            rtp_capabilities: rtpCapabilities,
+          }),
+        );
+      }
+    },
+    [],
+  );
+
+  const sendMsResumeConsumer = useCallback((consumerId: string) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ms-resume-consumer", consumer_id: consumerId }));
+    }
+  }, []);
+
+  const sendMsCloseProducer = useCallback((producerId: string) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ms-close-producer", producer_id: producerId }));
+    }
+  }, []);
 
   const disconnect = useCallback(() => {
     intentionalClose.current = true;
@@ -375,6 +490,73 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
             }
             break;
           }
+          case "ms-rtp-capabilities": {
+            const caps = msg.rtp_capabilities;
+            if (caps !== undefined && caps !== null && o.onMsRtpCapabilities) {
+              o.onMsRtpCapabilities(jsonKeysToCamelCase(caps));
+            }
+            break;
+          }
+          case "ms-transport-created": {
+            const id = msg.id as string | undefined;
+            if (!id) break;
+            const iceParameters = msg.ice_parameters;
+            const iceCandidates = msg.ice_candidates;
+            const dtlsParameters = msg.dtls_parameters;
+            if (o.onMsTransportCreated) {
+              o.onMsTransportCreated({
+                id,
+                iceParameters: jsonKeysToCamelCase(iceParameters),
+                iceCandidates: jsonKeysToCamelCase(iceCandidates),
+                dtlsParameters: jsonKeysToCamelCase(dtlsParameters),
+              });
+            }
+            break;
+          }
+          case "ms-transport-connected": {
+            const tid = msg.transport_id as string | undefined;
+            if (tid && o.onMsTransportConnected) o.onMsTransportConnected(tid);
+            break;
+          }
+          case "ms-produced": {
+            const pid = msg.producer_id as string | undefined;
+            if (pid && o.onMsProduced) o.onMsProduced(pid);
+            break;
+          }
+          case "ms-consumed": {
+            const cid = msg.id as string | undefined;
+            const producerId = msg.producer_id as string | undefined;
+            const kind = msg.kind as string | undefined;
+            const rtpParameters = msg.rtp_parameters;
+            if (cid && producerId && kind && o.onMsConsumed) {
+              o.onMsConsumed({
+                id: cid,
+                producerId,
+                kind,
+                rtpParameters: jsonKeysToCamelCase(rtpParameters),
+              });
+            }
+            break;
+          }
+          case "ms-consumer-resumed": {
+            const consumerId = msg.consumer_id as string | undefined;
+            if (consumerId && o.onMsConsumerResumed) o.onMsConsumerResumed(consumerId);
+            break;
+          }
+          case "ms-new-producer": {
+            const producerId = msg.producer_id as string | undefined;
+            const userId = msg.user_id as string | undefined;
+            const kind = msg.kind as string | undefined;
+            if (producerId && userId && kind && o.onMsNewProducer) {
+              o.onMsNewProducer({ producerId, userId, kind });
+            }
+            break;
+          }
+          case "ms-producer-closed": {
+            const producerId = msg.producer_id as string | undefined;
+            if (producerId && o.onMsProducerClosed) o.onMsProducerClosed(producerId);
+            break;
+          }
           case "error": {
             const m = msg.message as string | undefined;
             if (!m) break;
@@ -460,6 +642,13 @@ export function useSessionWebSocket(options: UseSessionWebSocketOptions): UseSes
     sendGradeNotification,
     sendCreateAnnotation,
     sendRemoveAnnotation,
+    sendMsGetRtpCapabilities,
+    sendMsCreateTransport,
+    sendMsConnectTransport,
+    sendMsProduce,
+    sendMsConsume,
+    sendMsResumeConsumer,
+    sendMsCloseProducer,
     disconnect,
   };
 }

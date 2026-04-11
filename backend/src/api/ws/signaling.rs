@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::{
     extract::{
@@ -17,6 +17,8 @@ use uuid::Uuid;
 
 use crate::api::ws::messages::{ClientMessage, ServerMessage};
 use crate::api::AppState;
+use crate::config::MediaBackend;
+use crate::sfu::media_service::{ConsumeParams, DtlsParameters, ProduceParams, TransportDirection};
 use crate::auth::jwt::verify_token;
 use crate::sfu::ParticipantRole;
 
@@ -795,6 +797,299 @@ async fn handle_client_message(
                 .await
             {
                 tracing::warn!(error = %e, "media handle_ice_candidate");
+            }
+        }
+        ClientMessage::MsGetRtpCapabilities => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            match state
+                .media_service
+                .get_router_rtp_capabilities(session_id)
+                .await
+            {
+                Ok(router) => {
+                    let msg = ServerMessage::MsRtpCapabilities {
+                        rtp_capabilities: router.0,
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsCreateTransport { direction } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            let dir = match direction.to_ascii_lowercase().as_str() {
+                "send" => TransportDirection::Send,
+                "recv" => TransportDirection::Recv,
+                _ => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, "invalid transport direction")
+                        .await;
+                    return;
+                }
+            };
+            match state
+                .media_service
+                .create_webrtc_transport(session_id, user_id, dir)
+                .await
+            {
+                Ok(p) => {
+                    let msg = ServerMessage::MsTransportCreated {
+                        id: p.id,
+                        ice_parameters: p.ice_parameters,
+                        ice_candidates: p.ice_candidates,
+                        dtls_parameters: p.dtls_parameters,
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsConnectTransport {
+            transport_id,
+            dtls_parameters,
+        } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            match state
+                .media_service
+                .connect_webrtc_transport(
+                    session_id,
+                    user_id,
+                    transport_id.clone(),
+                    DtlsParameters(dtls_parameters.clone()),
+                )
+                .await
+            {
+                Ok(()) => {
+                    let msg = ServerMessage::MsTransportConnected {
+                        transport_id: transport_id.clone(),
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+
+                    if state.config.media_backend == MediaBackend::Mediasoup {
+                        let existing = state
+                            .media_service
+                            .list_other_producers(session_id, user_id)
+                            .await;
+                        for (owner_user_id, producer_id, kind) in existing {
+                            let catchup = ServerMessage::MsNewProducer {
+                                producer_id,
+                                user_id: owner_user_id,
+                                kind,
+                            };
+                            state.rooms.send_to(session_id, user_id, &catchup).await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsProduce {
+            transport_id,
+            kind,
+            rtp_parameters,
+        } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+
+            let is_teacher = user_id == teacher_id;
+            let active_reciter = state.media_service.get_active_reciter(session_id).await;
+            let is_active_reciter = Some(user_id) == active_reciter;
+
+            if !is_teacher && !is_active_reciter {
+                tracing::warn!(
+                    %session_id,
+                    %user_id,
+                    "produce rejected: not teacher and not active reciter"
+                );
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "Only the teacher and the active reciter may speak",
+                    )
+                    .await;
+                return;
+            }
+
+            let params = ProduceParams {
+                transport_id: transport_id.clone(),
+                kind: kind.clone(),
+                rtp_parameters: rtp_parameters.clone(),
+            };
+            match state.media_service.produce(session_id, user_id, params).await {
+                Ok(producer_id) => {
+                    let msg = ServerMessage::MsProduced {
+                        producer_id: producer_id.clone(),
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+                    let broadcast = ServerMessage::MsNewProducer {
+                        producer_id,
+                        user_id,
+                        kind: kind.clone(),
+                    };
+                    state
+                        .rooms
+                        .broadcast(session_id, &broadcast, Some(user_id))
+                        .await;
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsConsume {
+            transport_id,
+            producer_id,
+            rtp_capabilities,
+        } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            let params = ConsumeParams {
+                transport_id: transport_id.clone(),
+                producer_id: producer_id.clone(),
+                rtp_capabilities: rtp_capabilities.clone(),
+            };
+            match state.media_service.consume(session_id, user_id, params).await {
+                Ok(info) => {
+                    let msg = ServerMessage::MsConsumed {
+                        id: info.id,
+                        producer_id: info.producer_id,
+                        kind: info.kind,
+                        rtp_parameters: info.rtp_parameters,
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsResumeConsumer { consumer_id } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            match state
+                .media_service
+                .resume_consumer(session_id, user_id, consumer_id.clone())
+                .await
+            {
+                Ok(()) => {
+                    let msg = ServerMessage::MsConsumerResumed {
+                        consumer_id: consumer_id.clone(),
+                    };
+                    state.rooms.send_to(session_id, user_id, &msg).await;
+                }
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
+            }
+        }
+        ClientMessage::MsCloseProducer { producer_id } => {
+            if state.config.media_backend == MediaBackend::WebrtcRs {
+                state
+                    .rooms
+                    .send_error(
+                        session_id,
+                        user_id,
+                        "mediasoup protocol not available on webrtc-rs backend",
+                    )
+                    .await;
+                return;
+            }
+            match state
+                .media_service
+                .close_producer(session_id, user_id, producer_id.clone())
+                .await
+            {
+                Ok(()) => {}
+                Err(e) => {
+                    state
+                        .rooms
+                        .send_error(session_id, user_id, format!("{e}"))
+                        .await;
+                }
             }
         }
     }

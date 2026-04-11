@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use std::collections::BTreeSet;
 
@@ -505,6 +505,7 @@ pub async fn get_session(
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_session_tx(
     tx: &mut PgConnection,
     room_id: Uuid,
@@ -550,12 +551,12 @@ pub async fn create_session(
         return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
     }
 
-    let repeat_days_raw = req.repeat_days.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+    let repeat_days_raw = req.repeat_days.as_deref().unwrap_or(&[]);
     let is_repeat = !repeat_days_raw.is_empty();
 
     let mut days_set = BTreeSet::new();
     for &d in repeat_days_raw {
-        if d < 0 || d > 6 {
+        if !(0..=6).contains(&d) {
             return Err(json_err(StatusCode::BAD_REQUEST, "bad_request"));
         }
         days_set.insert(d);
@@ -591,7 +592,7 @@ pub async fn create_session(
             .begin()
             .await
             .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
-        let conn: &mut PgConnection = &mut *tx;
+        let conn: &mut PgConnection = &mut tx;
         let session_id = insert_session_tx(
             conn,
             req.room_id,
@@ -667,7 +668,7 @@ pub async fn create_session(
         .begin()
         .await
         .map_err(|_| json_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error"))?;
-    let conn: &mut PgConnection = &mut *tx;
+    let conn: &mut PgConnection = &mut tx;
     let mut created_ids: Vec<Uuid> = Vec::new();
 
     for scheduled_at in candidates {
@@ -794,13 +795,12 @@ pub async fn update_session(
     if new_duration <= 0 {
         return Err((StatusCode::BAD_REQUEST, Json(json!({ "code": "bad_request" }))));
     }
-    if req.scheduled_at.is_some() || req.duration_minutes.is_some() {
-        if has_overlap(&state.db, session.room_id, new_start, new_duration, Some(id))
+    if (req.scheduled_at.is_some() || req.duration_minutes.is_some())
+        && has_overlap(&state.db, session.room_id, new_start, new_duration, Some(id))
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
-        {
-            return Err((StatusCode::CONFLICT, Json(json!({ "code": "session_overlap" }))));
-        }
+    {
+        return Err((StatusCode::CONFLICT, Json(json!({ "code": "session_overlap" }))));
     }
     let status_bind: Option<&str> = match &req.status {
         None => None,

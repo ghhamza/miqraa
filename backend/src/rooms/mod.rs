@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025 Hamza Ghandouri
+// Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use std::collections::HashMap;
 
@@ -52,6 +52,7 @@ impl RoomManager {
     /// Adds or replaces a participant's outbound channel.
     /// `max_participants` is typically `max_students + 1` (teacher + students).
     /// If `user_id` is already connected, the old WebSocket receives an error and is replaced (latest tab wins).
+    #[allow(clippy::too_many_arguments)]
     pub async fn join_session(
         &self,
         session_id: Uuid,
@@ -94,11 +95,7 @@ impl RoomManager {
 
         let joined_at = Utc::now();
         let is_teacher = role == "teacher";
-        let is_muted = if is_teacher {
-            false
-        } else {
-            true
-        };
+        let is_muted = !is_teacher;
 
         session.participants.insert(
             user_id,
@@ -150,11 +147,7 @@ impl RoomManager {
                 continue;
             }
             if let Some(p) = session.participants.get_mut(&uid) {
-                if Some(uid) == reciter {
-                    p.is_muted = false;
-                } else {
-                    p.is_muted = true;
-                }
+                p.is_muted = Some(uid) != reciter;
             }
         }
     }
