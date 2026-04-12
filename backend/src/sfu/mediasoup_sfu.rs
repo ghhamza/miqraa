@@ -93,14 +93,13 @@ impl MediasoupMediaService {
     }
 
     fn listen_info(&self) -> Result<ListenInfo, MediaError> {
-        let ip: std::net::IpAddr = self
-            .announced_ip
-            .parse()
+        self.announced_ip
+            .parse::<std::net::IpAddr>()
             .map_err(|e| MediaError::Internal(format!("invalid APP_MEDIASOUP_ANNOUNCED_IP: {e}")))?;
         Ok(ListenInfo {
             protocol: Protocol::Udp,
-            ip,
-            announced_address: None,
+            ip: "0.0.0.0".parse().unwrap(),
+            announced_address: Some(self.announced_ip.clone()),
             expose_internal_ip: false,
             port: None,
             port_range: None,
