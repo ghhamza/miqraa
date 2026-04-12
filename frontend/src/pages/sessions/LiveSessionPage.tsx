@@ -1009,7 +1009,7 @@ export function LiveSessionPage() {
         {announce}
       </div>
       <div
-        className="pointer-events-none fixed bottom-2 left-2 z-[70] max-w-[min(100vw-1rem,22rem)] rounded border border-amber-200/80 bg-amber-50/95 px-2 py-1 font-mono text-[11px] leading-snug text-amber-950 shadow-sm"
+        className="pointer-events-none fixed left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[70] max-w-[min(100vw-1rem,22rem)] rounded border border-amber-200/80 bg-amber-50/95 px-2 py-1 font-mono text-[11px] leading-snug text-amber-950 shadow-sm"
         role="status"
         aria-live="polite"
       >
