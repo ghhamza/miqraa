@@ -147,7 +147,7 @@ function AdminDashboard({ user }: { user: User }) {
 }
 
 function TeacherDashboard({ user }: { user: User }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();

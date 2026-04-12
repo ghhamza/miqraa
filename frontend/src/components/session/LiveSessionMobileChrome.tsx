@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
+import type { SessionWsStatus } from "@/hooks/useSessionWebSocket";
+import type { NetworkQuality } from "@/hooks/useWebRTCConnection";
+
 import type { ReactNode } from "react";
 import {
   Circle,
