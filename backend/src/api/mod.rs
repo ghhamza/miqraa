@@ -8,6 +8,7 @@ pub mod types;
 pub mod ws;
 
 use crate::config::AppConfig;
+use crate::qf::config::QfConfig;
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
 use crate::sfu::MediaService;
@@ -21,6 +22,8 @@ pub struct AppState {
     #[allow(dead_code)]
     pub storage: StorageService,
     pub config: AppConfig,
+    pub qf_config: QfConfig,
+    pub http: reqwest::Client,
     pub rooms: Arc<RoomManager>,
     pub media_service: Arc<dyn MediaService>,
 }
@@ -36,6 +39,8 @@ impl AppState {
         Self {
             db,
             storage,
+            qf_config: QfConfig::from_app_config(&config),
+            http: reqwest::Client::new(),
             config,
             rooms,
             media_service,

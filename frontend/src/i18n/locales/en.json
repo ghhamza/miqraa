@@ -49,7 +49,29 @@
     "loginFailed": "Invalid email or password.",
     "accountType": "Account type",
     "createAccount": "Create account",
-    "newAccountSubtitle": "Create a new account"
+    "newAccountSubtitle": "Create a new account",
+    "or": "or",
+    "continueWithQuranFoundation": "Continue with Quran.Foundation",
+    "qfCallback": {
+      "verifying": "Verifying sign-in...",
+      "failed": "Quran.Foundation sign-in failed",
+      "linkedSuccess": "Quran.Foundation account linked",
+      "retry": "Try again",
+      "invalidState": "Sign-in request expired, please try again",
+      "nonceMismatch": "Sign-in could not be verified",
+      "alreadyLinked": "This account is already linked to another user"
+    },
+    "roleSelection": {
+      "title": "Choose your role in Miqraa",
+      "subtitle": "You can change this later from your account settings",
+      "student": "Student",
+      "studentDesc": "Learn Quran and take lessons from teachers",
+      "teacher": "Teacher",
+      "teacherDesc": "Create halaqat and teach students",
+      "continue": "Continue",
+      "selectFirst": "Please select a role first",
+      "saveFailed": "Could not save your choice, please try again"
+    }
   },
   "nav": {
     "home": "Home",
@@ -319,6 +341,16 @@
     "fr": "Français",
     "label": "Language"
   },
+  "settings": {
+    "qf": {
+      "title": "Quran.Foundation",
+      "description": "Link your account to sync reading sessions and streaks with Quran.com",
+      "linkedAs": "Linked as",
+      "link": "Link account",
+      "unlink": "Unlink",
+      "unlinkConfirm": "Are you sure you want to unlink your Quran.Foundation account?"
+    }
+  },
   "errors": {
     "server_error": "Server error",
     "not_found": "Not found",
@@ -351,7 +383,13 @@
     "students_only": "This action is for students only",
     "not_pending": "Request is not pending",
     "weak_password": "Password must be at least 8 characters.",
-    "wrong_password": "Current password is incorrect."
+    "wrong_password": "Current password is incorrect.",
+    "qf_invalid_state": "Sign-in request expired, please try again",
+    "qf_nonce_mismatch": "Sign-in could not be verified",
+    "qf_account_already_linked_to_other_user": "This account is already linked to another user",
+    "role_selection_required": "Please select your role to continue",
+    "role_already_selected": "Role was already selected",
+    "invalid_role": "Invalid role selected"
   },
   "placeholder": {
     "calendar": "Calendar"

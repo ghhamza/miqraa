@@ -341,6 +341,14 @@ pub async fn create_room(
     Json(req): Json<CreateRoomRequest>,
 ) -> Result<Json<RoomPublic>, StatusCode> {
     require_teacher_or_admin(&auth)?;
+    let role_pending: bool = sqlx::query_scalar("SELECT role_selection_pending FROM users WHERE id = $1")
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if role_pending {
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     let name = req.name.trim();
     if name.is_empty() {

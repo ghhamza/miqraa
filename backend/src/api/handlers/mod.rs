@@ -10,3 +10,4 @@ pub mod rooms;
 pub mod schedules;
 pub mod sessions;
 pub mod users;
+pub mod qf;

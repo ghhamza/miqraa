@@ -73,6 +73,9 @@ pub async fn register(
         name: req.name,
         email,
         role: role.to_string(),
+        qf_linked: false,
+        qf_email: None,
+        role_selection_pending: false,
     };
 
     Ok(Json(AuthResponse { token, user }))
@@ -87,8 +90,9 @@ pub async fn login(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let row: (Uuid, String, String, String, String) = sqlx::query_as(
-        "SELECT id, name, email, password_hash, role::text FROM users WHERE lower(trim(email)) = $1",
+    let row: (Uuid, String, String, String, String, bool) = sqlx::query_as(
+        "SELECT id, name, email, password_hash, role::text, role_selection_pending \
+         FROM users WHERE lower(trim(email)) = $1",
     )
     .bind(&email)
     .fetch_one(&state.db)
@@ -107,18 +111,37 @@ pub async fn login(
         name: row.1,
         email: row.2,
         role: row.4,
+        qf_linked: false,
+        qf_email: None,
+        role_selection_pending: row.5,
     };
 
     Ok(Json(AuthResponse { token, user }))
 }
 
-pub async fn me(auth: AuthenticatedUser) -> Json<UserResponse> {
-    Json(UserResponse {
+pub async fn me(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<Json<UserResponse>, StatusCode> {
+    let row: (Option<String>, bool) = sqlx::query_as(
+        "SELECT qa.qf_email, u.role_selection_pending \
+         FROM users u \
+         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
+         WHERE u.id = $1",
+    )
+    .bind(auth.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(UserResponse {
         id: auth.id,
         name: auth.name,
         email: auth.email,
         role: auth.role,
-    })
+        qf_linked: row.0.is_some(),
+        qf_email: row.0,
+        role_selection_pending: row.1,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -161,11 +184,117 @@ pub async fn update_profile(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let row: (Option<String>, bool) = sqlx::query_as(
+        "SELECT qa.qf_email, u.role_selection_pending \
+         FROM users u \
+         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
+         WHERE u.id = $1",
+    )
+    .bind(auth.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(Json(UserResponse {
         id: auth.id,
         name: name.to_string(),
         email,
         role: auth.role,
+        qf_linked: row.0.is_some(),
+        qf_email: row.0,
+        role_selection_pending: row.1,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct RoleSelectionRequest {
+    pub role: String,
+}
+
+pub async fn role_selection(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(req): Json<RoleSelectionRequest>,
+) -> Result<Json<UserResponse>, (StatusCode, Json<ApiMessage>)> {
+    let pending: bool = sqlx::query_scalar("SELECT role_selection_pending FROM users WHERE id = $1")
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    if !pending {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: "Role already selected",
+                code: "role_already_selected",
+            }),
+        ));
+    }
+
+    let role = match req.role.as_str() {
+        "student" | "teacher" => req.role.as_str(),
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiMessage {
+                    message: "Invalid role",
+                    code: "invalid_role",
+                }),
+            ));
+        }
+    };
+
+    sqlx::query("UPDATE users SET role = $1::user_role, role_selection_pending = FALSE WHERE id = $2")
+        .bind(role)
+        .bind(auth.id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "خطأ في الخادم",
+                    code: "server_error",
+                }),
+            )
+        })?;
+
+    let row: (String, String, String, Option<String>, bool) = sqlx::query_as(
+        "SELECT u.name, u.email, u.role::text, qa.qf_email, u.role_selection_pending \
+         FROM users u \
+         LEFT JOIN qf_accounts qa ON qa.user_id = u.id \
+         WHERE u.id = $1",
+    )
+    .bind(auth.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "خطأ في الخادم",
+                code: "server_error",
+            }),
+        )
+    })?;
+
+    Ok(Json(UserResponse {
+        id: auth.id,
+        name: row.0,
+        email: row.1,
+        role: row.2,
+        qf_linked: row.3.is_some(),
+        qf_email: row.3,
+        role_selection_pending: row.4,
     }))
 }
 

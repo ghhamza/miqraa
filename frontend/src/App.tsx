@@ -7,7 +7,10 @@ import { useTranslation } from "react-i18next";
 import { Direction } from "radix-ui";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
+import { QfCallbackPage } from "./pages/auth/QfCallbackPage";
+import { RoleSelectionPage } from "./pages/auth/RoleSelectionPage";
 import { ProtectedRoute } from "./components/ui/ProtectedRoute";
+import { RoleSelectionGuard } from "./components/auth/RoleSelectionGuard";
 import { AdminRoute } from "./components/ui/AdminRoute";
 import { AppLayout } from "./components/layout/AppLayout";
 import { HomePage } from "./pages/HomePage";
@@ -24,6 +27,7 @@ import { LiveSessionsPage } from "./pages/sessions/LiveSessionsPage";
 import { RecitationsPage } from "./pages/recitations/RecitationsPage";
 import { StudentProgressPage } from "./pages/recitations/StudentProgressPage";
 import { ProfilePage } from "./pages/profile/ProfilePage";
+import { AccountLinksPage } from "./pages/settings/AccountLinksPage";
 import { MushafPage } from "./pages/mushaf/MushafPage";
 import { useAuthStore } from "./stores/authStore";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -40,11 +44,22 @@ function RadixDirectionProvider({ children }: { children: ReactNode }) {
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
+  { path: "/auth/qf/callback", element: <QfCallbackPage /> },
+  {
+    path: "/auth/role-selection",
+    element: (
+      <ProtectedRoute>
+        <RoleSelectionPage />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: "/sessions/:id/live",
     element: (
       <ProtectedRoute>
-        <LiveSessionPage />
+        <RoleSelectionGuard>
+          <LiveSessionPage />
+        </RoleSelectionGuard>
       </ProtectedRoute>
     ),
   },
@@ -52,7 +67,9 @@ const router = createBrowserRouter([
     path: "/",
     element: (
       <ProtectedRoute>
-        <AppLayout />
+        <RoleSelectionGuard>
+          <AppLayout />
+        </RoleSelectionGuard>
       </ProtectedRoute>
     ),
     children: [
@@ -92,6 +109,7 @@ const router = createBrowserRouter([
       { path: "recitations", element: <RecitationsPage /> },
       { path: "live", element: <LiveSessionsPage /> },
       { path: "profile", element: <ProfilePage /> },
+      { path: "settings", element: <AccountLinksPage /> },
       { path: "students/:id/progress", element: <StudentProgressPage /> },
       { path: "mushaf", element: <Navigate to="/mushaf/1" replace /> },
       { path: "mushaf/:page", element: <MushafPage /> },

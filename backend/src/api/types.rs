@@ -12,6 +12,9 @@ pub struct UserResponse {
     pub name: String,
     pub email: String,
     pub role: String,
+    pub qf_linked: bool,
+    pub qf_email: Option<String>,
+    pub role_selection_pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

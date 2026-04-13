@@ -13,6 +13,7 @@ mod auth;
 mod config;
 mod db;
 mod models;
+mod qf;
 mod riwaya;
 mod rooms;
 mod services;
@@ -160,6 +161,20 @@ async fn run_server() -> Result<()> {
     });
 
     let state = api::AppState::new(db_pool, storage, config.clone(), rooms, media_service);
+    let cleanup_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            match sqlx::query("DELETE FROM qf_oauth_states WHERE expires_at < NOW()")
+                .execute(&cleanup_state.db)
+                .await
+            {
+                Ok(done) => tracing::debug!(rows_deleted = done.rows_affected(), "deleted expired qf oauth states"),
+                Err(err) => tracing::debug!(error = %err, "failed to cleanup qf oauth states"),
+            }
+        }
+    });
 
     let idle_state = state.clone();
     tokio::spawn(async move {

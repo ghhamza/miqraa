@@ -27,6 +27,11 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::auth::me).put(handlers::auth::update_profile),
         )
         .route("/api/auth/password", put(handlers::auth::change_password))
+        .route("/api/auth/role-selection", post(handlers::auth::role_selection))
+        .route("/api/auth/qf/start", get(handlers::qf::start))
+        .route("/api/auth/qf/exchange", post(handlers::qf::exchange))
+        .route("/api/auth/qf/unlink", post(handlers::qf::unlink))
+        .route("/api/auth/qf/debug", get(handlers::qf::debug_qf))
         .route("/api/users/stats", get(handlers::users::stats))
         .route(
             "/api/users",

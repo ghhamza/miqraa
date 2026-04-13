@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, LogOut, Menu, ScrollText, User } from "lucide-react";
+import { BookOpen, Link as LinkIcon, LogOut, Menu, ScrollText, User } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
@@ -118,6 +118,7 @@ export function AppLayout() {
       recitations: p === "/recitations",
       live: p === "/live",
       profile: p === "/profile",
+      settings: p === "/settings",
     };
   }, [location.pathname]);
 
@@ -237,6 +238,16 @@ export function AppLayout() {
           <span className="inline-flex items-center gap-2">
             <User className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             {t("nav.profile")}
+          </span>
+        </NavLink>
+        <NavLink
+          to="/settings"
+          className={cn(navLinkClassName(navActive.settings), linkWrap)}
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <span className="inline-flex items-center gap-2">
+            <LinkIcon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            Quran.Foundation
           </span>
         </NavLink>
       </div>
@@ -411,6 +422,13 @@ export function AppLayout() {
                 >
                   <User className="h-4 w-4" />
                   {t("nav.profile")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2"
+                  onClick={() => navigate("/settings")}
+                >
+                  <LinkIcon className="h-4 w-4" />
+                  {t("settings.qf.title")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"

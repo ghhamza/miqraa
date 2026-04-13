@@ -6,6 +6,9 @@ export interface User {
   name: string;
   email: string;
   role: "student" | "teacher" | "admin";
+  qf_linked: boolean;
+  qf_email: string | null;
+  role_selection_pending: boolean;
 }
 
 /** Full user row from admin APIs */
