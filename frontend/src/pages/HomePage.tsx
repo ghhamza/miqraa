@@ -24,6 +24,7 @@ import { UpcomingSessionsWidget, sessionCountdownLabel } from "../components/ses
 import { RecentRecitationsList } from "../components/recitations/RecentRecitationsList";
 import { GradeDistributionBar } from "../components/recitations/GradeDistributionBar";
 import { SurahProgressRing } from "../components/recitations/SurahProgressRing";
+import { SurahProgressGrid } from "../components/recitations/SurahProgressGrid";
 import { useLocaleDate } from "../hooks/useLocaleDate";
 import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
@@ -404,10 +405,22 @@ function StudentDashboard({ user }: { user: User }) {
       meta={dateLine}
       description={t("home.welcomeSubtitle")}
       contentClassName="space-y-8"
+      actions={
+        <Button asChild variant="primary" size="lg">
+          <Link to={`/students/${user.id}/progress`}>{t("home.myProgress")}</Link>
+        </Button>
+      }
     >
       <LiveNowDashboardCard />
       {progress ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.progressOverview")}</h2>
+            <Button asChild variant="secondary" size="sm">
+              <Link to={`/students/${user.id}/progress`}>{t("home.viewFullProgress")}</Link>
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
             <SurahProgressRing covered={surahCount} />
             <div>
@@ -437,6 +450,7 @@ function StudentDashboard({ user }: { user: User }) {
             </p>
           </div>
         </div>
+        </section>
       ) : (
         <p className="text-sm text-[var(--color-text-muted)]">{t("home.statsLoadError")}</p>
       )}
@@ -454,6 +468,21 @@ function StudentDashboard({ user }: { user: User }) {
               weak={gd.weak}
             />
           )}
+        </section>
+      ) : null}
+
+      {progress ? (
+        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.surahsCovered")}</h2>
+            <Link
+              to={`/students/${user.id}/progress`}
+              className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+            >
+              {t("home.viewFullProgress")}
+            </Link>
+          </div>
+          <SurahProgressGrid surahBestGrades={progress.surah_best_grades} />
         </section>
       ) : null}
 

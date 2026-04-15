@@ -273,10 +273,19 @@ export function RecitationsPage() {
       ]}
       title={t("recitations.title")}
       actions={
-        canAdd ? (
-          <Button type="button" variant="primary" onClick={() => setFormOpen(true)}>
-            {t("recitations.addRecitation")}
-          </Button>
+        (isStudent && user?.id) || canAdd ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {isStudent && user?.id ? (
+              <Button asChild variant={canAdd ? "secondary" : "primary"}>
+                <Link to={`/students/${user.id}/progress`}>{t("home.myProgress")}</Link>
+              </Button>
+            ) : null}
+            {canAdd ? (
+              <Button type="button" variant="primary" onClick={() => setFormOpen(true)}>
+                {t("recitations.addRecitation")}
+              </Button>
+            ) : null}
+          </div>
         ) : undefined
       }
     >

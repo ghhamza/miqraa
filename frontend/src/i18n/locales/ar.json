@@ -49,7 +49,29 @@
     "loginFailed": "البريد أو كلمة المرور غير صحيحة. حاول مرة أخرى.",
     "accountType": "نوع الحساب",
     "createAccount": "إنشاء حساب",
-    "newAccountSubtitle": "إنشاء حساب جديد"
+    "newAccountSubtitle": "إنشاء حساب جديد",
+    "or": "أو",
+    "continueWithQuranFoundation": "المتابعة عبر Quran.Foundation",
+    "qfCallback": {
+      "verifying": "جارٍ التحقق من تسجيل الدخول...",
+      "failed": "فشل تسجيل الدخول عبر Quran.Foundation",
+      "linkedSuccess": "تم ربط حساب Quran.Foundation بنجاح",
+      "retry": "المحاولة مرة أخرى",
+      "invalidState": "انتهت صلاحية طلب تسجيل الدخول، يرجى المحاولة مرة أخرى",
+      "nonceMismatch": "تعذّر التحقق من تسجيل الدخول",
+      "alreadyLinked": "هذا الحساب مرتبط بمستخدم آخر"
+    },
+    "roleSelection": {
+      "title": "اختر دورك في المقرأ",
+      "subtitle": "يمكنك تغيير ذلك لاحقاً من إعدادات حسابك",
+      "student": "طالب",
+      "studentDesc": "أتعلم القرآن وأتلقى الدروس من المعلمين",
+      "teacher": "معلّم",
+      "teacherDesc": "أُنشئ حلقاتي وأقوم بتدريس الطلاب",
+      "continue": "متابعة",
+      "selectFirst": "يرجى اختيار دور أولاً",
+      "saveFailed": "تعذّر حفظ الاختيار، حاول مرة أخرى"
+    }
   },
   "nav": {
     "home": "الرئيسية",
@@ -103,6 +125,8 @@
     "studentRecitationWidgetTitle": "تقدّمك في التلاوة",
     "teacherRecentRecitationsTitle": "آخر التلاوات المقيّمة",
     "viewFullProgress": "عرض التقدّم الكامل",
+    "myProgress": "تقدّمي",
+    "progressOverview": "نظرة على التقدّم",
     "surahsCoveredCount": "{{count}} / ١١٤ سورة",
     "dayStreak": "{{days}} يومًا متتاليًا",
     "lastGradeLabel": "آخر تقييم",
@@ -319,6 +343,16 @@
     "fr": "Français",
     "label": "اللغة"
   },
+  "settings": {
+    "qf": {
+      "title": "Quran.Foundation",
+      "description": "اربط حسابك لمزامنة جلسات القراءة والسلاسل مع Quran.com",
+      "linkedAs": "مرتبط بـ",
+      "link": "ربط الحساب",
+      "unlink": "إلغاء الربط",
+      "unlinkConfirm": "هل أنت متأكد من إلغاء ربط حساب Quran.Foundation؟"
+    }
+  },
   "errors": {
     "server_error": "خطأ في الخادم",
     "not_found": "غير موجود",
@@ -351,7 +385,13 @@
     "students_only": "هذا الإجراء للطلاب فقط",
     "not_pending": "الطلب ليس قيد الانتظار",
     "weak_password": "كلمة المرور يجب أن تكون 8 أحرف على الأقل.",
-    "wrong_password": "كلمة المرور الحالية غير صحيحة."
+    "wrong_password": "كلمة المرور الحالية غير صحيحة.",
+    "qf_invalid_state": "انتهت صلاحية طلب تسجيل الدخول، يرجى المحاولة مرة أخرى",
+    "qf_nonce_mismatch": "تعذّر التحقق من تسجيل الدخول",
+    "qf_account_already_linked_to_other_user": "هذا الحساب مرتبط بمستخدم آخر",
+    "role_selection_required": "يرجى اختيار دورك للمتابعة",
+    "role_already_selected": "تم اختيار الدور بالفعل",
+    "invalid_role": "الدور المحدد غير صالح"
   },
   "placeholder": {
     "calendar": "الجدول"

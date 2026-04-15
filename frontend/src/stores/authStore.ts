@@ -46,12 +46,18 @@ export const useAuthStore = create<AuthState>((set) => ({
         throw new Error("unauthorized");
       }
       const data = (await res.json()) as User;
+      const normalized: User = {
+        ...data,
+        qf_linked: Boolean(data.qf_linked),
+        qf_email: data.qf_email ?? null,
+        role_selection_pending: Boolean(data.role_selection_pending),
+      };
       // Ignore stale responses if login() replaced the token while this fetch was in flight
       if (localStorage.getItem("miqraa_token") !== tokenForThisRequest) {
         set({ isLoading: false });
         return;
       }
-      set({ user: data, isLoading: false });
+      set({ user: normalized, isLoading: false });
     } catch {
       // Do not wipe a successful login that happened while this request was in flight
       if (localStorage.getItem("miqraa_token") !== tokenForThisRequest) {

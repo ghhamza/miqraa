@@ -49,7 +49,29 @@
     "loginFailed": "E-mail ou mot de passe incorrect.",
     "accountType": "Type de compte",
     "createAccount": "Créer un compte",
-    "newAccountSubtitle": "Créer un nouveau compte"
+    "newAccountSubtitle": "Créer un nouveau compte",
+    "or": "ou",
+    "continueWithQuranFoundation": "Continuer avec Quran.Foundation",
+    "qfCallback": {
+      "verifying": "Vérification de la connexion...",
+      "failed": "Échec de la connexion Quran.Foundation",
+      "linkedSuccess": "Compte Quran.Foundation lié",
+      "retry": "Réessayer",
+      "invalidState": "La demande de connexion a expiré, veuillez réessayer",
+      "nonceMismatch": "La connexion n'a pas pu être vérifiée",
+      "alreadyLinked": "Ce compte est déjà lié à un autre utilisateur"
+    },
+    "roleSelection": {
+      "title": "Choisissez votre rôle dans Miqraa",
+      "subtitle": "Vous pourrez modifier ce choix plus tard depuis vos paramètres",
+      "student": "Étudiant",
+      "studentDesc": "Apprendre le Coran et suivre les cours des enseignants",
+      "teacher": "Enseignant",
+      "teacherDesc": "Créer des cercles et enseigner aux élèves",
+      "continue": "Continuer",
+      "selectFirst": "Veuillez choisir un rôle d'abord",
+      "saveFailed": "Impossible d'enregistrer votre choix, veuillez réessayer"
+    }
   },
   "nav": {
     "home": "Accueil",
@@ -103,6 +125,8 @@
     "studentRecitationWidgetTitle": "Votre progression en récitation",
     "teacherRecentRecitationsTitle": "Récitations notées récemment",
     "viewFullProgress": "Voir la progression complète",
+    "myProgress": "Ma progression",
+    "progressOverview": "Aperçu de la progression",
     "surahsCoveredCount": "{{count}} / 114 sourates",
     "dayStreak": "{{days}} jours consécutifs",
     "lastGradeLabel": "Dernière note",
@@ -319,6 +343,16 @@
     "fr": "Français",
     "label": "Langue"
   },
+  "settings": {
+    "qf": {
+      "title": "Quran.Foundation",
+      "description": "Liez votre compte pour synchroniser vos sessions de lecture et vos séries avec Quran.com",
+      "linkedAs": "Lié en tant que",
+      "link": "Lier le compte",
+      "unlink": "Délier",
+      "unlinkConfirm": "Êtes-vous sûr de vouloir délier votre compte Quran.Foundation ?"
+    }
+  },
   "errors": {
     "server_error": "Erreur serveur",
     "not_found": "Introuvable",
@@ -351,7 +385,13 @@
     "students_only": "Cette action est réservée aux étudiants",
     "not_pending": "La demande n'est pas en attente",
     "weak_password": "Le mot de passe doit contenir au moins 8 caractères.",
-    "wrong_password": "Le mot de passe actuel est incorrect."
+    "wrong_password": "Le mot de passe actuel est incorrect.",
+    "qf_invalid_state": "La demande de connexion a expiré, veuillez réessayer",
+    "qf_nonce_mismatch": "La connexion n'a pas pu être vérifiée",
+    "qf_account_already_linked_to_other_user": "Ce compte est déjà lié à un autre utilisateur",
+    "role_selection_required": "Veuillez choisir votre rôle pour continuer",
+    "role_already_selected": "Le rôle a déjà été choisi",
+    "invalid_role": "Rôle sélectionné invalide"
   },
   "placeholder": {
     "calendar": "Calendrier"
