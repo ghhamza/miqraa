@@ -127,6 +127,7 @@
     "viewFullProgress": "View full progress",
     "myProgress": "My progress",
     "progressOverview": "Progress overview",
+    "qfStreak": "Quran.com streak",
     "surahsCoveredCount": "{{count}} / 114 surahs",
     "dayStreak": "{{days}} day streak",
     "lastGradeLabel": "Last grade",
@@ -393,6 +394,8 @@
     "role_already_selected": "Role was already selected",
     "invalid_role": "Invalid role selected",
     "qf_upstream_error": "Could not reach Quran Foundation, please try again",
+    "qf_not_linked": "User has not linked their Quran.com account",
+    "qf_insufficient_scope": "Insufficient permissions, please re-link",
     "invalid_chapter": "Invalid surah number",
     "invalid_recitation": "Selected reciter not available"
   },
@@ -563,6 +566,10 @@
     "deletedStudent": "Deleted student",
     "selectStudent": "Select a student",
     "invalidRange": "Invalid ayah range for this surah",
+    "qfSynced": "Synced to Quran.com",
+    "qfSyncSuccess": "Synced to Quran.com",
+    "qfSyncFailed": "Could not sync to Quran.com",
+    "qfRelinkNeeded": "Re-link your Quran.com account to enable sync",
     "audio": {
       "listen": "Listen",
       "stop": "Stop",

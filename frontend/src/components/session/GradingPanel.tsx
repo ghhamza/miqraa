@@ -16,6 +16,8 @@ import type { Riwaya } from "../../lib/quranService";
 import { cn } from "@/lib/utils";
 import { FormSelect } from "@/components/ui/select";
 import { GradeBadge } from "../recitations/GradeBadge";
+import { waitForQfSyncStatus } from "../../lib/qfSync";
+import { QfSyncToast } from "../recitations/QfSyncToast";
 
 const GRADE_ORDER: RecitationGrade[] = ["excellent", "good", "needs_work", "weak"];
 const GRADE_COLORS: Record<RecitationGrade, string> = {
@@ -78,6 +80,7 @@ export function GradingPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okFlash, setOkFlash] = useState(false);
+  const [qfSyncToast, setQfSyncToast] = useState<{ kind: "success" | "error"; relinkNeeded?: boolean } | null>(null);
 
   useEffect(() => {
     if (highlightRange) {
@@ -151,6 +154,15 @@ export function GradingPanel({
       window.setTimeout(() => setOkFlash(false), 1800);
       onRecitationCreated?.(data);
       onGradeSubmitted(activeReciter.userId, grade, notes.trim() || undefined);
+      const sync = await waitForQfSyncStatus(data.id);
+      if (sync?.synced_at) {
+        setQfSyncToast({ kind: "success" });
+      } else if (sync?.error && sync.error !== "not_linked") {
+        setQfSyncToast({
+          kind: "error",
+          relinkNeeded: sync.error === "insufficient_scope",
+        });
+      }
     } catch (e: unknown) {
       setError(userFacingApiError(e));
     } finally {
@@ -165,6 +177,13 @@ export function GradingPanel({
       className={cn("border-t border-gray-100 bg-muted/20 px-4 py-4", className)}
       style={{ fontFamily: "var(--font-ui)" }}
     >
+      {qfSyncToast ? (
+        <QfSyncToast
+          kind={qfSyncToast.kind}
+          relinkNeeded={qfSyncToast.relinkNeeded}
+          onDismiss={() => setQfSyncToast(null)}
+        />
+      ) : null}
       {!hideTitle ? (
         <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t("liveSession.gradeRecitation")}</h3>
       ) : null}

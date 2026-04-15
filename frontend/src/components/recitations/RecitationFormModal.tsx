@@ -220,7 +220,7 @@ export function RecitationFormModal({
     setLoading(true);
     try {
       if (mode === "create") {
-        await api.post("recitations", {
+        await api.post<RecitationPublic>("recitations", {
           student_id: studentId,
           room_id: roomId || null,
           session_id: sessionId || null,

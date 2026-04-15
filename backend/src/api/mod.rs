@@ -10,6 +10,7 @@ pub mod ws;
 use crate::config::AppConfig;
 use crate::qf::config::QfConfig;
 use crate::qf::content::ContentApiClient;
+use crate::qf::user_api::UserApiClient;
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
 use crate::sfu::MediaService;
@@ -26,6 +27,7 @@ pub struct AppState {
     pub qf_config: QfConfig,
     pub http: reqwest::Client,
     pub content_api: Arc<ContentApiClient>,
+    pub user_api: Arc<UserApiClient>,
     pub rooms: Arc<RoomManager>,
     pub media_service: Arc<dyn MediaService>,
 }
@@ -41,12 +43,14 @@ impl AppState {
         let qf_config = QfConfig::from_app_config(&config);
         let http = reqwest::Client::new();
         let content_api = Arc::new(ContentApiClient::new(qf_config.clone(), http.clone()));
+        let user_api = Arc::new(UserApiClient::new(qf_config.clone(), http.clone(), db.clone()));
         Self {
             db,
             storage,
             qf_config,
             http,
             content_api,
+            user_api,
             config,
             rooms,
             media_service,

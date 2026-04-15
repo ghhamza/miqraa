@@ -4,13 +4,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
+import { api, userFacingApiError } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 
 type QfExchangeResponse =
   | { token: string; user: User; redirect_after?: string }
   | { linked: true; qf_email: string | null; redirect_after?: string };
+
+// OAuth state is one-time-use; share an in-flight exchange per code/state key
+// so strict-mode double effects don't trigger a second backend consume.
+const exchangeRequests = new Map<string, Promise<QfExchangeResponse>>();
 
 export function QfCallbackPage() {
   const { t } = useTranslation();
@@ -35,10 +39,21 @@ export function QfCallbackPage() {
       setError(initialError);
       return;
     }
+    const exchangeKey = `${code}:${state}`;
     let cancelled = false;
     void (async () => {
       try {
-        const { data } = await api.post<QfExchangeResponse>("auth/qf/exchange", { code, state });
+        let req = exchangeRequests.get(exchangeKey);
+        if (!req) {
+          req = api
+            .post<QfExchangeResponse>("auth/qf/exchange", { code, state })
+            .then((res) => res.data)
+            .finally(() => {
+              exchangeRequests.delete(exchangeKey);
+            });
+          exchangeRequests.set(exchangeKey, req);
+        }
+        const data = await req;
         if (cancelled) return;
         if ("token" in data) {
           login(data.token, data.user);
@@ -51,8 +66,8 @@ export function QfCallbackPage() {
         }
         await loadUser();
         navigate(data.redirect_after || "/settings", { replace: true });
-      } catch {
-        if (!cancelled) setError(t("auth.qfCallback.failed"));
+      } catch (err) {
+        if (!cancelled) setError(userFacingApiError(err, "auth.qfCallback.failed"));
       }
     })();
     return () => {

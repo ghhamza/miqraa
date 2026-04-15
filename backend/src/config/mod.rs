@@ -95,7 +95,7 @@ impl AppConfig {
             qf_client_secret: std::env::var("QF_CLIENT_SECRET").unwrap_or_default(),
             qf_redirect_uri: std::env::var("QF_REDIRECT_URI").unwrap_or_default().trim().to_string(),
             qf_scopes: std::env::var("QF_SCOPES")
-                .unwrap_or_else(|_| "openid offline_access reading_session streak user".into()),
+                .unwrap_or_else(|_| "openid offline_access reading_session streak activity_day user".into()),
             qf_audio_cdn_base_url: std::env::var("QF_AUDIO_CDN_BASE_URL")
                 .unwrap_or_else(|_| "https://audio.qurancdn.com".into()),
         })

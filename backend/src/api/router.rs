@@ -38,9 +38,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/qf/exchange", post(handlers::qf::exchange))
         .route("/api/auth/qf/unlink", post(handlers::qf::unlink))
         .route("/api/auth/qf/debug", get(handlers::qf::debug_qf))
+        .route("/api/qf/me/streak", get(handlers::qf::get_my_streak))
         .route(
             "/api/quran/recitations/{recitation_id}/by_chapter/{chapter}",
             get(handlers::qf::get_chapter_audio),
+        )
+        .route(
+            "/api/recitations/{id}/qf-sync",
+            get(handlers::qf::get_recitation_qf_sync),
         )
         .route("/api/users/stats", get(handlers::users::stats))
         .route(

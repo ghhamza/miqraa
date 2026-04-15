@@ -4,6 +4,7 @@
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use base64::Engine as _;
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 
 use super::config::QfConfig;
@@ -85,6 +86,14 @@ pub struct TokenResponse {
     pub token_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RefreshTokenResponse {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_in: i64,
+    pub scope: String,
+}
+
 pub async fn exchange_code(
     cfg: &QfConfig,
     http: &reqwest::Client,
@@ -145,4 +154,34 @@ pub fn decode_id_token_unverified(id_token: &str) -> Result<IdTokenClaims, ApiEr
         .map_err(|_| ApiError::bad_request("qf_invalid_id_token", "invalid id token payload"))?;
     serde_json::from_slice::<IdTokenClaims>(&decoded)
         .map_err(|_| ApiError::bad_request("qf_invalid_id_token", "invalid id token claims"))
+}
+
+pub async fn exchange_refresh_token(
+    cfg: &QfConfig,
+    http: &reqwest::Client,
+    refresh_token: &str,
+) -> Result<RefreshTokenResponse, anyhow::Error> {
+    let url = format!("{}/oauth2/token", cfg.auth_base_url);
+    let resp = http
+        .post(&url)
+        .basic_auth(&cfg.client_id, Some(&cfg.client_secret))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("scope", cfg.scopes.as_str()),
+        ])
+        .send()
+        .await
+        .context("qf refresh request failed")?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        tracing::warn!(qf_status = %status, "QF refresh token HTTP error");
+        return Err(anyhow!("qf refresh http {status}"));
+    }
+    let body: RefreshTokenResponse = resp
+        .json()
+        .await
+        .context("qf refresh json parse failed")?;
+    tracing::info!("QF token refreshed");
+    Ok(body)
 }

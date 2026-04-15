@@ -18,9 +18,10 @@ use crate::api::types::UserResponse;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
 use crate::qf::content::DEFAULT_RECITATION_ID;
+use crate::qf::user_api::SyncError;
 use crate::qf::{oauth, pkce};
 
-const QF_LOGIN_SCOPES: &str = "openid offline_access reading_session streak user";
+const QF_LOGIN_SCOPES: &str = "openid offline_access reading_session streak activity_day user";
 
 #[derive(Serialize)]
 pub struct QfErrorBody {
@@ -131,7 +132,11 @@ pub async fn start(
         &state.qf_config,
         &oauth::AuthorizeUrlParams {
             redirect_uri: state.qf_config.redirect_uri.clone(),
-            scope: QF_LOGIN_SCOPES.to_string(),
+            scope: if state.qf_config.scopes.trim().is_empty() {
+                QF_LOGIN_SCOPES.to_string()
+            } else {
+                state.qf_config.scopes.clone()
+            },
             state: state_token,
             nonce,
             code_challenge: pkce.code_challenge,
@@ -566,4 +571,62 @@ pub async fn debug_qf(State(state): State<AppState>) -> Result<Json<QfDebugRespo
         chapters_cached,
         default_recitation_id,
     }))
+}
+
+#[derive(Serialize)]
+pub struct MyStreakResponse {
+    pub days: i64,
+    pub longest: Option<i64>,
+}
+
+pub async fn get_my_streak(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> QfResult<Json<MyStreakResponse>> {
+    let data = state.user_api.get_streak(auth.id).await.map_err(|e| match e {
+        SyncError::NotLinked => qf_err(
+            StatusCode::NOT_FOUND,
+            "qf_not_linked",
+            "user has not linked QF account",
+        ),
+        SyncError::InsufficientScope => qf_err(
+            StatusCode::FORBIDDEN,
+            "qf_insufficient_scope",
+            "QF token missing required scope; relink account",
+        ),
+        other => qf_err(
+            StatusCode::BAD_GATEWAY,
+            "qf_upstream_error",
+            format!("could not fetch streak: {other}"),
+        ),
+    })?;
+    Ok(Json(MyStreakResponse {
+        days: data.days,
+        longest: data.longest,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct QfSyncStatus {
+    pub synced_at: Option<chrono::DateTime<Utc>>,
+    pub error: Option<String>,
+}
+
+pub async fn get_recitation_qf_sync(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<QfSyncStatus>, StatusCode> {
+    let row: Option<(Uuid, Uuid, Option<chrono::DateTime<Utc>>, Option<String>)> = sqlx::query_as(
+        "SELECT student_id, teacher_id, qf_synced_at, qf_sync_error FROM recitations WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (student, teacher, synced_at, error) = row.ok_or(StatusCode::NOT_FOUND)?;
+    if auth.role != "admin" && auth.id != student && auth.id != teacher {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json(QfSyncStatus { synced_at, error }))
 }

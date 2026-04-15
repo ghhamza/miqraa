@@ -209,6 +209,8 @@ pub struct RecitationPublic {
     pub turn_type: String,
     pub pages_count: Option<f64>,
     pub star_rating: Option<i16>,
+    pub qf_synced_at: Option<DateTime<Utc>>,
+    pub qf_sync_error: Option<String>,
 }
 
 #[derive(Serialize)]
