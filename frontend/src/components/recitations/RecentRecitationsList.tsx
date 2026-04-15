@@ -2,8 +2,10 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useTranslation } from "react-i18next";
+import { Check } from "lucide-react";
 import type { RecitationPublic } from "../../types";
 import { GradeBadge } from "./GradeBadge";
+import { AyahRangeAudioButton } from "./AyahRangeAudioButton";
 import { getSurahNameWithArabic } from "../../lib/quranService";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 
@@ -44,7 +46,19 @@ export function RecentRecitationsList({ items, showStudent }: RecentRecitationsL
               </p>
             ) : null}
           </div>
-          <GradeBadge grade={r.grade} />
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            {r.qf_synced_at ? (
+              <span
+                title={t("recitations.qfSynced")}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+              >
+                <Check size={10} />
+                Quran.com
+              </span>
+            ) : null}
+            <AyahRangeAudioButton surah={r.surah} ayahStart={r.ayah_start} ayahEnd={r.ayah_end} variant="icon" />
+            <GradeBadge grade={r.grade} />
+          </div>
         </li>
       ))}
     </ul>

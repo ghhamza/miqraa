@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-use axum::extract::{Query, State};
+use std::collections::HashMap;
+
+use axum::extract::{Path, Query, State};
 use axum::http::header::AUTHORIZATION;
-use axum::http::StatusCode;
-use axum::http::HeaderMap;
+use axum::http::header::CACHE_CONTROL;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::Json;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -15,9 +17,11 @@ use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::UserResponse;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
+use crate::qf::content::DEFAULT_RECITATION_ID;
+use crate::qf::user_api::SyncError;
 use crate::qf::{oauth, pkce};
 
-const QF_LOGIN_SCOPES: &str = "openid offline_access reading_session streak user";
+const QF_LOGIN_SCOPES: &str = "openid offline_access reading_session streak activity_day user";
 
 #[derive(Serialize)]
 pub struct QfErrorBody {
@@ -27,7 +31,11 @@ pub struct QfErrorBody {
 
 type QfResult<T> = Result<T, (StatusCode, Json<QfErrorBody>)>;
 
-fn qf_err(status: StatusCode, code: &'static str, message: impl Into<String>) -> (StatusCode, Json<QfErrorBody>) {
+fn qf_err(
+    status: StatusCode,
+    code: &'static str,
+    message: impl Into<String>,
+) -> (StatusCode, Json<QfErrorBody>) {
     (
         status,
         Json(QfErrorBody {
@@ -56,7 +64,11 @@ pub async fn start(
     let link = query.link.unwrap_or(false);
     let redirect_after = query.redirect_after.unwrap_or_else(|| "/".to_string());
     if !redirect_after.starts_with('/') {
-        return Err(qf_err(StatusCode::BAD_REQUEST, "qf_invalid_redirect_after", "redirect_after must be relative"));
+        return Err(qf_err(
+            StatusCode::BAD_REQUEST,
+            "qf_invalid_redirect_after",
+            "redirect_after must be relative",
+        ));
     }
 
     let link_to_user_id = if link {
@@ -64,9 +76,13 @@ pub async fn start(
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| qf_err(StatusCode::UNAUTHORIZED, "unauthorized", "login required"))?;
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or_else(|| qf_err(StatusCode::UNAUTHORIZED, "unauthorized", "invalid auth header"))?;
+        let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
+            qf_err(
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "invalid auth header",
+            )
+        })?;
         let claims = jwt::verify_token(token, &state.config.jwt_secret)
             .map_err(|_| qf_err(StatusCode::UNAUTHORIZED, "unauthorized", "invalid token"))?;
         let already_linked: bool =
@@ -74,9 +90,19 @@ pub async fn start(
                 .bind(claims.sub)
                 .fetch_one(&state.db)
                 .await
-                .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to query links"))?;
+                .map_err(|_| {
+                    qf_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "server_error",
+                        "failed to query links",
+                    )
+                })?;
         if already_linked {
-            return Err(qf_err(StatusCode::BAD_REQUEST, "qf_already_linked", "account already linked"));
+            return Err(qf_err(
+                StatusCode::BAD_REQUEST,
+                "qf_already_linked",
+                "account already linked",
+            ));
         }
         Some(claims.sub)
     } else {
@@ -106,7 +132,11 @@ pub async fn start(
         &state.qf_config,
         &oauth::AuthorizeUrlParams {
             redirect_uri: state.qf_config.redirect_uri.clone(),
-            scope: QF_LOGIN_SCOPES.to_string(),
+            scope: if state.qf_config.scopes.trim().is_empty() {
+                QF_LOGIN_SCOPES.to_string()
+            } else {
+                state.qf_config.scopes.clone()
+            },
             state: state_token,
             nonce,
             code_challenge: pkce.code_challenge,
@@ -134,16 +164,32 @@ pub async fn exchange(
     .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to load oauth state"))?;
 
     let (code_verifier, nonce, redirect_after, link_to_user_id, expires_at) =
-        row.ok_or_else(|| qf_err(StatusCode::BAD_REQUEST, "qf_invalid_state", "invalid oauth state"))?;
+        row.ok_or_else(|| {
+            qf_err(
+                StatusCode::BAD_REQUEST,
+                "qf_invalid_state",
+                "invalid oauth state",
+            )
+        })?;
 
     sqlx::query("DELETE FROM qf_oauth_states WHERE state = $1")
         .bind(&req.state)
         .execute(&state.db)
         .await
-        .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to consume oauth state"))?;
+        .map_err(|_| {
+            qf_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to consume oauth state",
+            )
+        })?;
 
     if expires_at < Utc::now() {
-        return Err(qf_err(StatusCode::BAD_REQUEST, "qf_state_expired", "oauth state expired"));
+        return Err(qf_err(
+            StatusCode::BAD_REQUEST,
+            "qf_state_expired",
+            "oauth state expired",
+        ));
     }
 
     let token = oauth::exchange_code(
@@ -156,24 +202,38 @@ pub async fn exchange(
     .await
     .map_err(|e| qf_err(e.status, e.code, e.message))?;
 
-    let id_token = token
-        .id_token
-        .as_deref()
-        .ok_or_else(|| qf_err(StatusCode::BAD_REQUEST, "qf_missing_id_token", "id_token missing"))?;
+    let id_token = token.id_token.as_deref().ok_or_else(|| {
+        qf_err(
+            StatusCode::BAD_REQUEST,
+            "qf_missing_id_token",
+            "id_token missing",
+        )
+    })?;
     let claims = oauth::decode_id_token_unverified(id_token)
         .map_err(|e| qf_err(e.status, e.code, e.message))?;
     if claims.nonce.as_deref() != Some(nonce.as_str()) {
-        return Err(qf_err(StatusCode::BAD_REQUEST, "qf_nonce_mismatch", "nonce mismatch"));
+        return Err(qf_err(
+            StatusCode::BAD_REQUEST,
+            "qf_nonce_mismatch",
+            "nonce mismatch",
+        ));
     }
     let expires_at = Utc::now() + Duration::seconds(token.expires_in.max(0));
     let redirect_after = redirect_after.unwrap_or_else(|| "/".to_string());
 
     if let Some(user_id) = link_to_user_id {
-        let owner: Option<Uuid> = sqlx::query_scalar("SELECT user_id FROM qf_accounts WHERE qf_sub = $1")
-            .bind(&claims.sub)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to check existing link"))?;
+        let owner: Option<Uuid> =
+            sqlx::query_scalar("SELECT user_id FROM qf_accounts WHERE qf_sub = $1")
+                .bind(&claims.sub)
+                .fetch_optional(&state.db)
+                .await
+                .map_err(|_| {
+                    qf_err(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "server_error",
+                        "failed to check existing link",
+                    )
+                })?;
         if let Some(existing_user_id) = owner {
             if existing_user_id != user_id {
                 return Err(qf_err(
@@ -227,12 +287,20 @@ pub async fn exchange(
     .bind(&claims.sub)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to find linked user"))?;
+    .map_err(|_| {
+        qf_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "server_error",
+            "failed to find linked user",
+        )
+    })?;
 
     let (user_row, created_new_user) = if let Some(user) = existing_qf_user {
         (user, false)
     } else {
-        let matched_user: Option<(Uuid, String, String, String, bool)> = if let Some(email) = claims.email.as_deref() {
+        let matched_user: Option<(Uuid, String, String, String, bool)> = if let Some(email) =
+            claims.email.as_deref()
+        {
             sqlx::query_as(
                 "SELECT id, name, email, role::text, role_selection_pending FROM users WHERE lower(trim(email)) = $1",
             )
@@ -258,8 +326,13 @@ pub async fn exchange(
                 .clone()
                 .unwrap_or_else(|| format!("qf-{}@miqraa.local", &claims.sub));
             let random_password = pkce::random_string(32);
-            let hash = password::hash_password(&random_password)
-                .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to hash password"))?;
+            let hash = password::hash_password(&random_password).map_err(|_| {
+                qf_err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "server_error",
+                    "failed to hash password",
+                )
+            })?;
             sqlx::query(
                 "INSERT INTO users (id, name, email, password_hash, role, role_selection_pending)
                  VALUES ($1,$2,$3,$4,'student'::user_role, TRUE)",
@@ -270,7 +343,13 @@ pub async fn exchange(
             .bind(&hash)
             .execute(&state.db)
             .await
-            .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to create user"))?;
+            .map_err(|_| {
+                qf_err(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "server_error",
+                    "failed to create user",
+                )
+            })?;
             ((id, name, email, "student".to_string(), true), true)
         }
     };
@@ -302,8 +381,14 @@ pub async fn exchange(
     .await
     .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to upsert qf account"))?;
 
-    let jwt_token = jwt::create_token(user_row.0, &user_row.3, &state.config.jwt_secret)
-        .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to create jwt"))?;
+    let jwt_token =
+        jwt::create_token(user_row.0, &user_row.3, &state.config.jwt_secret).map_err(|_| {
+            qf_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to create jwt",
+            )
+        })?;
     let user = UserResponse {
         id: user_row.0,
         name: user_row.1,
@@ -333,8 +418,96 @@ pub async fn unlink(
         .bind(auth.id)
         .execute(&state.db)
         .await
-        .map_err(|_| qf_err(StatusCode::INTERNAL_SERVER_ERROR, "server_error", "failed to unlink account"))?;
+        .map_err(|_| {
+            qf_err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to unlink account",
+            )
+        })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize)]
+pub struct ChapterAudioResponse {
+    pub chapter: i32,
+    pub recitation_id: i32,
+    /// Map of verse_key ("1:1") -> full CDN URL
+    pub audio_files: HashMap<String, String>,
+}
+
+pub async fn get_chapter_audio(
+    State(state): State<AppState>,
+    Path((recitation_id, chapter)): Path<(i32, i32)>,
+) -> QfResult<(HeaderMap, Json<ChapterAudioResponse>)> {
+    if !(1..=114).contains(&chapter) {
+        return Err(qf_err(
+            StatusCode::BAD_REQUEST,
+            "invalid_chapter",
+            "chapter must be 1-114",
+        ));
+    }
+    if recitation_id < 1 || recitation_id > 200 {
+        return Err(qf_err(
+            StatusCode::BAD_REQUEST,
+            "invalid_recitation",
+            "recitation_id out of range",
+        ));
+    }
+
+    let candidates: Vec<i32> = if recitation_id == DEFAULT_RECITATION_ID {
+        vec![DEFAULT_RECITATION_ID, 6, 7]
+    } else {
+        vec![recitation_id]
+    };
+    let mut chosen_recitation_id = recitation_id;
+    let mut map_opt: Option<HashMap<String, String>> = None;
+    let mut last_error: Option<anyhow::Error> = None;
+    for candidate in candidates {
+        match state
+            .content_api
+            .get_chapter_audio_files(chapter, candidate)
+            .await
+        {
+            Ok(map) => {
+                chosen_recitation_id = candidate;
+                map_opt = Some(map);
+                break;
+            }
+            Err(e) => {
+                last_error = Some(e);
+            }
+        }
+    }
+    let map = map_opt.ok_or_else(|| {
+        if let Some(e) = &last_error {
+            tracing::error!(
+                error = %e,
+                chapter,
+                requested_recitation_id = recitation_id,
+                "QF audio fetch failed"
+            );
+        }
+        qf_err(
+            StatusCode::BAD_GATEWAY,
+            "qf_upstream_error",
+            "failed to fetch audio from Quran Foundation",
+        )
+    })?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=86400"),
+    );
+    Ok((
+        headers,
+        Json(ChapterAudioResponse {
+            chapter,
+            recitation_id: chosen_recitation_id,
+            audio_files: map,
+        }),
+    ))
 }
 
 #[derive(Serialize)]
@@ -345,12 +518,46 @@ pub struct QfDebugResponse {
     qf_client_id: String,
     qf_redirect_uri: String,
     qf_scopes: String,
+    content_api_token_cached: bool,
+    content_api_token_expires_in_seconds: Option<u64>,
+    audio_cdn_base_url: String,
+    chapters_cached: Vec<i32>,
+    default_recitation_id: i32,
 }
 
 pub async fn debug_qf(State(state): State<AppState>) -> Result<Json<QfDebugResponse>, StatusCode> {
     if state.config.qf_env != "prelive" {
         return Err(StatusCode::NOT_FOUND);
     }
+    let content_state = state.content_api.debug_state().await;
+    let token_cached = content_state
+        .get("content_api_token_cached")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let token_expires_in_seconds = content_state
+        .get("content_api_token_expires_in_seconds")
+        .and_then(serde_json::Value::as_u64);
+    let audio_cdn_base_url = content_state
+        .get("audio_cdn_base_url")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let chapters_cached = content_state
+        .get("chapters_cached")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(serde_json::Value::as_i64)
+                .map(|n| n as i32)
+                .collect()
+        })
+        .unwrap_or_else(Vec::new);
+    let default_recitation_id = content_state
+        .get("default_recitation_id")
+        .and_then(serde_json::Value::as_i64)
+        .map(|v| v as i32)
+        .unwrap_or(DEFAULT_RECITATION_ID);
+
     Ok(Json(QfDebugResponse {
         qf_env: state.config.qf_env.clone(),
         qf_auth_base_url: state.config.qf_auth_base_url(),
@@ -358,5 +565,68 @@ pub async fn debug_qf(State(state): State<AppState>) -> Result<Json<QfDebugRespo
         qf_client_id: state.config.qf_client_id.clone(),
         qf_redirect_uri: state.config.qf_redirect_uri.clone(),
         qf_scopes: state.config.qf_scopes.clone(),
+        content_api_token_cached: token_cached,
+        content_api_token_expires_in_seconds: token_expires_in_seconds,
+        audio_cdn_base_url,
+        chapters_cached,
+        default_recitation_id,
     }))
+}
+
+#[derive(Serialize)]
+pub struct MyStreakResponse {
+    pub days: i64,
+    pub longest: Option<i64>,
+}
+
+pub async fn get_my_streak(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> QfResult<Json<MyStreakResponse>> {
+    let data = state.user_api.get_streak(auth.id).await.map_err(|e| match e {
+        SyncError::NotLinked => qf_err(
+            StatusCode::NOT_FOUND,
+            "qf_not_linked",
+            "user has not linked QF account",
+        ),
+        SyncError::InsufficientScope => qf_err(
+            StatusCode::FORBIDDEN,
+            "qf_insufficient_scope",
+            "QF token missing required scope; relink account",
+        ),
+        other => qf_err(
+            StatusCode::BAD_GATEWAY,
+            "qf_upstream_error",
+            format!("could not fetch streak: {other}"),
+        ),
+    })?;
+    Ok(Json(MyStreakResponse {
+        days: data.days,
+        longest: data.longest,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct QfSyncStatus {
+    pub synced_at: Option<chrono::DateTime<Utc>>,
+    pub error: Option<String>,
+}
+
+pub async fn get_recitation_qf_sync(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<QfSyncStatus>, StatusCode> {
+    let row: Option<(Uuid, Uuid, Option<chrono::DateTime<Utc>>, Option<String>)> = sqlx::query_as(
+        "SELECT student_id, teacher_id, qf_synced_at, qf_sync_error FROM recitations WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (student, teacher, synced_at, error) = row.ok_or(StatusCode::NOT_FOUND)?;
+    if auth.role != "admin" && auth.id != student && auth.id != teacher {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json(QfSyncStatus { synced_at, error }))
 }

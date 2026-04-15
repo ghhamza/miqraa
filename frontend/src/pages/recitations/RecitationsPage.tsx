@@ -20,6 +20,7 @@ import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
 import { Table } from "../../components/ui/Table";
 import { GradeBadge } from "../../components/recitations/GradeBadge";
+import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { SurahPicker } from "../../components/recitations/SurahPicker";
 import { DeleteRecitationModal } from "../../components/recitations/DeleteRecitationModal";
@@ -222,24 +223,31 @@ export function RecitationsPage() {
       {
         key: "actions",
         header: t("common.actions"),
-        render: (r: RecitationPublic) =>
-          canEditRow(r) ? (
-            <div className="flex flex-wrap justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-              <Button
-                type="button"
-                variant="secondary"
-                className="!py-1 !px-2 text-xs"
-                onClick={() => setEditRec(r)}
-              >
-                {t("common.edit")}
-              </Button>
-              <Button type="button" variant="danger" className="!py-1 !px-2 text-xs" onClick={() => setDeleteRec(r)}>
-                {t("common.delete")}
-              </Button>
-            </div>
-          ) : (
-            "—"
-          ),
+        render: (r: RecitationPublic) => (
+          <div className="flex flex-wrap items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+            <AyahRangeAudioButton surah={r.surah} ayahStart={r.ayah_start} ayahEnd={r.ayah_end} variant="icon" />
+            {canEditRow(r) ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!py-1 !px-2 text-xs"
+                  onClick={() => setEditRec(r)}
+                >
+                  {t("common.edit")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  className="!py-1 !px-2 text-xs"
+                  onClick={() => setDeleteRec(r)}
+                >
+                  {t("common.delete")}
+                </Button>
+              </>
+            ) : null}
+          </div>
+        ),
       },
     ];
     return base;

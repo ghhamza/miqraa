@@ -230,6 +230,8 @@ export interface RecitationPublic {
   turn_type: TurnType;
   pages_count: number | null;
   star_rating: number | null;
+  qf_synced_at: string | null;
+  qf_sync_error: string | null;
 }
 
 export type ErrorSeverity = "jali" | "khafi";

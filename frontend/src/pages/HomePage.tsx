@@ -31,6 +31,7 @@ import { riwayaBadgeClass } from "../lib/riwayaUi";
 import { PageShell } from "../components/layout/PageShell";
 import { LiveNowDashboardCard } from "../components/home/LiveNowDashboardCard";
 import { sessionNavigatePath } from "../lib/sessionNav";
+import { useQfStreak } from "../hooks/useQfStreak";
 
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -389,6 +390,7 @@ function StudentDashboard({ user }: { user: User }) {
   const surahCount = progress?.surahs_covered.length ?? 0;
   const gradeSum =
     (gd?.excellent ?? 0) + (gd?.good ?? 0) + (gd?.needs_work ?? 0) + (gd?.weak ?? 0);
+  const { data: qfStreak, loading: qfStreakLoading } = useQfStreak(user.qf_linked === true);
 
   if (loading) {
     return (
@@ -420,7 +422,7 @@ function StudentDashboard({ user }: { user: User }) {
               <Link to={`/students/${user.id}/progress`}>{t("home.viewFullProgress")}</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
             <SurahProgressRing covered={surahCount} />
             <div>
@@ -443,6 +445,25 @@ function StudentDashboard({ user }: { user: User }) {
               )}
             </div>
           </div>
+          {user.qf_linked ? (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+              <div className="mt-2 flex items-center gap-2">
+                <Flame className="h-8 w-8 shrink-0 text-blue-600" aria-hidden />
+                <div>
+                  <p className="text-xs font-medium text-blue-700">{t("home.qfStreak")}</p>
+                  {qfStreak ? (
+                    <p className="text-lg font-bold text-blue-900">
+                      {t("home.dayStreak", { days: qfStreak.days })}
+                    </p>
+                  ) : (
+                    <p className="text-sm font-medium text-blue-900">
+                      {qfStreakLoading ? t("common.loading") : "—"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
             <p className="text-sm text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
             <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>

@@ -15,6 +15,8 @@ export interface MushafCanvasProps {
   onWordClick?: QCFPageRendererProps["onWordClick"];
   onWordMouseEnter?: QCFPageRendererProps["onWordMouseEnter"];
   onWordMouseLeave?: QCFPageRendererProps["onWordMouseLeave"];
+  onAyahMarkerMouseEnter?: QCFPageRendererProps["onAyahMarkerMouseEnter"];
+  onAyahMarkerMouseLeave?: QCFPageRendererProps["onAyahMarkerMouseLeave"];
   onAyahClick?: QCFPageRendererProps["onAyahClick"];
   getWordAnnotationClass?: QCFPageRendererProps["getWordAnnotationClass"];
 }
@@ -27,6 +29,8 @@ export function MushafCanvas({
   onWordClick,
   onWordMouseEnter,
   onWordMouseLeave,
+  onAyahMarkerMouseEnter,
+  onAyahMarkerMouseLeave,
   onAyahClick,
   getWordAnnotationClass,
 }: MushafCanvasProps) {
@@ -51,6 +55,8 @@ export function MushafCanvas({
       onWordClick={onWordClick}
       onWordMouseEnter={onWordMouseEnter}
       onWordMouseLeave={onWordMouseLeave}
+      onAyahMarkerMouseEnter={onAyahMarkerMouseEnter}
+      onAyahMarkerMouseLeave={onAyahMarkerMouseLeave}
       onAyahClick={onAyahClick}
       getWordAnnotationClass={getWordAnnotationClass}
     />

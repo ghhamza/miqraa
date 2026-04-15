@@ -4,10 +4,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
-import { getSurahAyahCount, isValidAyahRange } from "../../lib/quranService";
+import { getSurahAyahCount, getSurahNameWithArabic, isValidAyahRange } from "../../lib/quranService";
 import type { QuranRiwaya, RecitationGrade, RecitationPublic, TurnType } from "../../types";
 import { Button } from "../ui/Button";
 import { SurahPicker } from "../recitations/SurahPicker";
+import { AyahRangeAudioButton } from "../recitations/AyahRangeAudioButton";
 
 interface RecitationTurnTabProps {
   turnType: TurnType;
@@ -28,8 +29,9 @@ export function RecitationTurnTab({
   existing,
   onSaved,
 }: RecitationTurnTabProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isEdit = existing != null;
+  const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
 
   const [surah, setSurah] = useState(existing?.surah ?? 1);
   const [ayahStart, setAyahStart] = useState(existing?.ayah_start ?? 1);
@@ -136,7 +138,7 @@ export function RecitationTurnTab({
             <SurahPicker value={surah} onChange={(s) => s && setSurah(s)} riwaya={riwaya} />
           </div>
           <div className="w-24 shrink-0">
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("sessions.ayah")}</label>
+            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.ayahStart")}</label>
             <select
               className="w-full rounded-lg border border-gray-200 bg-[var(--color-surface)] px-2 py-2 text-sm"
               value={ayahStart}
@@ -158,10 +160,12 @@ export function RecitationTurnTab({
         </label>
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <SurahPicker value={surah} onChange={(s) => s && setSurah(s)} riwaya={riwaya} disabled />
+            <div className="rounded-lg border border-gray-200 bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]">
+              {surah}. {getSurahNameWithArabic(surah, loc)}
+            </div>
           </div>
           <div className="w-24 shrink-0">
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("sessions.ayah")}</label>
+            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.ayahEnd")}</label>
             <select
               className="w-full rounded-lg border border-gray-200 bg-[var(--color-surface)] px-2 py-2 text-sm"
               value={ayahEnd}
@@ -176,6 +180,13 @@ export function RecitationTurnTab({
           </div>
         </div>
       </div>
+
+      {isValidAyahRange(surah, ayahStart, ayahEnd, riwaya) ? (
+        <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+          <span>{t("recitations.audio.previewLabel")}</span>
+          <AyahRangeAudioButton surah={surah} ayahStart={ayahStart} ayahEnd={ayahEnd} variant="labeled" />
+        </div>
+      ) : null}
 
       <div>
         <label className="block text-sm font-medium text-[var(--color-text)]">

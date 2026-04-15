@@ -127,6 +127,7 @@
     "viewFullProgress": "Voir la progression complète",
     "myProgress": "Ma progression",
     "progressOverview": "Aperçu de la progression",
+    "qfStreak": "Série Quran.com",
     "surahsCoveredCount": "{{count}} / 114 sourates",
     "dayStreak": "{{days}} jours consécutifs",
     "lastGradeLabel": "Dernière note",
@@ -391,7 +392,12 @@
     "qf_account_already_linked_to_other_user": "Ce compte est déjà lié à un autre utilisateur",
     "role_selection_required": "Veuillez choisir votre rôle pour continuer",
     "role_already_selected": "Le rôle a déjà été choisi",
-    "invalid_role": "Rôle sélectionné invalide"
+    "invalid_role": "Rôle sélectionné invalide",
+    "qf_upstream_error": "Impossible de contacter Quran Foundation, réessayez plus tard",
+    "qf_not_linked": "L'utilisateur n'a pas lié son compte Quran.com",
+    "qf_insufficient_scope": "Permissions insuffisantes, veuillez relier le compte",
+    "invalid_chapter": "Numéro de sourate invalide",
+    "invalid_recitation": "Récitateur sélectionné non disponible"
   },
   "placeholder": {
     "calendar": "Calendrier"
@@ -559,7 +565,17 @@
     "lastRecitationAt": "Dernière récitation",
     "deletedStudent": "Étudiant supprimé",
     "selectStudent": "Sélectionner un étudiant",
-    "invalidRange": "Plage de versets invalide pour cette sourate"
+    "invalidRange": "Plage de versets invalide pour cette sourate",
+    "qfSynced": "Synchronisé avec Quran.com",
+    "qfSyncSuccess": "Synchronisé avec Quran.com",
+    "qfSyncFailed": "Impossible de synchroniser avec Quran.com",
+    "qfRelinkNeeded": "Re-liez votre compte Quran.com pour activer la synchronisation",
+    "audio": {
+      "listen": "Écouter",
+      "stop": "Arrêter",
+      "previewLabel": "Récitation de référence :",
+      "failed": "Impossible de charger la récitation"
+    }
   },
   "liveSession": {
     "connecting": "Connexion...",

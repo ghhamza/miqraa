@@ -92,7 +92,7 @@ async fn fetch_recitation_public(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -281,7 +281,7 @@ pub async fn list_recitations(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -417,6 +417,21 @@ pub async fn create_recitation(
     let rec = fetch_recitation_public(&state.db, id)
         .await?
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_api = state.user_api.clone();
+    let rec_id = rec.id;
+    let student_id = req.student_id;
+    let surah = req.surah;
+    let ayah_start = req.ayah_start;
+    let ayah_end = req.ayah_end;
+    tokio::spawn(async move {
+        if let Err(e) = user_api
+            .sync_recitation(rec_id, student_id, surah, ayah_start, ayah_end, None)
+            .await
+        {
+            tracing::warn!(rec_id = %rec_id, error = %e, "QF sync failed");
+            user_api.mark_sync_error(rec_id, &e).await;
+        }
+    });
     Ok((StatusCode::CREATED, Json(rec)))
 }
 
@@ -613,7 +628,7 @@ pub async fn list_by_student(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \

@@ -56,6 +56,7 @@ import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
+import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
 import { useMediasoupConnection } from "../../hooks/useMediasoupConnection";
 import { cn } from "@/lib/utils";
@@ -163,6 +164,16 @@ export function LiveSessionPage() {
     rect: DOMRect;
     pinned: boolean;
   } | null>(null);
+  const [studentAudioHover, setStudentAudioHover] = useState<{
+    surah: number;
+    ayah: number;
+    rect: DOMRect;
+  } | null>(null);
+  const [studentAudioHighlight, setStudentAudioHighlight] = useState<{
+    surah: number;
+    ayahStart: number;
+    ayahEnd: number;
+  } | null>(null);
 
   const [gradingDialogOpen, setGradingDialogOpen] = useState(false);
   /** Bumps when the grading modal opens so GradingPanel remounts with fresh surah/ayah state. */
@@ -182,6 +193,7 @@ export function LiveSessionPage() {
 
   const studentPopoverPinnedRef = useRef(false);
   const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const studentAudioHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelHoverCloseTimer = useCallback(() => {
     if (hoverCloseTimerRef.current != null) {
@@ -214,6 +226,31 @@ export function LiveSessionPage() {
     studentPopoverPinnedRef.current = false;
     setStudentPopover(null);
   }, [cancelHoverCloseTimer]);
+
+  const cancelStudentAudioHideTimer = useCallback(() => {
+    if (studentAudioHideTimerRef.current != null) {
+      clearTimeout(studentAudioHideTimerRef.current);
+      studentAudioHideTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleStudentAudioHide = useCallback(
+    (delayMs = 5000) => {
+      cancelStudentAudioHideTimer();
+      studentAudioHideTimerRef.current = window.setTimeout(() => {
+        studentAudioHideTimerRef.current = null;
+        setStudentAudioHover(null);
+      }, delayMs);
+    },
+    [cancelStudentAudioHideTimer],
+  );
+
+  useEffect(
+    () => () => {
+      cancelStudentAudioHideTimer();
+    },
+    [cancelStudentAudioHideTimer],
+  );
 
   const {
     loadAnnotations,
@@ -528,6 +565,23 @@ export function LiveSessionPage() {
     if (studentPopoverPinnedRef.current) return;
     scheduleHoverClose();
   }, [scheduleHoverClose]);
+
+  const handleStudentAyahMarkerEnter = useCallback(
+    (data: { surah: number; ayah: number; rect?: DOMRect }) => {
+      if (!data.rect) return;
+      cancelStudentAudioHideTimer();
+      setStudentAudioHover({
+        surah: data.surah,
+        ayah: data.ayah,
+        rect: data.rect,
+      });
+    },
+    [cancelStudentAudioHideTimer],
+  );
+
+  const handleStudentAyahMarkerLeave = useCallback(() => {
+    scheduleStudentAudioHide(2000);
+  }, [scheduleStudentAudioHide]);
 
   const handleStudentWordClick = useCallback(
     (data: MushafWordClickData) => {
@@ -1133,11 +1187,13 @@ export function LiveSessionPage() {
                 <MushafCanvas
                   page={page}
                   riwaya={riwaya}
-                  highlightRange={interaction.highlightRange}
+                  highlightRange={studentAudioHighlight ?? interaction.highlightRange}
                   activeWord={interaction.activeWord}
                   onWordClick={isTeacher ? handleLiveWordClick : handleStudentWordClick}
                   onWordMouseEnter={!isTeacher ? handleStudentWordEnter : undefined}
                   onWordMouseLeave={!isTeacher ? handleStudentWordLeave : undefined}
+                  onAyahMarkerMouseEnter={!isTeacher ? handleStudentAyahMarkerEnter : undefined}
+                  onAyahMarkerMouseLeave={!isTeacher ? handleStudentAyahMarkerLeave : undefined}
                   onAyahClick={interaction.handleAyahClick}
                   getWordAnnotationClass={getWordAnnotationClass}
                 />
@@ -1428,6 +1484,37 @@ export function LiveSessionPage() {
             scheduleHoverClose();
           }}
         />
+      ) : null}
+      {!isTeacher && studentAudioHover ? (
+        <div
+          className="pointer-events-auto fixed z-[319]"
+          style={{
+            top: Math.max(
+              8,
+              Math.min(window.innerHeight - 40, studentAudioHover.rect.top + studentAudioHover.rect.height / 2 - 16),
+            ),
+            left: Math.max(
+              8,
+              Math.min(window.innerWidth - 40, studentAudioHover.rect.left + studentAudioHover.rect.width / 2 - 16),
+            ),
+          }}
+          onMouseEnter={() => cancelStudentAudioHideTimer()}
+          onMouseLeave={() => scheduleStudentAudioHide(1800)}
+        >
+          <AyahRangeAudioButton
+            surah={studentAudioHover.surah}
+            ayahStart={studentAudioHover.ayah}
+            ayahEnd={studentAudioHover.ayah}
+            variant="icon"
+            onPlaybackStateChange={({ playing, surah, currentAyah }) => {
+              if (playing && currentAyah != null) {
+                setStudentAudioHighlight({ surah, ayahStart: currentAyah, ayahEnd: currentAyah });
+              } else {
+                setStudentAudioHighlight(null);
+              }
+            }}
+          />
+        </div>
       ) : null}
     </div>
   );
