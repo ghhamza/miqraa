@@ -391,7 +391,10 @@
     "qf_account_already_linked_to_other_user": "This account is already linked to another user",
     "role_selection_required": "Please select your role to continue",
     "role_already_selected": "Role was already selected",
-    "invalid_role": "Invalid role selected"
+    "invalid_role": "Invalid role selected",
+    "qf_upstream_error": "Could not reach Quran Foundation, please try again",
+    "invalid_chapter": "Invalid surah number",
+    "invalid_recitation": "Selected reciter not available"
   },
   "placeholder": {
     "calendar": "Calendar"
@@ -559,7 +562,13 @@
     "lastRecitationAt": "Last recitation",
     "deletedStudent": "Deleted student",
     "selectStudent": "Select a student",
-    "invalidRange": "Invalid ayah range for this surah"
+    "invalidRange": "Invalid ayah range for this surah",
+    "audio": {
+      "listen": "Listen",
+      "stop": "Stop",
+      "previewLabel": "Reference recitation:",
+      "failed": "Could not load recitation"
+    }
   },
   "liveSession": {
     "connecting": "Connecting...",

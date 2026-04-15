@@ -391,7 +391,10 @@
     "qf_account_already_linked_to_other_user": "هذا الحساب مرتبط بمستخدم آخر",
     "role_selection_required": "يرجى اختيار دورك للمتابعة",
     "role_already_selected": "تم اختيار الدور بالفعل",
-    "invalid_role": "الدور المحدد غير صالح"
+    "invalid_role": "الدور المحدد غير صالح",
+    "qf_upstream_error": "تعذّر الاتصال بمؤسسة القرآن، حاول لاحقاً",
+    "invalid_chapter": "رقم السورة غير صالح",
+    "invalid_recitation": "القارئ المختار غير متوفّر"
   },
   "placeholder": {
     "calendar": "الجدول"
@@ -559,7 +562,13 @@
     "lastRecitationAt": "آخر تلاوة",
     "deletedStudent": "طالب محذوف",
     "selectStudent": "اختر طالبًا",
-    "invalidRange": "نطاق آيات غير صالح لهذه السورة"
+    "invalidRange": "نطاق آيات غير صالح لهذه السورة",
+    "audio": {
+      "listen": "استمع",
+      "stop": "إيقاف",
+      "previewLabel": "تلاوة مرجعية:",
+      "failed": "تعذّر تحميل التلاوة"
+    }
   },
   "liveSession": {
     "connecting": "جارٍ الاتصال...",

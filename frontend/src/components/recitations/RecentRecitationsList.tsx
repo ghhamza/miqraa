@@ -4,6 +4,7 @@
 import { useTranslation } from "react-i18next";
 import type { RecitationPublic } from "../../types";
 import { GradeBadge } from "./GradeBadge";
+import { AyahRangeAudioButton } from "./AyahRangeAudioButton";
 import { getSurahNameWithArabic } from "../../lib/quranService";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 
@@ -44,7 +45,10 @@ export function RecentRecitationsList({ items, showStudent }: RecentRecitationsL
               </p>
             ) : null}
           </div>
-          <GradeBadge grade={r.grade} />
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            <AyahRangeAudioButton surah={r.surah} ayahStart={r.ayah_start} ayahEnd={r.ayah_end} variant="icon" />
+            <GradeBadge grade={r.grade} />
+          </div>
         </li>
       ))}
     </ul>

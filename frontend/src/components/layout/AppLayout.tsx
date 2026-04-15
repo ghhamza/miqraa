@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Link as LinkIcon, LogOut, Menu, ScrollText, User } from "lucide-react";
+import { BookOpen, Link as LinkIcon, LogOut, Menu, User } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
@@ -202,16 +202,6 @@ export function AppLayout() {
           {t("nav.calendar")}
         </NavLink>
         <NavLink
-          to="/mushaf"
-          className={cn(navLinkClassName(navActive.mushaf), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.mushaf")}
-          </span>
-        </NavLink>
-        <NavLink
           to="/recitations"
           className={cn(navLinkClassName(navActive.recitations), linkWrap)}
           onClick={() => setMobileNavOpen(false)}
@@ -348,16 +338,6 @@ export function AppLayout() {
                 <NavigationMenuLink asChild>
                   <NavLink to="/calendar" className={navLinkClassName(navActive.calendar)}>
                     {t("nav.calendar")}
-                  </NavLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink asChild>
-                  <NavLink to="/mushaf" className={navLinkClassName(navActive.mushaf)}>
-                    <span className="inline-flex items-center gap-2">
-                      <ScrollText className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                      {t("nav.mushaf")}
-                    </span>
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>

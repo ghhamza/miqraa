@@ -11,7 +11,6 @@ import type { Riwaya } from "../../lib/quranService";
 import type { LineData, WordData } from "../../hooks/useQuranPage";
 import { Button } from "../ui/Button";
 import { MushafBasmalahSvg } from "./MushafBasmalahSvg";
-import { MushafSurahArabesqueFrame } from "./MushafSurahArabesqueFrame";
 import { SurahNameSvg } from "./SurahNameSvg";
 
 export interface QCFPageRendererProps {
@@ -21,6 +20,9 @@ export interface QCFPageRendererProps {
   /** Live session student: preview annotations on hover (optional). */
   onWordMouseEnter?: (data: { surah: number; ayah: number; wordIndex: number; rect?: DOMRect }) => void;
   onWordMouseLeave?: (data: { surah: number; ayah: number; wordIndex: number }) => void;
+  /** Optional: emits only for ayah-number marker hover. */
+  onAyahMarkerMouseEnter?: (data: { surah: number; ayah: number; rect?: DOMRect }) => void;
+  onAyahMarkerMouseLeave?: (data: { surah: number; ayah: number }) => void;
   onAyahClick?: (data: { surah: number; ayah: number }) => void;
   highlightRange?: { surah: number; ayahStart: number; ayahEnd: number } | null;
   activeWord?: { surah: number; ayah: number; wordIndex: number } | null;
@@ -76,6 +78,8 @@ export function QCFPageRenderer({
   onWordClick,
   onWordMouseEnter,
   onWordMouseLeave,
+  onAyahMarkerMouseEnter,
+  onAyahMarkerMouseLeave,
   onAyahClick,
   highlightRange,
   activeWord,
@@ -286,6 +290,8 @@ export function QCFPageRenderer({
     onWordClick: handleWordClick,
     onWordMouseEnter: onWordMouseEnter ? handleWordMouseEnter : undefined,
     onWordMouseLeave: onWordMouseLeave ? handleWordMouseLeave : undefined,
+    onAyahMarkerMouseEnter,
+    onAyahMarkerMouseLeave,
   };
 
   const safeFontPx = Math.min(48, Math.max(12, Number.isFinite(fontSizePx) ? fontSizePx : 28));
@@ -343,6 +349,8 @@ function LineView({
   onWordClick,
   onWordMouseEnter,
   onWordMouseLeave,
+  onAyahMarkerMouseEnter,
+  onAyahMarkerMouseLeave,
 }: {
   line: LineData;
   mushafPageNumber: number;
@@ -352,14 +360,14 @@ function LineView({
   onWordClick: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
   onWordMouseEnter?: (w: WordData, e: MouseEvent<HTMLSpanElement>) => void;
   onWordMouseLeave?: (w: WordData) => void;
+  onAyahMarkerMouseEnter?: (data: { surah: number; ayah: number; rect?: DOMRect }) => void;
+  onAyahMarkerMouseLeave?: (data: { surah: number; ayah: number }) => void;
 }) {
   if (line.lineType === "surah_name" && line.surahNumber != null) {
     const sn = line.surahNumber;
     return (
-      <div className="mushaf-line mushaf-line--centered w-full py-[0.2rem]">
-        <MushafSurahArabesqueFrame>
-          <SurahNameSvg surah={sn} className="h-[calc(2.5em*2/3*0.8)] w-auto max-w-full" />
-        </MushafSurahArabesqueFrame>
+      <div className="mushaf-line mushaf-line--centered flex justify-center w-full py-[0.2rem]">
+        <SurahNameSvg surah={sn} className="h-[calc(2.5em*2/3*0.8)] w-auto max-w-full" />
       </div>
     );
   }
@@ -396,8 +404,22 @@ function LineView({
             data-ayah={word.ayah}
             data-word={word.wordPosition}
             onClick={(e) => onWordClick(word, e)}
-            onMouseEnter={onWordMouseEnter ? (e) => onWordMouseEnter(word, e) : undefined}
-            onMouseLeave={onWordMouseLeave ? () => onWordMouseLeave(word) : undefined}
+            onMouseEnter={(e) => {
+              onWordMouseEnter?.(word, e);
+              if (isVerseEndMarker(word)) {
+                onAyahMarkerMouseEnter?.({
+                  surah: word.surah,
+                  ayah: word.ayah,
+                  rect: e.currentTarget.getBoundingClientRect(),
+                });
+              }
+            }}
+            onMouseLeave={() => {
+              onWordMouseLeave?.(word);
+              if (isVerseEndMarker(word)) {
+                onAyahMarkerMouseLeave?.({ surah: word.surah, ayah: word.ayah });
+              }
+            }}
           >
             {word.glyph}
           </span>

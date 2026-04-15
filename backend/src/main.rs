@@ -14,6 +14,7 @@ mod config;
 mod db;
 mod models;
 mod qf;
+mod quran_ayah_counts;
 mod riwaya;
 mod rooms;
 mod services;
@@ -23,8 +24,8 @@ use chrono::Utc;
 
 use crate::api::ws::messages::ServerMessage;
 use crate::api::ws::signaling::on_session_ended;
-use crate::rooms::RoomManager;
 use crate::config::MediaBackend;
+use crate::rooms::RoomManager;
 use crate::sfu::{MediaService, MediasoupMediaService, SfuServerEvent, WebRtcSfu};
 
 #[derive(Parser)]
@@ -64,12 +65,11 @@ async fn create_admin(name: String, email: String, password: String) -> Result<(
     sqlx::migrate!("./migrations").run(&pool).await?;
 
     let email_norm = email.trim().to_lowercase();
-    let existing: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE lower(trim(email)) = $1",
-    )
-    .bind(&email_norm)
-    .fetch_optional(&pool)
-    .await?;
+    let existing: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE lower(trim(email)) = $1")
+            .bind(&email_norm)
+            .fetch_optional(&pool)
+            .await?;
 
     if existing.is_some() {
         println!("❌ User with email {email_norm} already exists");
@@ -161,6 +161,16 @@ async fn run_server() -> Result<()> {
     });
 
     let state = api::AppState::new(db_pool, storage, config.clone(), rooms, media_service);
+    let warm = state.content_api.clone();
+    tokio::spawn(async move {
+        match warm.get_access_token().await {
+            Ok(_) => tracing::info!("QF content token pre-warmed"),
+            Err(e) => tracing::warn!(
+                error = %e,
+                "QF content token pre-warm failed (will retry on first use)"
+            ),
+        }
+    });
     let cleanup_state = state.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
@@ -170,7 +180,10 @@ async fn run_server() -> Result<()> {
                 .execute(&cleanup_state.db)
                 .await
             {
-                Ok(done) => tracing::debug!(rows_deleted = done.rows_affected(), "deleted expired qf oauth states"),
+                Ok(done) => tracing::debug!(
+                    rows_deleted = done.rows_affected(),
+                    "deleted expired qf oauth states"
+                ),
                 Err(err) => tracing::debug!(error = %err, "failed to cleanup qf oauth states"),
             }
         }

@@ -19,7 +19,10 @@ pub fn build_router(state: AppState) -> Router {
         .allow_headers(Any);
 
     Router::new()
-        .route("/health", get(|| async { "بسم الله — Al-Miqraa is running" }))
+        .route(
+            "/health",
+            get(|| async { "بسم الله — Al-Miqraa is running" }),
+        )
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
         .route(
@@ -27,11 +30,18 @@ pub fn build_router(state: AppState) -> Router {
             get(handlers::auth::me).put(handlers::auth::update_profile),
         )
         .route("/api/auth/password", put(handlers::auth::change_password))
-        .route("/api/auth/role-selection", post(handlers::auth::role_selection))
+        .route(
+            "/api/auth/role-selection",
+            post(handlers::auth::role_selection),
+        )
         .route("/api/auth/qf/start", get(handlers::qf::start))
         .route("/api/auth/qf/exchange", post(handlers::qf::exchange))
         .route("/api/auth/qf/unlink", post(handlers::qf::unlink))
         .route("/api/auth/qf/debug", get(handlers::qf::debug_qf))
+        .route(
+            "/api/quran/recitations/{recitation_id}/by_chapter/{chapter}",
+            get(handlers::qf::get_chapter_audio),
+        )
         .route("/api/users/stats", get(handlers::users::stats))
         .route(
             "/api/users",
@@ -55,7 +65,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/recitations/stats", get(handlers::recitations::stats))
         .route(
             "/api/recitations",
-            get(handlers::recitations::list_recitations).post(handlers::recitations::create_recitation),
+            get(handlers::recitations::list_recitations)
+                .post(handlers::recitations::create_recitation),
         )
         .route(
             "/api/recitations/{id}",
@@ -69,7 +80,8 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/api/error-annotations",
-            get(handlers::error_annotations::list_annotations).post(handlers::error_annotations::create_annotation),
+            get(handlers::error_annotations::list_annotations)
+                .post(handlers::error_annotations::create_annotation),
         )
         .route(
             "/api/error-annotations/{id}",
@@ -87,7 +99,8 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/api/rooms/{room_id}/my-enrollment",
-            get(handlers::enrollments::my_enrollment).delete(handlers::enrollments::cancel_my_enrollment),
+            get(handlers::enrollments::my_enrollment)
+                .delete(handlers::enrollments::cancel_my_enrollment),
         )
         .route(
             "/api/rooms/{room_id}/enrollments/pending",
@@ -107,7 +120,8 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/api/rooms/{room_id}/enrollments",
-            get(handlers::enrollments::list_enrollments).post(handlers::enrollments::create_enrollment),
+            get(handlers::enrollments::list_enrollments)
+                .post(handlers::enrollments::create_enrollment),
         )
         .route(
             "/api/rooms/{room_id}/sessions",
@@ -125,10 +139,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/schedules/generate",
             post(handlers::schedules::generate_sessions),
         )
-        .route(
-            "/api/schedules",
-            post(handlers::schedules::create_schedule),
-        )
+        .route("/api/schedules", post(handlers::schedules::create_schedule))
         .route(
             "/api/schedules/{id}",
             put(handlers::schedules::update_schedule).delete(handlers::schedules::delete_schedule),
@@ -137,10 +148,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/sessions/stats",
             get(handlers::sessions::session_stats),
         )
-        .route(
-            "/api/sessions/upcoming",
-            get(handlers::sessions::upcoming),
-        )
+        .route("/api/sessions/upcoming", get(handlers::sessions::upcoming))
         .route(
             "/api/sessions/live-public",
             get(handlers::sessions::list_live_public_sessions),

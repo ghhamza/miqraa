@@ -23,6 +23,7 @@ import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
 import { SurahPicker } from "./SurahPicker";
+import { AyahRangeAudioButton } from "./AyahRangeAudioButton";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 
 interface RecitationFormModalProps {
@@ -359,6 +360,17 @@ export function RecitationFormModal({
             />
           </div>
         </div>
+        {surah && ayahStart && ayahEnd && isValidAyahRange(surah, ayahStart, ayahEnd, riwaya) ? (
+          <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <span>{t("recitations.audio.previewLabel")}</span>
+            <AyahRangeAudioButton
+              surah={surah}
+              ayahStart={ayahStart}
+              ayahEnd={ayahEnd}
+              variant="labeled"
+            />
+          </div>
+        ) : null}
 
         {mode === "create" ? (
           <>

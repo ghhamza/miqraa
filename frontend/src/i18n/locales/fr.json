@@ -391,7 +391,10 @@
     "qf_account_already_linked_to_other_user": "Ce compte est déjà lié à un autre utilisateur",
     "role_selection_required": "Veuillez choisir votre rôle pour continuer",
     "role_already_selected": "Le rôle a déjà été choisi",
-    "invalid_role": "Rôle sélectionné invalide"
+    "invalid_role": "Rôle sélectionné invalide",
+    "qf_upstream_error": "Impossible de contacter Quran Foundation, réessayez plus tard",
+    "invalid_chapter": "Numéro de sourate invalide",
+    "invalid_recitation": "Récitateur sélectionné non disponible"
   },
   "placeholder": {
     "calendar": "Calendrier"
@@ -559,7 +562,13 @@
     "lastRecitationAt": "Dernière récitation",
     "deletedStudent": "Étudiant supprimé",
     "selectStudent": "Sélectionner un étudiant",
-    "invalidRange": "Plage de versets invalide pour cette sourate"
+    "invalidRange": "Plage de versets invalide pour cette sourate",
+    "audio": {
+      "listen": "Écouter",
+      "stop": "Arrêter",
+      "previewLabel": "Récitation de référence :",
+      "failed": "Impossible de charger la récitation"
+    }
   },
   "liveSession": {
     "connecting": "Connexion...",
