@@ -125,6 +125,8 @@
     "studentRecitationWidgetTitle": "تقدّمك في التلاوة",
     "teacherRecentRecitationsTitle": "آخر التلاوات المقيّمة",
     "viewFullProgress": "عرض التقدّم الكامل",
+    "myProgress": "تقدّمي",
+    "progressOverview": "نظرة على التقدّم",
     "surahsCoveredCount": "{{count}} / ١١٤ سورة",
     "dayStreak": "{{days}} يومًا متتاليًا",
     "lastGradeLabel": "آخر تقييم",

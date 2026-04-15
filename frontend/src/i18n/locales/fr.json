@@ -125,6 +125,8 @@
     "studentRecitationWidgetTitle": "Votre progression en récitation",
     "teacherRecentRecitationsTitle": "Récitations notées récemment",
     "viewFullProgress": "Voir la progression complète",
+    "myProgress": "Ma progression",
+    "progressOverview": "Aperçu de la progression",
     "surahsCoveredCount": "{{count}} / 114 sourates",
     "dayStreak": "{{days}} jours consécutifs",
     "lastGradeLabel": "Dernière note",

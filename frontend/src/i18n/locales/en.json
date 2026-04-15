@@ -125,6 +125,8 @@
     "studentRecitationWidgetTitle": "Your recitation progress",
     "teacherRecentRecitationsTitle": "Recently graded recitations",
     "viewFullProgress": "View full progress",
+    "myProgress": "My progress",
+    "progressOverview": "Progress overview",
     "surahsCoveredCount": "{{count}} / 114 surahs",
     "dayStreak": "{{days}} day streak",
     "lastGradeLabel": "Last grade",
