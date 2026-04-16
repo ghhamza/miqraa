@@ -275,7 +275,6 @@ export function SessionDetailPage() {
 
   return (
     <PageShell
-      className="mx-auto max-w-3xl"
       breadcrumb={[
         { label: t("nav.home"), to: "/" },
         { label: t("sessions.calendar"), to: "/calendar" },

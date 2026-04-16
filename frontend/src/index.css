@@ -215,16 +215,17 @@
   align-items: baseline;
   width: 100%;
   min-width: 0;
+  justify-content: center; 
 }
 
 /* Full-width lines: justify */
 .mushaf-ayah-line--justify {
-  justify-content: space-between;
+  /* justify-content: space-between; */
 }
 
-/* Very short lines only: pack to the right margin in RTL (flex-start = main-start = right); gap on the left */
+/* Centered lines (e.g. last line of a surah, Bismillah as an ayah in Al-Fatihah): horizontally centered in the column, matching Madina Mushaf print convention. */
 .mushaf-ayah-line--center {
-  justify-content: flex-start;
+  justify-content: center;
   column-gap: 0.15em;
 }
 

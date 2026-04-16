@@ -89,7 +89,6 @@ export function StudentProgressPage() {
 
   return (
     <PageShell
-      className="mx-auto max-w-4xl"
       backTo={{ to: "/recitations", label: t("recitations.title") }}
       breadcrumb={[
         { label: t("nav.home"), to: "/" },

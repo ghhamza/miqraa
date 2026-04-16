@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
-import { flushSync } from "react-dom";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuranPage } from "../../hooks/useQuranPage";
 import { getPageFontFamily, loadPageFont, preloadAdjacentPages } from "../../lib/mushafFontLoader";
@@ -89,12 +88,7 @@ export function QCFPageRenderer({
   const { data, loading, error, reload } = useQuranPage(pageNumber, riwaya);
   const [fontReady, setFontReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  /** Default until we read a real column width (avoid fontSize=12 when width was 0 → huge flex gaps). */
   const [fontSizePx, setFontSizePx] = useState(28);
-  /** Last container width used to set font from ResizeObserver — ignore RO when only height changes (new page). */
-  const lastObservedWidthForFontRef = useRef<number | null>(null);
-  /** Reset width-based font on page navigation (avoid carrying over previous page’s vertical shrink). */
-  const layoutPageRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,83 +120,27 @@ export function QCFPageRenderer({
   useEffect(() => {
     if (!fontReady || !containerRef.current) return;
     const el = containerRef.current;
+    const applyFromWidth = () => {
+      const w = el.clientWidth;
+      if (w < 64) return;
+      // Divisor tuned empirically so the widest QCF line (15 words, full-justified) fits with
+      // ~3% slack. Clamp: mobile minimum legibility (16px) through desktop cap (34px - beyond
+      // this the line height and letter size make the page feel oversized).
+      const next = Math.max(16, Math.min(34, (w - 2) / 16));
+      setFontSizePx((prev) => (Math.abs(prev - next) < 0.25 ? prev : next));
+    };
 
-    const MIN_WIDTH_PX = 64;
-
-    function computeFontSize(widthPx: number): number {
-      /* Subpixel + padding: slightly conservative so justified QCF lines (flex, no shrink) stay in column */
-      const w = Math.max(0, Math.floor(widthPx) - 2);
-      if (w < MIN_WIDTH_PX) return -1;
-      return Math.max(12, Math.min(48, w / 14.5));
-    }
-
-    function applyFontSizeIfWidthChanged(rawWidth: number): void {
-      if (lastObservedWidthForFontRef.current != null && Math.abs(rawWidth - lastObservedWidthForFontRef.current) < 1) {
-        return;
-      }
-      lastObservedWidthForFontRef.current = rawWidth;
-      const next = computeFontSize(rawWidth);
-      if (next < 0) return;
-      setFontSizePx(next);
-    }
-
-    function measureFromEl(): void {
-      applyFontSizeIfWidthChanged(el.clientWidth);
-    }
-
-    const ro = new ResizeObserver((entries) => {
-      /* Read after layout; first frame often reports 0 in nested flex min-h-0 chains. */
-      requestAnimationFrame(() => {
-        const raw = entries[0]?.contentRect.width ?? el.clientWidth;
-        applyFontSizeIfWidthChanged(raw);
-      });
+    const ro = new ResizeObserver(() => {
+      /* Double rAF so CSS has committed the new card width before we read it. */
+      requestAnimationFrame(() => requestAnimationFrame(applyFromWidth));
     });
     ro.observe(el);
 
-    /* Double rAF: wait until parent flex layout has stable width (fixes flaky refresh). */
-    requestAnimationFrame(() => {
-      requestAnimationFrame(measureFromEl);
-    });
+    /* Prime once in case the element was already at its final width at effect-setup time. */
+    requestAnimationFrame(() => requestAnimationFrame(applyFromWidth));
 
     return () => ro.disconnect();
-  }, [fontReady, pageNumber]);
-
-  /** On page change: width-based font, then shrink until column fits height. */
-  useLayoutEffect(() => {
-    if (!fontReady || !data || !containerRef.current) return;
-    if (data.pageNumber !== pageNumber) return;
-    const el = containerRef.current;
-
-    if (layoutPageRef.current !== pageNumber) {
-      const w = Math.max(0, Math.floor(el.clientWidth) - 2);
-      if (w < 64) return;
-      const baseSize = Math.max(12, Math.min(48, w / 14.5));
-      lastObservedWidthForFontRef.current = el.clientWidth;
-      const nextPage = pageNumber;
-      let cancelled = false;
-      queueMicrotask(() => {
-        if (cancelled) return;
-        flushSync(() => {
-          layoutPageRef.current = nextPage;
-          setFontSizePx(baseSize);
-        });
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const h = el.clientHeight;
-    const sh = el.scrollHeight;
-    if (h <= 0 || sh <= h + 2) return;
-    setFontSizePx((prev) => {
-      const p = Number.isFinite(prev) ? prev : 28;
-      if (p <= 12) return 12;
-      const scaled = Math.floor(p * (h / sh));
-      if (!Number.isFinite(scaled)) return p;
-      return Math.max(12, scaled < p ? scaled : p - 1);
-    });
-  }, [fontReady, data, pageNumber, fontSizePx]);
+  }, [fontReady]);
 
   useEffect(() => {
     if (fontReady) preloadAdjacentPages(pageNumber);
@@ -265,15 +203,9 @@ export function QCFPageRenderer({
 
   if (loading || !data || !fontReady) {
     return (
-      <div
-        className="flex w-full flex-1 flex-col gap-1.5 px-1 py-2 min-h-0"
-        aria-busy="true"
-      >
+      <div className="flex w-full flex-col gap-3 py-6" aria-busy="true">
         {Array.from({ length: 15 }).map((_, i) => (
-          <div
-            key={i}
-            className="min-h-[6px] flex-1 basis-0 rounded-sm bg-muted/60 animate-pulse"
-          />
+          <div key={i} className="h-5 w-full rounded-sm bg-muted/60 animate-pulse" />
         ))}
         <span className="sr-only">{t("mushaf.loading")}</span>
       </div>
@@ -294,29 +226,21 @@ export function QCFPageRenderer({
     onAyahMarkerMouseLeave,
   };
 
-  const safeFontPx = Math.min(48, Math.max(12, Number.isFinite(fontSizePx) ? fontSizePx : 28));
+  const safeFontPx = Math.min(34, Math.max(16, Number.isFinite(fontSizePx) ? fontSizePx : 28));
 
   if (centerInColumn) {
     const { head, body } = partitionOpeningHeadBody(data.lines);
     const bodyCenter = trimAyahLinesForCentering(body);
+    const centeredLines = [...head, ...bodyCenter];
     return (
       <div
         ref={containerRef}
-        className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
+        className="flex w-full flex-1 flex-col justify-center text-[var(--color-text)]"
         style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
       >
-        {head.length > 0 ? (
-          <div className="w-full shrink-0">
-            {head.map((line) => (
-              <LineView key={line.lineNumber} line={line} {...lineProps} />
-            ))}
-          </div>
-        ) : null}
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center">
-          {bodyCenter.map((line) => (
-            <LineView key={line.lineNumber} line={line} {...lineProps} />
-          ))}
-        </div>
+        {centeredLines.map((line) => (
+          <LineView key={line.lineNumber} line={line} {...lineProps} />
+        ))}
       </div>
     );
   }
@@ -324,17 +248,11 @@ export function QCFPageRenderer({
   return (
     <div
       ref={containerRef}
-      className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-auto overflow-y-hidden text-[var(--color-text)]"
+      className="flex w-full flex-col text-[var(--color-text)]"
       style={{ fontSize: safeFontPx, lineHeight: 1.65 }}
     >
-      {/* 15 QCF slots share height so the footer area doesn’t leave a dead band */}
       {data.lines.map((line) => (
-        <div
-          key={line.lineNumber}
-          className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col justify-center"
-        >
-          <LineView line={line} {...lineProps} />
-        </div>
+        <LineView key={line.lineNumber} line={line} {...lineProps} />
       ))}
     </div>
   );

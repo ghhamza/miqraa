@@ -21,11 +21,7 @@ interface MushafPageTurnButtonsProps {
   showDesktopJump?: boolean;
 }
 
-/**
- * Controls sit on top of the mushaf column (parent must be `relative`).
- * Inset positioning keeps them inside overflow-hidden ancestors (e.g. live session shell).
- * RTL book: physical left = next page, physical right = previous; chevrons point outward (‹ / ›).
- */
+/** RTL book: physical left = next page, physical right = previous; chevrons point outward (‹ / ›). */
 export function MushafPageTurnButtons({
   page,
   totalPages,
@@ -41,12 +37,12 @@ export function MushafPageTurnButtons({
   const navDisabled = disabled;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30">
+    <>
       <button
         type="button"
         className={cn(
           btnClass,
-          "pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 shadow-md",
+          "pointer-events-auto fixed left-3 top-1/2 z-30 -translate-y-1/2 shadow-md",
         )}
         aria-label={t("mushaf.nextPage")}
         title={t("mushaf.tooltip.nextPage")}
@@ -60,7 +56,7 @@ export function MushafPageTurnButtons({
           type="button"
           className={cn(
             btnClass,
-            "pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-md",
+            "pointer-events-auto fixed bottom-6 left-1/2 z-30 -translate-x-1/2 shadow-md",
           )}
           aria-label={t("mushaf.jumpOpen")}
           title={t("mushaf.tooltip.jumpOpen")}
@@ -73,7 +69,7 @@ export function MushafPageTurnButtons({
         type="button"
         className={cn(
           btnClass,
-          "pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 shadow-md",
+          "pointer-events-auto fixed right-3 top-1/2 z-30 -translate-y-1/2 shadow-md",
         )}
         aria-label={t("mushaf.prevPage")}
         title={t("mushaf.tooltip.prevPage")}
@@ -82,6 +78,6 @@ export function MushafPageTurnButtons({
       >
         <ChevronRight className="h-6 w-6" aria-hidden />
       </button>
-    </div>
+    </>
   );
 }

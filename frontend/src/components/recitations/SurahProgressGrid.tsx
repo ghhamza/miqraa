@@ -43,7 +43,7 @@ export function SurahProgressGrid({ surahBestGrades }: SurahProgressGridProps) {
 
   return (
     <div>
-      <div className="grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(28px,1fr))] gap-0.5">
+      <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(28px,1fr))] gap-0.5">
         {QURAN_SURAHS.map((s) => {
           const g = gradeBySurah.get(s.number) ?? null;
           const covered = coveredSet.has(s.number);

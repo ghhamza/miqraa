@@ -5,16 +5,15 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { Riwaya } from "../../lib/quranService";
 
-/** Madina mushaf page proportion (width : height = 5 : 7). */
-const MUSHAF_PAGE_ASPECT = "5 / 7" as const;
-
 /**
- * Width of the 5:7 page card inside a `[container-type:size]` mushaf column (shared with
- * {@link MushafReader} immersive chrome so headers align with page text).
+ * Max width of the reading column. The page flows naturally in height; no aspect-ratio lock.
+ * On viewports narrower than this the card is viewport width minus small gutters.
  */
+export const MUSHAF_PAGE_MAX_WIDTH = "48rem" as const;
+
 export const mushafPageCardWidthStyle: CSSProperties = {
-  width: "min(100cqi, min(48rem, calc(100cqh * 5 / 7)))",
-  maxWidth: "100%",
+  width: "100%",
+  maxWidth: MUSHAF_PAGE_MAX_WIDTH,
   boxSizing: "border-box",
 };
 
@@ -28,27 +27,23 @@ export interface MushafBookLayoutProps {
 }
 
 /**
- * The page card only. Parent must be `[container-type:size]` with size = the area **below** any
- * menu chrome so 5:7 uses cqi/cqh for the mushaf column alone (not the navigation zone).
+ * The page card. Height is content-driven with a `min-height` so opening pages (Fatiha,
+ * start of Baqarah) have vertical breathing room and can vertically center their short content.
+ *
+ * The card does NOT clip overflow. If content is taller than the viewport, the outer
+ * app scroll handles it — same pattern as quran.com.
  */
 export function MushafBookLayout({ children }: MushafBookLayoutProps) {
   return (
     <div
-      className="mx-auto flex min-h-0 w-full max-w-3xl shrink-0 flex-col overflow-hidden "
+      data-mushaf-card=""
+      className="mx-auto flex w-full flex-col min-h-[min(80vh,900px)] md:min-h-[min(64vh,820px)] lg:min-h-[min(68vh,860px)]"
       style={{
-        aspectRatio: MUSHAF_PAGE_ASPECT,
-        maxHeight: "100%",
-        height: "auto",
         ...mushafPageCardWidthStyle,
       }}
     >
-      <div
-        className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden py-3 sm:py-4 md:py-4",
-          MUSHAF_PAGE_INNER_PADDING_X,
-        )}
-      >
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className={cn("flex w-full flex-1 flex-col py-1 sm:py-2 md:py-2", MUSHAF_PAGE_INNER_PADDING_X)}>
+        <div className="flex w-full flex-1 flex-col">{children}</div>
       </div>
     </div>
   );

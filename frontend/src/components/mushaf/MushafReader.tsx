@@ -109,39 +109,27 @@ export function MushafReader({
         </Sheet>
       ) : null}
 
-      {/* Tablet / desktop: always-visible surah · juz · page (small screens use bottom sheet + jump). */}
-      {!hideNavigation ? (
-        <div className="hidden w-full shrink-0 border-b border-gray-100 pb-2 md:block">
-          <div className="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-5 lg:px-6">
-            <MushafNavigation
-              page={page}
-              totalPages={totalPages}
-              riwaya={riwaya}
-              onPageChange={onPageChange}
-              disabled={navDisabled}
-              surahIntent={surahIntent}
-              onSurahIntent={setSurahIntent}
-            />
+      <header className="w-full shrink-0">
+        {/* Tablet / desktop: always-visible surah · juz · page (small screens use bottom sheet + jump). */}
+        {!hideNavigation ? (
+          <div className="hidden w-full border-b border-gray-100 pb-2 md:block">
+            <div className="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-5 lg:px-6">
+              <MushafNavigation
+                page={page}
+                totalPages={totalPages}
+                riwaya={riwaya}
+                onPageChange={onPageChange}
+                disabled={navDisabled}
+                surahIntent={surahIntent}
+                onSurahIntent={setSurahIntent}
+              />
+            </div>
           </div>
-        </div>
-      ) : null}
-
-      <div
-        className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-3 sm:px-4 md:px-5 lg:px-6"
-        aria-label="Mushaf content"
-      >
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <MushafPageTurnButtons
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            disabled={navDisabled}
-            onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
-            showDesktopJump={!hideNavigation}
-          />
+        ) : null}
+        <div className="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-5 lg:px-6">
           {!omitMenuStrip ? (
             <nav
-              className="flex w-full max-w-full shrink-0 flex-col items-stretch gap-2  py-2"
+              className="flex w-full max-w-full shrink-0 flex-col items-stretch gap-2 py-2"
               aria-label={t("mushaf.menuNavigationZone")}
               data-testid="quran-menu-navigation-zone"
             >
@@ -152,26 +140,40 @@ export function MushafReader({
               )}
             </nav>
           ) : null}
-          {/* cqi/cqh = mushaf column; immersive header uses same card width + text gutters as the page */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden [container-type:size]">
-            {immersiveHeader ? (
-              <div className="mx-auto w-full max-w-3xl shrink-0" style={mushafPageCardWidthStyle}>
-                <div className={cn(MUSHAF_PAGE_INNER_PADDING_X, "pb-1 pt-0")}>{immersiveHeader}</div>
-              </div>
-            ) : null}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-hidden">
-              <MushafBookLayout page={page} riwaya={riwaya}>
-                {children}
-              </MushafBookLayout>
-            </div>
-          </div>
-          {bottomAccessory ? (
-            <div className="flex w-full max-w-full shrink-0 flex-col items-center justify-center gap-2 px-2">
-              {bottomAccessory}
+          {immersiveHeader ? (
+            <div className="mx-auto w-full" style={mushafPageCardWidthStyle}>
+              <div className={cn(MUSHAF_PAGE_INNER_PADDING_X, "pb-1 pt-0")}>{immersiveHeader}</div>
             </div>
           ) : null}
         </div>
-      </div>
+      </header>
+
+      <main
+        className="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col overflow-y-auto px-3 sm:px-4 md:px-5 lg:px-6"
+        aria-label="Mushaf content"
+      >
+        <div className="relative flex min-h-0 flex-1 flex-col items-center">
+          <MushafPageTurnButtons
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            disabled={navDisabled}
+            onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
+            showDesktopJump={!hideNavigation}
+          />
+          <section className="flex min-h-0 w-full flex-1 flex-col items-center">
+            <MushafBookLayout page={page} riwaya={riwaya}>
+              {children}
+            </MushafBookLayout>
+          </section>
+        </div>
+      </main>
+
+      <footer className="mx-auto w-full min-w-0 max-w-4xl shrink-0 px-3 sm:px-4 md:px-5 lg:px-6">
+        <section className="flex w-full max-w-full shrink-0 flex-col items-center justify-center gap-2 px-2">
+          {bottomAccessory}
+        </section>
+      </footer>
     </div>
   );
 }
