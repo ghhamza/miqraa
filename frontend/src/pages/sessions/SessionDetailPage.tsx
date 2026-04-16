@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -73,6 +74,7 @@ export function SessionDetailPage() {
   const [sessionRecitations, setSessionRecitations] = useState<RecitationPublic[]>([]);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
+  const [activeSessionConflictId, setActiveSessionConflictId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -200,10 +202,17 @@ export function SessionDetailPage() {
     if (!id || !detail) return;
     setActionLoading(true);
     setError(null);
+    setActiveSessionConflictId(null);
     try {
       await api.put<SessionPublic>(`sessions/${id}`, { status: "in_progress" });
       navigate(`/sessions/${id}/live`);
     } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as { active_session_id?: string; code?: string } | undefined;
+        if (data?.code === "session_already_in_progress" && data.active_session_id) {
+          setActiveSessionConflictId(data.active_session_id);
+        }
+      }
       setError(userFacingApiError(err));
     } finally {
       setActionLoading(false);
@@ -327,6 +336,14 @@ export function SessionDetailPage() {
           >
             {t("liveSession.startSession")}
           </Button>
+          {activeSessionConflictId ? (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p>{t("sessions.closeCurrentSessionFirst")}</p>
+              <Link className="mt-2 inline-block font-medium underline" to={`/sessions/${activeSessionConflictId}/live`}>
+                {t("sessions.openCurrentSession")}
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

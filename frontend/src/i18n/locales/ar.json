@@ -371,6 +371,7 @@
     "serverDown": "خطأ في الخادم. حاول لاحقًا.",
     "serviceUnavailable": "الخدمة غير متاحة مؤقتًا.",
     "session_overlap": "يوجد تعارض مع حصة أخرى في نفس الوقت.",
+    "session_already_in_progress": "يرجى إنهاء الجلسة المباشرة المفتوحة حالياً قبل بدء جلسة جديدة.",
     "session_past": "لا يمكن جدولة حصة في الماضي.",
     "session_completed": "لا يمكن تعديل حصة مكتملة.",
     "session_delete_forbidden": "لا يمكن حذف حصة جارية أو مكتملة.",
@@ -519,7 +520,9 @@
     "notesPlaceholder": "ملاحظات على أداء الطالب...",
     "starRating": "التقدير",
     "saveRecitation": "حفظ التسميع",
-    "saved": "تم الحفظ بنجاح"
+    "saved": "تم الحفظ بنجاح",
+    "closeCurrentSessionFirst": "يرجى إغلاق الجلسة المفتوحة أولاً ثم بدء هذه الجلسة.",
+    "openCurrentSession": "فتح الجلسة المباشرة الحالية"
   },
   "recitations": {
     "title": "سجل التلاوات",

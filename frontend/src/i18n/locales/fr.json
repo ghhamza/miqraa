@@ -371,6 +371,7 @@
     "serverDown": "Erreur serveur. Réessayez plus tard.",
     "serviceUnavailable": "Service temporairement indisponible.",
     "session_overlap": "Conflit avec une autre session dans cette salle.",
+    "session_already_in_progress": "Veuillez d'abord fermer la session en direct déjà ouverte avant d'en démarrer une nouvelle.",
     "session_past": "Impossible de planifier dans le passé.",
     "session_completed": "Impossible de modifier une session terminée.",
     "session_delete_forbidden": "Impossible de supprimer une session en cours ou terminée.",
@@ -519,7 +520,9 @@
     "notesPlaceholder": "Notes sur la performance de l'élève...",
     "starRating": "Appréciation",
     "saveRecitation": "Enregistrer la récitation",
-    "saved": "Enregistré avec succès"
+    "saved": "Enregistré avec succès",
+    "closeCurrentSessionFirst": "Veuillez fermer la session ouverte avant d'en démarrer une nouvelle.",
+    "openCurrentSession": "Ouvrir la session en direct en cours"
   },
   "recitations": {
     "title": "Journal des récitations",

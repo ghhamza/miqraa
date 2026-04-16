@@ -806,6 +806,81 @@ pub async fn update_session(
         None => None,
         Some(s) => Some(parse_status(s).ok_or((StatusCode::BAD_REQUEST, Json(json!({ "code": "bad_request" }))))?),
     };
+    if status_bind == Some("in_progress") && session.status != "in_progress" {
+        let mut tx = state
+            .db
+            .begin()
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        // Serialize "start session" transitions per teacher to prevent race conditions where
+        // two concurrent requests both pass the in-progress check.
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
+            .bind(session.teacher_id.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        let active_session_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT s.id \
+             FROM sessions s \
+             INNER JOIN rooms r ON r.id = s.room_id \
+             WHERE r.teacher_id = $1 \
+               AND s.status::text = 'in_progress' \
+               AND s.id <> $2 \
+             ORDER BY s.scheduled_at DESC \
+             LIMIT 1",
+        )
+        .bind(session.teacher_id)
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        if let Some(active_id) = active_session_id {
+            return Err((
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "code": "session_already_in_progress",
+                    "active_session_id": active_id
+                })),
+            ));
+        }
+
+        sqlx::query(
+            "UPDATE sessions SET \
+             title = COALESCE($1, title), \
+             scheduled_at = COALESCE($2, scheduled_at), \
+             duration_minutes = COALESCE($3, duration_minutes), \
+             notes = COALESCE($4, notes), \
+             status = CASE WHEN $5 IS NULL THEN status ELSE $5::text::session_status END \
+             WHERE id = $6",
+        )
+        .bind(req.title.as_ref())
+        .bind(req.scheduled_at)
+        .bind(req.duration_minutes)
+        .bind(req.notes.as_ref())
+        .bind(status_bind)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        tx.commit()
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        let updated = fetch_session_public(&state.db, id)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "server_error" }))))?;
+
+        if matches!(updated.status.as_str(), "completed" | "cancelled") {
+            crate::api::ws::signaling::on_session_ended(&state, id).await;
+        }
+
+        return Ok(Json(updated));
+    }
     sqlx::query(
         "UPDATE sessions SET \
          title = COALESCE($1, title), \

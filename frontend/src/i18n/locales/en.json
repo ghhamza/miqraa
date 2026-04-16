@@ -371,6 +371,7 @@
     "serverDown": "Server error. Try again later.",
     "serviceUnavailable": "Service temporarily unavailable.",
     "session_overlap": "This time overlaps another session in the room.",
+    "session_already_in_progress": "Please close your currently open live session before starting a new one.",
     "session_past": "Cannot schedule a session in the past.",
     "session_completed": "Cannot edit a completed session.",
     "session_delete_forbidden": "Cannot delete a session that is in progress or completed.",
@@ -519,7 +520,9 @@
     "notesPlaceholder": "Notes on student performance...",
     "starRating": "Rating",
     "saveRecitation": "Save recitation",
-    "saved": "Saved successfully"
+    "saved": "Saved successfully",
+    "closeCurrentSessionFirst": "Please close the opened session first, then start this one.",
+    "openCurrentSession": "Open current live session"
   },
   "recitations": {
     "title": "Recitation log",
