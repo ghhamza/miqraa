@@ -113,6 +113,20 @@ export function useMediasoupConnection(
     errback: (err: Error) => void;
   } | null>(null);
 
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const rawStreamRef = useRef<MediaStream | null>(null);
+
+  const closePublishAudioGraph = useCallback(() => {
+    rawStreamRef.current?.getTracks().forEach((t) => t.stop());
+    rawStreamRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    gainNodeRef.current = null;
+  }, []);
+
   const clearLocalMedia = useCallback(() => {
     for (const [pid, producer] of producersRef.current) {
       try {
@@ -141,7 +155,8 @@ export function useMediasoupConnection(
       consumingProducersRef.current.delete(entry.consumer.producerId);
     }
     setConsumerCount(0);
-  }, [sendMsCloseProducer]);
+    closePublishAudioGraph();
+  }, [sendMsCloseProducer, closePublishAudioGraph]);
 
   const cleanupConsumer = useCallback((consumerId: string) => {
     const entry = consumersRef.current.get(consumerId);
@@ -327,7 +342,8 @@ export function useMediasoupConnection(
     producersRef.current.clear();
     setIsPublishing(false);
     pendingProduceRef.current = null;
-  }, [sendMsCloseProducer]);
+    closePublishAudioGraph();
+  }, [sendMsCloseProducer, closePublishAudioGraph]);
 
   const publishAudio = useCallback(async () => {
     const transport = sendTransportRef.current;
@@ -339,23 +355,65 @@ export function useMediasoupConnection(
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Capture raw mic with AGC enabled (normalizes hardware differences),
+      // but keep EC/NS off to preserve tajweed fidelity for Quran recitation.
+      const rawStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: false,
+          autoGainControl: true,
           sampleRate: 48000,
           channelCount: 1,
         },
       });
-      const track = stream.getAudioTracks()[0];
-      if (!track) {
+      rawStreamRef.current = rawStream;
+      const rawTrack = rawStream.getAudioTracks()[0];
+      if (!rawTrack) {
         setError("no audio track from getUserMedia");
+        rawStreamRef.current = null;
+        rawStream.getTracks().forEach((t) => t.stop());
         return;
       }
 
+      // Route through Web Audio graph: source -> GainNode(+6dB) -> destination.
+      // This guarantees a loudness floor for weak laptop mics even after AGC.
+      // AudioContext creation is safe here because this runs inside a user-gesture
+      // call path (the join/unmute button).
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioContext = new AudioCtx({ sampleRate: 48000 });
+      if (audioContext.state === "suspended") {
+        try {
+          await audioContext.resume();
+        } catch (e) {
+          console.warn("[mediasoup] AudioContext resume failed", e);
+        }
+      }
+      const source = audioContext.createMediaStreamSource(rawStream);
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 2.0; // +6 dB boost on top of AGC
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(gainNode);
+      gainNode.connect(destination);
+
+      const track = destination.stream.getAudioTracks()[0];
+      let publishTrack: MediaStreamTrack;
+      if (!track) {
+        // Fallback: if the processed track is missing for any reason, publish raw.
+        console.warn("[mediasoup] processed audio track missing, falling back to raw mic");
+        void audioContext.close().catch(() => {});
+        audioContextRef.current = null;
+        gainNodeRef.current = null;
+        publishTrack = rawTrack;
+      } else {
+        audioContextRef.current = audioContext;
+        gainNodeRef.current = gainNode;
+        publishTrack = track;
+      }
+
       const producer = await transport.produce({
-        track,
+        track: publishTrack,
         codecOptions: {
           opusStereo: false,
           opusDtx: true,
@@ -376,11 +434,12 @@ export function useMediasoupConnection(
         setIsPublishing(false);
       });
     } catch (e) {
+      closePublishAudioGraph();
       const msg = (e as Error).message;
       setError(`publishAudio: ${msg}`);
       console.error("[mediasoup] publishAudio error:", e);
     }
-  }, [stopPublishing]);
+  }, [stopPublishing, closePublishAudioGraph]);
 
   const handleNewProducer = useCallback(
     (info: { producerId: string; userId: string; kind: string }) => {
@@ -514,6 +573,8 @@ export function useMediasoupConnection(
       consumingProducersRef.current.clear();
       pendingProduceRef.current = null;
 
+      closePublishAudioGraph();
+
       sendTransportRef.current?.close();
       recvTransportRef.current?.close();
       sendTransportRef.current = null;
@@ -522,7 +583,7 @@ export function useMediasoupConnection(
       pendingConnectRef.current.clear();
       stepRef.current = "idle";
     };
-  }, []);
+  }, [closePublishAudioGraph]);
 
   const result: UseMediasoupConnectionReturn = {
     status,
