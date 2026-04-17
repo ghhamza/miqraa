@@ -126,10 +126,19 @@ pub async fn exchange_code(
         ));
     }
 
-    response
+    let token = response
         .json::<TokenResponse>()
         .await
-        .map_err(|_| ApiError::bad_request("qf_oauth_exchange_failed", "invalid token response"))
+        .map_err(|_| ApiError::bad_request("qf_oauth_exchange_failed", "invalid token response"))?;
+
+    if !token.token_type.eq_ignore_ascii_case("bearer") {
+        tracing::warn!(
+            token_type = %token.token_type,
+            "QF token exchange returned unexpected token_type (expected Bearer)"
+        );
+    }
+
+    Ok(token)
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +149,8 @@ pub struct IdTokenClaims {
     pub first_name: Option<String>,
     pub nonce: Option<String>,
     pub exp: i64,
+    /// Issued-at (Unix seconds); deserialized from JWT, not used in logic yet.
+    #[allow(dead_code)]
     pub iat: i64,
 }
 
@@ -152,8 +163,22 @@ pub fn decode_id_token_unverified(id_token: &str) -> Result<IdTokenClaims, ApiEr
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(payload)
         .map_err(|_| ApiError::bad_request("qf_invalid_id_token", "invalid id token payload"))?;
-    serde_json::from_slice::<IdTokenClaims>(&decoded)
-        .map_err(|_| ApiError::bad_request("qf_invalid_id_token", "invalid id token claims"))
+    let claims = serde_json::from_slice::<IdTokenClaims>(&decoded)
+        .map_err(|_| ApiError::bad_request("qf_invalid_id_token", "invalid id token claims"))?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| ApiError::internal("qf_clock", "system time unavailable"))?
+        .as_secs() as i64;
+
+    if claims.exp < now {
+        return Err(ApiError::bad_request(
+            "qf_id_token_expired",
+            "id token has expired",
+        ));
+    }
+
+    Ok(claims)
 }
 
 pub async fn exchange_refresh_token(
