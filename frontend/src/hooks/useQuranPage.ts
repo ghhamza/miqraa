@@ -50,7 +50,7 @@ interface ApiResponse {
 }
 
 /** Bump when layout rules change so cached pages refetch. */
-const PAGE_CACHE_VER = 7;
+const PAGE_CACHE_VER = 9;
 const PAGE_CACHE = new Map<string, PageData>();
 
 /** Madani mushaf page count (Hafs 604 lines). */
@@ -60,11 +60,9 @@ function pageCacheKey(pageNumber: number): string {
   return `${PAGE_CACHE_VER}:${pageNumber}`;
 }
 
-/** Surahs that do not have a standalone basmalah line before the first verse (Al-Fatiha is special-cased in layout). */
+/** Standalone basmalah before the surah body: every surah except At-Tawbah (9), which has none in the Mushaf. */
 function needsStandaloneBasmallahLine(surah: number): boolean {
-  if (surah === 1) return false;
-  if (surah === 9) return false;
-  return true;
+  return surah !== 9;
 }
 
 function parseGlyph(w: ApiWord): string {
@@ -131,6 +129,11 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
   type Slot = LineData | null;
   const grid: Slot[] = Array.from({ length: 15 }, () => null);
 
+  const rowHasAyahWords = (cell: Slot): boolean =>
+    cell != null &&
+    cell.lineType === "ayah" &&
+    cell.words.some((w) => w.charTypeName.toLowerCase() !== "end");
+
   // 1) Place ayah lines from API
   for (const lineNum of sortedLines) {
     const words = byLine.get(lineNum)!;
@@ -168,9 +171,29 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
       words: [],
     };
 
-    if (needsStandaloneBasmallahLine(s) && gapLen >= 2) {
+    if (!needsStandaloneBasmallahLine(s)) continue;
+
+    if (gapLen >= 2) {
       grid[gapStart] = {
         lineNumber: gapStart + 1,
+        lineType: "basmallah",
+        isCentered: true,
+        surahNumber: null,
+        words: [],
+      };
+    } else if (gapLen === 1) {
+      // Only one free line (surah title); shift the new surah’s ayah block down to fit basmalah.
+      const firstAyahIdx = nextL - 1;
+      for (let j = 13; j >= firstAyahIdx; j--) {
+        const cell = grid[j];
+        if (cell) {
+          grid[j + 1] = { ...cell, lineNumber: j + 2 };
+        } else {
+          grid[j + 1] = null;
+        }
+      }
+      grid[firstAyahIdx] = {
+        lineNumber: firstAyahIdx + 1,
         lineType: "basmallah",
         isCentered: true,
         surahNumber: null,
@@ -191,12 +214,66 @@ function buildPageData(pageNumber: number, verses: ApiVerse[], riwaya: Riwaya): 
     };
 
     const wantBasmallah =
-      minLine >= 3 &&
-      needsStandaloneBasmallahLine(w.surah) &&
-      w.ayah === 1 &&
-      !(w.surah === 1 && minLine === 2);
+      minLine >= 2 && needsStandaloneBasmallahLine(w.surah) && w.ayah === 1;
 
     if (wantBasmallah) {
+      if (minLine >= 3) {
+        grid[1] = {
+          lineNumber: 2,
+          lineType: "basmallah",
+          isCentered: true,
+          surahNumber: null,
+          words: [],
+        };
+      } else if (minLine === 2) {
+        // First ayah is on QCF line 2 with line 1 empty: surah fits on line 1 but we need
+        // one more row for basmalah — shift ayah rows down by one (matches printed Mushaf).
+        for (let i = 13; i >= 1; i--) {
+          const cell = grid[i];
+          if (cell) {
+            grid[i + 1] = { ...cell, lineNumber: i + 2 };
+          } else {
+            grid[i + 1] = null;
+          }
+        }
+        grid[1] = {
+          lineNumber: 2,
+          lineType: "basmallah",
+          isCentered: true,
+          surahNumber: null,
+          words: [],
+        };
+      }
+    }
+  }
+
+  // 4) Surah begins on QCF line 1 (no empty lines above first ayah): insert surah + basmalah
+  // when the page itself starts at ayah 1 of that surah. Shift ayah rows down by two only if the
+  // last two grid rows have no verse text (otherwise we would truncate the page).
+  if (minLine === 1) {
+    const w = byLine.get(1)![0];
+    const [pageStartSurah, pageStartAyah] = getSurahAyahAtPageStart(pageNumber, riwaya);
+    const pageStartsAtSurahAyah1 =
+      w.surah === pageStartSurah && w.ayah === pageStartAyah && pageStartAyah === 1;
+    const wantBasmallah = pageStartsAtSurahAyah1 && needsStandaloneBasmallahLine(w.surah);
+    const canShiftTwoLines = !rowHasAyahWords(grid[13]) && !rowHasAyahWords(grid[14]);
+
+    if (wantBasmallah && canShiftTwoLines) {
+      for (let i = 12; i >= 0; i--) {
+        const cell = grid[i];
+        if (cell) {
+          grid[i + 2] = { ...cell, lineNumber: i + 3 };
+        } else {
+          grid[i + 2] = null;
+        }
+      }
+      grid[0] = {
+        lineNumber: 1,
+        lineType: "surah_name",
+        isCentered: true,
+        surahNumber: w.surah,
+        words: [],
+      };
       grid[1] = {
         lineNumber: 2,
         lineType: "basmallah",

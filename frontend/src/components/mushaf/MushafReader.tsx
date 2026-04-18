@@ -152,7 +152,7 @@ export function MushafReader({
         className="mx-auto flex min-h-0 w-full min-w-0 max-w-4xl flex-1 flex-col overflow-y-auto px-3 sm:px-4 md:px-5 lg:px-6"
         aria-label="Mushaf content"
       >
-        <div className="relative flex min-h-0 flex-1 flex-col items-center">
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
           <MushafPageTurnButtons
             page={page}
             totalPages={totalPages}
@@ -161,7 +161,7 @@ export function MushafReader({
             onOpenJump={hideNavigation ? undefined : () => setJumpOpen(true)}
             showDesktopJump={!hideNavigation}
           />
-          <section className="flex min-h-0 w-full flex-1 flex-col items-center">
+          <section className="flex min-h-0 w-full flex-1 flex-col items-center justify-center">
             <MushafBookLayout page={page} riwaya={riwaya}>
               {children}
             </MushafBookLayout>
