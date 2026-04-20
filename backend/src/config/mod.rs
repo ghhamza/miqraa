@@ -3,6 +3,8 @@
 
 use anyhow::Result;
 
+use crate::media::{LivekitConfig, MediaBackend};
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub host: String,
@@ -16,6 +18,8 @@ pub struct AppConfig {
     pub qf_redirect_uri: String,
     pub qf_scopes: String,
     pub qf_audio_cdn_base_url: String,
+    pub media_backend: MediaBackend,
+    pub livekit: LivekitConfig,
 }
 
 impl AppConfig {
@@ -53,6 +57,20 @@ impl AppConfig {
                 .unwrap_or_else(|_| "openid offline_access reading_session streak activity_day user".into()),
             qf_audio_cdn_base_url: std::env::var("QF_AUDIO_CDN_BASE_URL")
                 .unwrap_or_else(|_| "https://audio.qurancdn.com".into()),
+            media_backend: std::env::var("APP_MEDIA_BACKEND")
+                .unwrap_or_else(|_| "livekit".into())
+                .parse()
+                .unwrap_or(MediaBackend::Livekit),
+            livekit: LivekitConfig {
+                url: std::env::var("APP_LIVEKIT_URL")
+                    .unwrap_or_else(|_| "ws://localhost:7880".into()),
+                http_url: std::env::var("APP_LIVEKIT_HTTP_URL")
+                    .unwrap_or_else(|_| "http://localhost:7880".into()),
+                api_key: std::env::var("APP_LIVEKIT_API_KEY")
+                    .unwrap_or_else(|_| "devkey".into()),
+                api_secret: std::env::var("APP_LIVEKIT_API_SECRET")
+                    .unwrap_or_else(|_| "secret".into()),
+            },
         })
     }
 }

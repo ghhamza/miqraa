@@ -11,6 +11,7 @@ mod auth;
 mod config;
 mod db;
 mod models;
+mod media;
 mod qf;
 mod quran_ayah_counts;
 mod riwaya;
@@ -20,6 +21,7 @@ mod services;
 use chrono::Utc;
 
 use crate::api::ws::signaling::on_session_ended;
+use crate::media::LivekitClient;
 use crate::rooms::RoomManager;
 
 #[derive(Parser)]
@@ -106,7 +108,12 @@ async fn run_server() -> Result<()> {
     let storage = services::storage::StorageService::new(&config.recordings_path);
 
     let rooms = std::sync::Arc::new(RoomManager::new());
-    let state = api::AppState::new(db_pool, storage, config.clone(), rooms);
+    let livekit = std::sync::Arc::new(
+        LivekitClient::new(config.livekit.clone())
+            .expect("failed to initialize LiveKit client"),
+    );
+    tracing::info!("LiveKit client initialized: {}", livekit.ws_url());
+    let state = api::AppState::new(db_pool, storage, config.clone(), rooms, livekit);
     let warm = state.content_api.clone();
     tokio::spawn(async move {
         match warm.get_access_token().await {

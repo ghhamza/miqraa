@@ -190,6 +190,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/ws/session/{session_id}",
             get(ws::signaling::ws_session_handler),
         )
+        .route("/api/livekit/token", post(handlers::livekit::mint_token))
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
