@@ -56,6 +56,7 @@ export function useLivekitConnection(
 
   // The one and only live Room instance. Null when disconnected or between attempts.
   const roomRef = useRef<Room | null>(null);
+  const attachedAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // Generation counter. Every fresh connect attempt captures this value; any
   // async step that resumes with a stale generation must bail out.
@@ -85,6 +86,13 @@ export function useLivekitConnection(
    * async step that resumes afterwards will abort.
    */
   const teardownCurrentRoom = useCallback(async () => {
+    for (const [, audioEl] of attachedAudioElementsRef.current) {
+      if (audioEl.parentElement) {
+        audioEl.parentElement.removeChild(audioEl);
+      }
+    }
+    attachedAudioElementsRef.current.clear();
+
     const r = roomRef.current;
     if (!r) return;
     roomRef.current = null;
@@ -142,14 +150,32 @@ export function useLivekitConnection(
         // in some SDK versions).
         room.on(
           RoomEvent.TrackSubscribed,
-          (_track: RemoteTrack, pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+          (track: RemoteTrack, pub: RemoteTrackPublication, _p: RemoteParticipant) => {
             if (pub.kind === Track.Kind.Audio) {
+              const trackSid = track.sid;
+              const existing = attachedAudioElementsRef.current.get(trackSid);
+              if (existing?.parentElement) {
+                existing.parentElement.removeChild(existing);
+              }
+
+              const audioEl = track.attach() as HTMLAudioElement;
+              document.body.appendChild(audioEl);
+              attachedAudioElementsRef.current.set(trackSid, audioEl);
               setHasRemoteAudio(true);
             }
           },
         );
 
-        room.on(RoomEvent.TrackUnsubscribed, () => {
+        room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, pub: RemoteTrackPublication) => {
+          const audioEl = attachedAudioElementsRef.current.get(pub.trackSid);
+          if (audioEl) {
+            track.detach(audioEl);
+            if (audioEl.parentElement) {
+              audioEl.parentElement.removeChild(audioEl);
+            }
+            attachedAudioElementsRef.current.delete(pub.trackSid);
+          }
+
           const audioStillThere = Array.from(room.remoteParticipants.values()).some(
             (participant) =>
               Array.from(participant.trackPublications.values()).some(
