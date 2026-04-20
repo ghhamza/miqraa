@@ -7,4 +7,4 @@ pub mod livekit;
 
 pub use config::{LivekitConfig, MediaBackend};
 pub use grants::SessionRole;
-pub use livekit::{LivekitClient, LivekitError};
+pub use livekit::LivekitClient;

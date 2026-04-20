@@ -18,6 +18,9 @@ pub struct AppConfig {
     pub qf_redirect_uri: String,
     pub qf_scopes: String,
     pub qf_audio_cdn_base_url: String,
+    /// Selector for the media backend. Currently only `Livekit` is supported.
+    /// Retained for future variants (e.g. a self-hosted mediasoup sidecar).
+    #[allow(dead_code)]
     pub media_backend: MediaBackend,
     pub livekit: LivekitConfig,
 }

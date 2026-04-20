@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import type { SessionWsStatus } from "@/hooks/useSessionWebSocket";
+import type { LivekitConnectionStatus } from "@/hooks/useLivekitConnection";
 
 import type { ReactNode } from "react";
 import {
@@ -28,10 +29,7 @@ export interface LiveSessionMobileTopBarProps {
   page: number;
   juzN: number;
   hizbN: number;
-  livekitStatusDot?: {
-    color: string;
-    label: string;
-  };
+  statusSlot?: ReactNode;
   onOpenMenu: () => void;
 }
 
@@ -40,7 +38,7 @@ export function LiveSessionMobileTopBar({
   page,
   juzN,
   hizbN,
-  livekitStatusDot,
+  statusSlot,
   onOpenMenu,
 }: LiveSessionMobileTopBarProps) {
   const { t } = useTranslation();
@@ -67,14 +65,7 @@ export function LiveSessionMobileTopBar({
       >
         {locationLine}
       </p>
-      {livekitStatusDot ? (
-        <span
-          className="inline-block size-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: livekitStatusDot.color }}
-          title={livekitStatusDot.label}
-          aria-label={livekitStatusDot.label}
-        />
-      ) : null}
+      {statusSlot ? <div className="flex items-center gap-2">{statusSlot}</div> : null}
     </header>
   );
 }
@@ -84,6 +75,7 @@ export interface LiveSessionMobileBottomBarProps {
   isActiveReciter?: boolean;
   canPublishAudio?: boolean;
   livekitConnected?: boolean;
+  livekitStatus?: LivekitConnectionStatus;
   isMicEnabled?: boolean;
   annotationMode: boolean;
   onToggleMic?: () => void;
@@ -99,6 +91,7 @@ export function LiveSessionMobileBottomBar({
   isActiveReciter = false,
   canPublishAudio = false,
   livekitConnected = false,
+  livekitStatus = "idle",
   isMicEnabled = false,
   annotationMode,
   onToggleMic,
@@ -113,7 +106,9 @@ export function LiveSessionMobileBottomBar({
   const showComingSoon = () => {
     window.alert(t("common.comingSoon"));
   };
-  const canToggleMic = canPublishAudio && livekitConnected;
+  const hasLivekitError = livekitStatus === "error";
+  const canToggleMic = canPublishAudio && livekitConnected && !hasLivekitError;
+  const micState = hasLivekitError ? "error" : canToggleMic && isMicEnabled ? "open" : "closed";
 
   return (
     <nav
@@ -125,7 +120,9 @@ export function LiveSessionMobileBottomBar({
         onClick={canToggleMic ? onToggleMic : undefined}
         disabled={!canToggleMic}
         title={
-          canToggleMic
+          micState === "error"
+            ? t("liveSession.audio.error")
+            : canToggleMic
             ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
             : t("liveSession.tooltip.micDisabled")
         }
@@ -137,13 +134,15 @@ export function LiveSessionMobileBottomBar({
         className={cn(
           MEET_ICON_BTN_BASE,
           "h-10 w-10",
-          canToggleMic && isMicEnabled
+          micState === "open"
             ? "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90"
-            : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
+            : micState === "error"
+              ? "bg-gradient-to-b from-red-100 to-red-200/90 text-[#C62828] hover:from-red-100 hover:to-red-200/90"
+              : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
           !canToggleMic && "cursor-not-allowed opacity-85",
         )}
       >
-        {canToggleMic && isMicEnabled ? (
+        {micState === "open" ? (
           <Mic className="h-5 w-5" strokeWidth={2.25} />
         ) : (
           <MicOff className="h-5 w-5" strokeWidth={2.25} />

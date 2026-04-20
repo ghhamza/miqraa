@@ -598,7 +598,11 @@
     "leave": "Leave",
     "layoutZoneTopLeft": "Top left · status & elapsed",
     "layoutZoneTopMiddle": "Top middle · Quran menu",
-    "layoutZoneTopRight": "Top right · reserved",
+    "layoutZoneTopRight": "Top-right status",
+    "micStatus": {
+      "on": "Microphone on air",
+      "off": "Microphone muted"
+    },
     "layoutZoneBottomLeft": "Bottom left · leave & end session",
     "layoutZoneBottomMiddle": "Bottom middle · controls",
     "layoutZoneBottomRight": "Bottom right · info & chat",

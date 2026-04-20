@@ -54,6 +54,7 @@ import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
+import { SessionStatusCorner } from "../../components/session/SessionStatusCorner";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
@@ -401,15 +402,12 @@ export function LiveSessionPage() {
     sessionId: id ?? "",
     canPublish: canPublishAudio,
   });
-  const livekitDotMap: Record<typeof livekit.status, { color: string; i18nKey: string }> = {
-    idle: { color: "#9CA3AF", i18nKey: "liveSession.audio.idle" },
-    requesting_token: { color: "#D4A843", i18nKey: "liveSession.audio.connecting" },
-    connecting: { color: "#D4A843", i18nKey: "liveSession.audio.connecting" },
-    connected: { color: "#1B5E20", i18nKey: "liveSession.audio.connected" },
-    disconnected: { color: "#6B7280", i18nKey: "liveSession.audio.disconnected" },
-    error: { color: "#EF5350", i18nKey: "liveSession.audio.error" },
-  };
-  const livekitDot = livekitDotMap[livekit.status];
+  const elapsedLabel = formatElapsed(elapsedMs);
+  const micState: "publishing" | "muted" | "listener" = canPublishAudio
+    ? livekit.isMicEnabled
+      ? "publishing"
+      : "muted"
+    : "listener";
 
   /** When a student is set as active reciter, turn on pen/annotation mode so the teacher can mark without an extra click. */
   useEffect(() => {
@@ -1048,7 +1046,14 @@ export function LiveSessionPage() {
             page={page}
             juzN={navCornerLabels.juzN}
             hizbN={navCornerLabels.hizbN}
-            livekitStatusDot={{ color: livekitDot.color, label: t(livekitDot.i18nKey) }}
+            statusSlot={
+              <SessionStatusCorner
+                wsStatus={sessionState.wsStatus}
+                livekitStatus={livekit.status}
+                elapsedLabel={elapsedLabel}
+                micState={micState}
+              />
+            }
             onOpenMenu={() => setNavigatorOpen(true)}
           />
 
@@ -1081,20 +1086,12 @@ export function LiveSessionPage() {
                     <Menu className="h-5 w-5" strokeWidth={2.25} />
                   </button>
                   <div className="min-w-0 flex-1 text-start leading-snug">
-                    <div className="flex items-center gap-2">
-                      <p
-                        className="truncate text-sm font-semibold text-[#2c5f7c]"
-                        style={{ fontFamily: "var(--font-ui)" }}
-                      >
-                        {navCornerLabels.surahLabel}
-                      </p>
-                      <span
-                        className="inline-block size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: livekitDot.color }}
-                        title={t(livekitDot.i18nKey)}
-                        aria-label={t(livekitDot.i18nKey)}
-                      />
-                    </div>
+                    <p
+                      className="truncate text-sm font-semibold text-[#2c5f7c]"
+                      style={{ fontFamily: "var(--font-ui)" }}
+                    >
+                      {navCornerLabels.surahLabel}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
                       <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
                       {navCornerLabels.juzN > 0 ? (
@@ -1136,6 +1133,14 @@ export function LiveSessionPage() {
                 />
               </div>
             </MushafReader>
+            <div className="pointer-events-auto absolute top-2 z-10 hidden end-2 md:block">
+              <SessionStatusCorner
+                wsStatus={sessionState.wsStatus}
+                livekitStatus={livekit.status}
+                elapsedLabel={elapsedLabel}
+                micState={micState}
+              />
+            </div>
           </div>
 
           <LiveSessionMobileBottomBar
@@ -1143,6 +1148,7 @@ export function LiveSessionPage() {
             isActiveReciter={isActiveReciter}
             canPublishAudio={canPublishAudio}
             livekitConnected={livekit.status === "connected"}
+            livekitStatus={livekit.status}
             isMicEnabled={livekit.isMicEnabled}
             annotationMode={annotationMode}
             onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
@@ -1199,6 +1205,7 @@ export function LiveSessionPage() {
                 isActiveReciter={isActiveReciter}
                 canPublishAudio={canPublishAudio}
                 livekitConnected={livekit.status === "connected"}
+                livekitStatus={livekit.status}
                 isMicEnabled={livekit.isMicEnabled}
                 onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
                 annotationMode={annotationMode}
@@ -1273,7 +1280,7 @@ export function LiveSessionPage() {
         onOpenChange={setMobileOverflowOpen}
         connectionStatus={sessionState.wsStatus}
         participantCount={sessionState.state.participants.length}
-        elapsedLabel={formatElapsed(elapsedMs)}
+        elapsedLabel={elapsedLabel}
         isTeacher={isTeacher}
         autoFollow={autoFollow}
         onAutoFollowToggle={handleAutoFollowToggle}

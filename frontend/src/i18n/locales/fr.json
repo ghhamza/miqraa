@@ -598,7 +598,11 @@
     "leave": "Quitter",
     "layoutZoneTopLeft": "Haut gauche · statut et durée",
     "layoutZoneTopMiddle": "Haut centre · menu Mushaf",
-    "layoutZoneTopRight": "Haut droite · réservé",
+    "layoutZoneTopRight": "Statut en haut à droite",
+    "micStatus": {
+      "on": "Microphone en direct",
+      "off": "Microphone coupé"
+    },
     "layoutZoneBottomLeft": "Bas gauche · quitter et terminer",
     "layoutZoneBottomMiddle": "Bas centre · contrôles",
     "layoutZoneBottomRight": "Bas droite · infos et chat",

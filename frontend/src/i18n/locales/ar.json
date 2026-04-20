@@ -598,7 +598,11 @@
     "leave": "مغادرة",
     "layoutZoneTopLeft": "أعلى اليسار · الحالة والوقت",
     "layoutZoneTopMiddle": "أعلى الوسط · قائمة المصحف",
-    "layoutZoneTopRight": "أعلى اليمين · محجوز",
+    "layoutZoneTopRight": "الحالة العلوية اليمنى",
+    "micStatus": {
+      "on": "الميكروفون يبث",
+      "off": "الميكروفون مكتوم"
+    },
     "layoutZoneBottomLeft": "أسفل اليسار · المغادرة وإنهاء الحصة",
     "layoutZoneBottomMiddle": "أسفل الوسط · الأزرار",
     "layoutZoneBottomRight": "أسفل اليمين · معلومات ومحادثة",
