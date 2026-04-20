@@ -153,6 +153,7 @@ export function useLivekitConnection(
           (track: RemoteTrack, pub: RemoteTrackPublication, _p: RemoteParticipant) => {
             if (pub.kind === Track.Kind.Audio) {
               const trackSid = track.sid;
+              if (!trackSid) return;
               const existing = attachedAudioElementsRef.current.get(trackSid);
               if (existing?.parentElement) {
                 existing.parentElement.removeChild(existing);
