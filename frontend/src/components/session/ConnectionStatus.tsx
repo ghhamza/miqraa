@@ -3,7 +3,7 @@
 
 import { useTranslation } from "react-i18next";
 import type { SessionWsStatus } from "../../hooks/useSessionWebSocket";
-import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
+import type { LivekitConnectionStatus } from "../../hooks/useLivekitConnection";
 
 const DOT: Record<SessionWsStatus, { color: string; key: string }> = {
   connected: { color: "#1B5E20", key: "connected" },
@@ -13,66 +13,39 @@ const DOT: Record<SessionWsStatus, { color: string; key: string }> = {
   error: { color: "#EF5350", key: "disconnected" },
 };
 
-function SignalBars({ quality, qualityLabel }: { quality: NetworkQuality | null; qualityLabel: string }) {
-  const bars =
-    quality === "good" ? 3 : quality === "fair" ? 2 : quality === "poor" ? 1 : 3;
-  const color =
-    quality === "poor"
-      ? "#EF5350"
-      : quality === "fair"
-        ? "#F9A825"
-        : quality === "good"
-          ? "#1B5E20"
-          : "#9E9E9E";
-  const h = [4, 7, 10] as const;
-
-  return (
-    <span className="inline-flex items-end gap-0.5" title={qualityLabel} aria-hidden>
-      {h.map((px, i) => (
-        <span
-          key={i}
-          className="w-1 rounded-sm"
-          style={{
-            height: `${px}px`,
-            backgroundColor: i < bars ? color : "#E0E0E0",
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
 interface ConnectionStatusProps {
   status: SessionWsStatus;
-  /** WebRTC audio quality when connected; ignored when not connected. */
-  networkQuality?: NetworkQuality | null;
+  livekitStatus?: LivekitConnectionStatus;
   className?: string;
   /** Light text for dark translucent bars (e.g. immersive live session). */
   variant?: "default" | "onDark";
-  /** Dot + signal bars only (no “Connected” / status text). */
+  /** Dot only (no status text). */
   iconsOnly?: boolean;
 }
 
+const LIVEKIT_DOT: Record<
+  LivekitConnectionStatus,
+  { color: string; key: "idle" | "connecting" | "connected" | "disconnected" | "error" }
+> = {
+  idle: { color: "#9CA3AF", key: "idle" },
+  requesting_token: { color: "#D4A843", key: "connecting" },
+  connecting: { color: "#D4A843", key: "connecting" },
+  connected: { color: "#1B5E20", key: "connected" },
+  disconnected: { color: "#6B7280", key: "disconnected" },
+  error: { color: "#EF5350", key: "error" },
+};
+
 export function ConnectionStatus({
   status,
-  networkQuality = null,
+  livekitStatus,
   className = "",
   variant = "default",
   iconsOnly = false,
 }: ConnectionStatusProps) {
   const { t } = useTranslation();
   const cfg = DOT[status] ?? DOT.disconnected;
+  const livekitCfg = livekitStatus ? LIVEKIT_DOT[livekitStatus] : null;
   const labelKey = `liveSession.${cfg.key}` as const;
-  const showBars = status === "connected";
-  const qualityLabelKey =
-    networkQuality === "good"
-      ? "networkGood"
-      : networkQuality === "fair"
-        ? "networkFair"
-        : networkQuality === "poor"
-          ? "networkPoor"
-          : "networkGood";
-  const qualityLabel = t(`liveSession.${qualityLabelKey}`);
 
   const labelClass =
     variant === "onDark" ? "text-white/80" : "text-[var(--color-text-muted)]";
@@ -86,7 +59,16 @@ export function ConnectionStatus({
           style={{ backgroundColor: cfg.color }}
           aria-hidden
         />
-        {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
+        {livekitCfg ? (
+          <>
+            <span className="sr-only">{t(`liveSession.audio.${livekitCfg.key}`)}</span>
+            <span
+              className="inline-block size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: livekitCfg.color }}
+              aria-hidden
+            />
+          </>
+        ) : null}
       </div>
     );
   }
@@ -98,8 +80,17 @@ export function ConnectionStatus({
         style={{ backgroundColor: cfg.color }}
         aria-hidden
       />
-      {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
       <span className={labelClass}>{t(labelKey)}</span>
+      {livekitCfg ? (
+        <>
+          <span
+            className="inline-block size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: livekitCfg.color }}
+            aria-hidden
+          />
+          <span className={labelClass}>{t(`liveSession.audio.${livekitCfg.key}`)}</span>
+        </>
+      ) : null}
     </div>
   );
 }

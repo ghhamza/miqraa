@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import type { SessionWsStatus } from "@/hooks/useSessionWebSocket";
-import type { NetworkQuality } from "@/hooks/useWebRTCConnection";
+import type { LivekitConnectionStatus } from "@/hooks/useLivekitConnection";
 
 import type { ReactNode } from "react";
 import {
@@ -29,6 +29,7 @@ export interface LiveSessionMobileTopBarProps {
   page: number;
   juzN: number;
   hizbN: number;
+  statusSlot?: ReactNode;
   onOpenMenu: () => void;
 }
 
@@ -37,6 +38,7 @@ export function LiveSessionMobileTopBar({
   page,
   juzN,
   hizbN,
+  statusSlot,
   onOpenMenu,
 }: LiveSessionMobileTopBarProps) {
   const { t } = useTranslation();
@@ -63,16 +65,20 @@ export function LiveSessionMobileTopBar({
       >
         {locationLine}
       </p>
+      {statusSlot ? <div className="flex items-center gap-2">{statusSlot}</div> : null}
     </header>
   );
 }
 
 export interface LiveSessionMobileBottomBarProps {
   isTeacher: boolean;
-  isMuted: boolean;
-  canToggleMute: boolean;
-  onToggleMute: () => void;
+  isActiveReciter?: boolean;
+  canPublishAudio?: boolean;
+  livekitConnected?: boolean;
+  livekitStatus?: LivekitConnectionStatus;
+  isMicEnabled?: boolean;
   annotationMode: boolean;
+  onToggleMic?: () => void;
   onToggleAnnotation?: () => void;
   onOpenParticipants: () => void;
   onOpenMore: () => void;
@@ -82,10 +88,13 @@ export interface LiveSessionMobileBottomBarProps {
 
 export function LiveSessionMobileBottomBar({
   isTeacher,
-  isMuted,
-  canToggleMute,
-  onToggleMute,
+  isActiveReciter = false,
+  canPublishAudio = false,
+  livekitConnected = false,
+  livekitStatus = "idle",
+  isMicEnabled = false,
   annotationMode,
+  onToggleMic,
   onToggleAnnotation,
   onOpenParticipants,
   onOpenMore,
@@ -97,6 +106,9 @@ export function LiveSessionMobileBottomBar({
   const showComingSoon = () => {
     window.alert(t("common.comingSoon"));
   };
+  const hasLivekitError = livekitStatus === "error";
+  const canToggleMic = canPublishAudio && livekitConnected && !hasLivekitError;
+  const micState = hasLivekitError ? "error" : canToggleMic && isMicEnabled ? "open" : "closed";
 
   return (
     <nav
@@ -105,24 +117,36 @@ export function LiveSessionMobileBottomBar({
     >
       <button
         type="button"
-        disabled={!canToggleMute}
-        onClick={onToggleMute}
+        onClick={canToggleMic ? onToggleMic : undefined}
+        disabled={!canToggleMic}
         title={
-          !canToggleMute
-            ? t("liveSession.tooltip.micDisabled")
-            : isMuted
-              ? t("liveSession.tooltip.unmute")
-              : t("liveSession.tooltip.mute")
+          micState === "error"
+            ? t("liveSession.audio.error")
+            : canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.tooltip.micDisabled")
         }
-        aria-label={isMuted ? t("liveSession.unmute") : t("liveSession.mute")}
+        aria-label={
+          canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.micDisabledHint")
+        }
         className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md ring-1 ring-black/10 transition hover:brightness-105 active:scale-[0.97] disabled:opacity-40",
-          isMuted
-            ? "bg-gradient-to-b from-[#EF5350] to-[#E53935]"
-            : "bg-gradient-to-b from-[#2E7D32] to-[#1B5E20]",
+          MEET_ICON_BTN_BASE,
+          "h-10 w-10",
+          micState === "open"
+            ? "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90"
+            : micState === "error"
+              ? "bg-gradient-to-b from-red-100 to-red-200/90 text-[#C62828] hover:from-red-100 hover:to-red-200/90"
+              : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
+          !canToggleMic && "cursor-not-allowed opacity-85",
         )}
       >
-        {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        {micState === "open" ? (
+          <Mic className="h-5 w-5" strokeWidth={2.25} />
+        ) : (
+          <MicOff className="h-5 w-5" strokeWidth={2.25} />
+        )}
       </button>
 
       {isTeacher ? (
@@ -144,8 +168,8 @@ export function LiveSessionMobileBottomBar({
         <button
           type="button"
           onClick={showComingSoon}
-          title={t("liveSession.tooltip.raiseHand")}
-          aria-label={t("liveSession.raiseHand")}
+          title={isActiveReciter ? t("liveSession.tooltip.pointerTool") : t("liveSession.tooltip.raiseHand")}
+          aria-label={isActiveReciter ? t("liveSession.pointerTool") : t("liveSession.raiseHand")}
           className={cn(
             MEET_ICON_BTN_BASE,
             "h-10 w-10 bg-gradient-to-b from-amber-50 to-amber-100/90 text-amber-800 hover:from-amber-100 hover:to-amber-200/90",
@@ -212,7 +236,6 @@ export interface LiveSessionOverflowSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connectionStatus: SessionWsStatus;
-  networkQuality: NetworkQuality | null;
   participantCount: number;
   elapsedLabel: string;
   isTeacher: boolean;
@@ -224,7 +247,6 @@ export function LiveSessionOverflowSheet({
   open,
   onOpenChange,
   connectionStatus,
-  networkQuality,
   participantCount,
   elapsedLabel,
   isTeacher,
@@ -247,15 +269,7 @@ export function LiveSessionOverflowSheet({
           : connectionStatus === "reconnecting"
             ? "reconnecting"
             : "disconnected";
-  const qualityLabelKey =
-    networkQuality === "good"
-      ? "networkGood"
-      : networkQuality === "fair"
-        ? "networkFair"
-        : networkQuality === "poor"
-          ? "networkPoor"
-          : "networkGood";
-  const statusLine = `${t(`liveSession.${statusLabelKey}`)} · ${t(`liveSession.${qualityLabelKey}`)}`;
+  const statusLine = t(`liveSession.${statusLabelKey}`);
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={t("liveSession.overflowMore")}>

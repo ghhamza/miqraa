@@ -17,10 +17,7 @@ use uuid::Uuid;
 
 use crate::api::ws::messages::{ClientMessage, ServerMessage};
 use crate::api::AppState;
-use crate::config::MediaBackend;
-use crate::sfu::media_service::{ConsumeParams, DtlsParameters, ProduceParams, TransportDirection};
 use crate::auth::jwt::verify_token;
-use crate::sfu::ParticipantRole;
 
 #[derive(Deserialize)]
 pub struct WsTokenQuery {
@@ -172,9 +169,6 @@ async fn record_attendance_leave(pool: &PgPool, session_id: Uuid, student_id: Uu
 
 /// Called when a session ends via REST — closes sockets and attendance.
 pub async fn on_session_ended(state: &AppState, session_id: Uuid) {
-    if let Err(e) = state.media_service.close_session(session_id).await {
-        tracing::warn!(error = %e, "media close_session");
-    }
     state.rooms.close_session(session_id).await;
     let _ = sqlx::query(
         "UPDATE session_attendance SET left_at = NOW() \
@@ -304,47 +298,6 @@ async fn handle_socket(
     let joined = ServerMessage::UserJoined { user: self_info };
     state.rooms.broadcast(session_id, &joined, Some(user_id)).await;
 
-    let active_reciter_room = match &initial {
-        ServerMessage::RoomState {
-            active_reciter_id, ..
-        } => *active_reciter_id,
-        _ => None,
-    };
-
-    let media_role = match meta.participant_role.as_str() {
-        "teacher" => ParticipantRole::Teacher,
-        _ => ParticipantRole::Student,
-    };
-
-    if let Err(e) = state.media_service.create_session(session_id).await {
-        tracing::warn!(error = %e, "media create_session");
-    }
-
-    match state
-        .media_service
-        .add_participant(session_id, user_id, media_role)
-        .await
-    {
-        Ok(sdp) => {
-            let offer = ServerMessage::Offer {
-                sdp,
-                from: Uuid::nil(),
-            };
-            if let Ok(text) = offer.to_ws_text() {
-                let _ = tx.send(Message::Text(text.into()));
-            }
-        }
-        Err(e) => tracing::warn!(error = %e, "media add_participant"),
-    }
-
-    if let Err(e) = state
-        .media_service
-        .set_active_reciter(session_id, active_reciter_room)
-        .await
-    {
-        tracing::warn!(error = %e, "media set_active_reciter (initial sync)");
-    }
-
     let (mut sink, mut stream) = socket.split();
 
     let send_task = tokio::spawn(async move {
@@ -388,18 +341,7 @@ async fn handle_socket(
     }
 
     send_task.abort();
-    if let Err(e) = state.media_service.remove_participant(session_id, user_id).await {
-        tracing::warn!(error = %e, "media remove_participant");
-    }
     state.rooms.leave_session(session_id, user_id).await;
-    let ar = state.rooms.get_active_reciter(session_id).await;
-    if let Err(e) = state
-        .media_service
-        .set_active_reciter(session_id, ar)
-        .await
-    {
-        tracing::warn!(error = %e, "media set_active_reciter after leave");
-    }
 
     let left = ServerMessage::UserLeft { user_id };
     state.rooms.broadcast(session_id, &left, Some(user_id)).await;
@@ -452,6 +394,7 @@ async fn handle_client_message(
                     .await;
                 return;
             }
+            let previous_active_reciter = state.rooms.get_active_reciter(session_id).await;
             if let Err(e) = state
                 .rooms
                 .set_active_reciter(session_id, *target, user_id)
@@ -464,12 +407,33 @@ async fn handle_client_message(
                     _ => "set-reciter failed",
                 };
                 state.rooms.send_error(session_id, user_id, m).await;
-            } else if let Err(me) = state
-                .media_service
-                .set_active_reciter(session_id, Some(*target))
-                .await
-            {
-                tracing::warn!(error = %me, "media set_active_reciter");
+            } else {
+                if let Some(old_reciter_id) = previous_active_reciter {
+                    if old_reciter_id != *target {
+                        if let Err(e) = state
+                            .livekit
+                            .set_participant_can_publish(session_id, old_reciter_id, false)
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to revoke publish rights for previous reciter {}: {}",
+                                old_reciter_id,
+                                e,
+                            );
+                        }
+                    }
+                }
+                if let Err(e) = state
+                    .livekit
+                    .set_participant_can_publish(session_id, *target, true)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to grant publish rights to new reciter {}: {}",
+                        target,
+                        e,
+                    );
+                }
             }
         }
         ClientMessage::ClearReciter => {
@@ -480,6 +444,7 @@ async fn handle_client_message(
                     .await;
                 return;
             }
+            let previous_active_reciter = state.rooms.get_active_reciter(session_id).await;
             if let Err(e) = state
                 .rooms
                 .clear_active_reciter(session_id, user_id)
@@ -491,12 +456,18 @@ async fn handle_client_message(
                     _ => "clear-reciter failed",
                 };
                 state.rooms.send_error(session_id, user_id, m).await;
-            } else if let Err(me) = state
-                .media_service
-                .set_active_reciter(session_id, None)
-                .await
-            {
-                tracing::warn!(error = %me, "media set_active_reciter after clear");
+            } else if let Some(old_reciter_id) = previous_active_reciter {
+                if let Err(e) = state
+                    .livekit
+                    .set_participant_can_publish(session_id, old_reciter_id, false)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to revoke publish rights for previous reciter {}: {}",
+                        old_reciter_id,
+                        e,
+                    );
+                }
             }
         }
         ClientMessage::CurrentAyah { surah, ayah } => {
@@ -770,324 +741,6 @@ async fn handle_client_message(
                     state
                         .rooms
                         .send_error(session_id, user_id, "Annotation delete failed")
-                        .await;
-                }
-            }
-        }
-        ClientMessage::Offer { .. } => {
-            tracing::debug!(%session_id, %user_id, "ignoring client offer (SFU sends offers)");
-        }
-        ClientMessage::Answer { sdp, .. } => {
-            if let Err(e) = state
-                .media_service
-                .handle_answer(session_id, user_id, sdp.clone())
-                .await
-            {
-                tracing::warn!(error = %e, "media handle_answer");
-                state
-                    .rooms
-                    .send_error(session_id, user_id, "WebRTC answer failed")
-                    .await;
-            }
-        }
-        ClientMessage::IceCandidate { candidate, .. } => {
-            if let Err(e) = state
-                .media_service
-                .handle_ice_candidate(session_id, user_id, candidate.clone())
-                .await
-            {
-                tracing::warn!(error = %e, "media handle_ice_candidate");
-            }
-        }
-        ClientMessage::MsGetRtpCapabilities => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            match state
-                .media_service
-                .get_router_rtp_capabilities(session_id)
-                .await
-            {
-                Ok(router) => {
-                    let msg = ServerMessage::MsRtpCapabilities {
-                        rtp_capabilities: router.0,
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsCreateTransport { direction } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            let dir = match direction.to_ascii_lowercase().as_str() {
-                "send" => TransportDirection::Send,
-                "recv" => TransportDirection::Recv,
-                _ => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, "invalid transport direction")
-                        .await;
-                    return;
-                }
-            };
-            match state
-                .media_service
-                .create_webrtc_transport(session_id, user_id, dir)
-                .await
-            {
-                Ok(p) => {
-                    let msg = ServerMessage::MsTransportCreated {
-                        id: p.id,
-                        ice_parameters: p.ice_parameters,
-                        ice_candidates: p.ice_candidates,
-                        dtls_parameters: p.dtls_parameters,
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsConnectTransport {
-            transport_id,
-            dtls_parameters,
-        } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            match state
-                .media_service
-                .connect_webrtc_transport(
-                    session_id,
-                    user_id,
-                    transport_id.clone(),
-                    DtlsParameters(dtls_parameters.clone()),
-                )
-                .await
-            {
-                Ok(()) => {
-                    let msg = ServerMessage::MsTransportConnected {
-                        transport_id: transport_id.clone(),
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-
-                    if state.config.media_backend == MediaBackend::Mediasoup {
-                        let existing = state
-                            .media_service
-                            .list_other_producers(session_id, user_id)
-                            .await;
-                        for (owner_user_id, producer_id, kind) in existing {
-                            let catchup = ServerMessage::MsNewProducer {
-                                producer_id,
-                                user_id: owner_user_id,
-                                kind,
-                            };
-                            state.rooms.send_to(session_id, user_id, &catchup).await;
-                        }
-                    }
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsProduce {
-            transport_id,
-            kind,
-            rtp_parameters,
-        } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-
-            let is_teacher = user_id == teacher_id;
-            let active_reciter = state.media_service.get_active_reciter(session_id).await;
-            let is_active_reciter = Some(user_id) == active_reciter;
-
-            if !is_teacher && !is_active_reciter {
-                tracing::warn!(
-                    %session_id,
-                    %user_id,
-                    "produce rejected: not teacher and not active reciter"
-                );
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "Only the teacher and the active reciter may speak",
-                    )
-                    .await;
-                return;
-            }
-
-            let params = ProduceParams {
-                transport_id: transport_id.clone(),
-                kind: kind.clone(),
-                rtp_parameters: rtp_parameters.clone(),
-            };
-            match state.media_service.produce(session_id, user_id, params).await {
-                Ok(producer_id) => {
-                    let msg = ServerMessage::MsProduced {
-                        producer_id: producer_id.clone(),
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-                    let broadcast = ServerMessage::MsNewProducer {
-                        producer_id,
-                        user_id,
-                        kind: kind.clone(),
-                    };
-                    state
-                        .rooms
-                        .broadcast(session_id, &broadcast, Some(user_id))
-                        .await;
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsConsume {
-            transport_id,
-            producer_id,
-            rtp_capabilities,
-        } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            let params = ConsumeParams {
-                transport_id: transport_id.clone(),
-                producer_id: producer_id.clone(),
-                rtp_capabilities: rtp_capabilities.clone(),
-            };
-            match state.media_service.consume(session_id, user_id, params).await {
-                Ok(info) => {
-                    let msg = ServerMessage::MsConsumed {
-                        id: info.id,
-                        producer_id: info.producer_id,
-                        kind: info.kind,
-                        rtp_parameters: info.rtp_parameters,
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsResumeConsumer { consumer_id } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            match state
-                .media_service
-                .resume_consumer(session_id, user_id, consumer_id.clone())
-                .await
-            {
-                Ok(()) => {
-                    let msg = ServerMessage::MsConsumerResumed {
-                        consumer_id: consumer_id.clone(),
-                    };
-                    state.rooms.send_to(session_id, user_id, &msg).await;
-                }
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
-                        .await;
-                }
-            }
-        }
-        ClientMessage::MsCloseProducer { producer_id } => {
-            if state.config.media_backend == MediaBackend::WebrtcRs {
-                state
-                    .rooms
-                    .send_error(
-                        session_id,
-                        user_id,
-                        "mediasoup protocol not available on webrtc-rs backend",
-                    )
-                    .await;
-                return;
-            }
-            match state
-                .media_service
-                .close_producer(session_id, user_id, producer_id.clone())
-                .await
-            {
-                Ok(()) => {}
-                Err(e) => {
-                    state
-                        .rooms
-                        .send_error(session_id, user_id, format!("{e}"))
                         .await;
                 }
             }

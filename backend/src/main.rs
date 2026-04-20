@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-use std::sync::Arc;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
@@ -13,20 +11,18 @@ mod auth;
 mod config;
 mod db;
 mod models;
+mod media;
 mod qf;
 mod quran_ayah_counts;
 mod riwaya;
 mod rooms;
 mod services;
-mod sfu;
 
 use chrono::Utc;
 
-use crate::api::ws::messages::ServerMessage;
 use crate::api::ws::signaling::on_session_ended;
-use crate::config::MediaBackend;
+use crate::media::LivekitClient;
 use crate::rooms::RoomManager;
-use crate::sfu::{MediaService, MediasoupMediaService, SfuServerEvent, WebRtcSfu};
 
 #[derive(Parser)]
 #[command(name = "miqraa-backend")]
@@ -101,13 +97,7 @@ async fn run_server() -> Result<()> {
     tracing::info!("Starting Al-Miqraa server...");
 
     let config = config::AppConfig::load()?;
-
-    tracing::info!(backend = ?config.media_backend, "initializing media service");
-
-    tracing::debug!(
-        stun_server = %config.stun_server,
-        recordings_path = %config.recordings_path,
-    );
+    tracing::debug!(recordings_path = %config.recordings_path);
 
     std::fs::create_dir_all(&config.recordings_path)?;
 
@@ -117,50 +107,13 @@ async fn run_server() -> Result<()> {
 
     let storage = services::storage::StorageService::new(&config.recordings_path);
 
-    let rooms = Arc::new(RoomManager::new());
-    let (sfu_tx, mut sfu_rx) = tokio::sync::mpsc::unbounded_channel::<SfuServerEvent>();
-    let media_service: Arc<dyn MediaService> = match config.media_backend {
-        MediaBackend::WebrtcRs => Arc::new(WebRtcSfu::new(sfu_tx, config.stun_server.clone())),
-        MediaBackend::Mediasoup => {
-            drop(sfu_tx);
-            Arc::new(MediasoupMediaService::new(
-                config.mediasoup_announced_ip.clone(),
-                config.mediasoup_rtc_min_port,
-                config.mediasoup_rtc_max_port,
-            ))
-        }
-    };
-    let rooms_for_sfu = rooms.clone();
-    tokio::spawn(async move {
-        while let Some(ev) = sfu_rx.recv().await {
-            match ev {
-                SfuServerEvent::IceCandidate {
-                    session_id,
-                    user_id,
-                    candidate,
-                } => {
-                    let msg = ServerMessage::IceCandidate {
-                        candidate,
-                        from: Uuid::nil(),
-                    };
-                    rooms_for_sfu.send_to(session_id, user_id, &msg).await;
-                }
-                SfuServerEvent::Offer {
-                    session_id,
-                    user_id,
-                    sdp,
-                } => {
-                    let msg = ServerMessage::Offer {
-                        sdp,
-                        from: Uuid::nil(),
-                    };
-                    rooms_for_sfu.send_to(session_id, user_id, &msg).await;
-                }
-            }
-        }
-    });
-
-    let state = api::AppState::new(db_pool, storage, config.clone(), rooms, media_service);
+    let rooms = std::sync::Arc::new(RoomManager::new());
+    let livekit = std::sync::Arc::new(
+        LivekitClient::new(config.livekit.clone())
+            .expect("failed to initialize LiveKit client"),
+    );
+    tracing::info!("LiveKit client initialized: {}", livekit.ws_url());
+    let state = api::AppState::new(db_pool, storage, config.clone(), rooms, livekit);
     let warm = state.content_api.clone();
     tokio::spawn(async move {
         match warm.get_access_token().await {

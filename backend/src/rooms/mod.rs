@@ -189,6 +189,14 @@ impl RoomManager {
             .and_then(|s| s.active_reciter_id)
     }
 
+    pub async fn is_active_reciter(&self, session_id: Uuid, user_id: Uuid) -> bool {
+        let guard = self.sessions.read().await;
+        guard
+            .get(&session_id)
+            .map(|s| s.active_reciter_id == Some(user_id))
+            .unwrap_or(false)
+    }
+
     fn send_json(
         tx: &mpsc::UnboundedSender<Message>,
         msg: &ServerMessage,

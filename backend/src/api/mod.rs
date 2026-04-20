@@ -8,12 +8,12 @@ pub mod types;
 pub mod ws;
 
 use crate::config::AppConfig;
+use crate::media::LivekitClient;
 use crate::qf::config::QfConfig;
 use crate::qf::content::ContentApiClient;
 use crate::qf::user_api::UserApiClient;
 use crate::rooms::RoomManager;
 use crate::services::storage::StorageService;
-use crate::sfu::MediaService;
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -29,7 +29,7 @@ pub struct AppState {
     pub content_api: Arc<ContentApiClient>,
     pub user_api: Arc<UserApiClient>,
     pub rooms: Arc<RoomManager>,
-    pub media_service: Arc<dyn MediaService>,
+    pub livekit: Arc<LivekitClient>,
 }
 
 impl AppState {
@@ -38,7 +38,7 @@ impl AppState {
         storage: StorageService,
         config: AppConfig,
         rooms: Arc<RoomManager>,
-        media_service: Arc<dyn MediaService>,
+        livekit: Arc<LivekitClient>,
     ) -> Self {
         let qf_config = QfConfig::from_app_config(&config);
         let http = reqwest::Client::new();
@@ -53,7 +53,7 @@ impl AppState {
             user_api,
             config,
             rooms,
-            media_service,
+            livekit,
         }
     }
 }

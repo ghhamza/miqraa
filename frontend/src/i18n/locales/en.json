@@ -585,10 +585,24 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "reconnecting": "Reconnecting...",
+    "tapToEnableAudio": "Tap to enable audio",
+    "muteMic": "Mute microphone",
+    "unmuteMic": "Unmute microphone",
+    "audio": {
+      "idle": "Audio not connected",
+      "connecting": "Connecting audio…",
+      "connected": "Audio connected",
+      "disconnected": "Audio disconnected",
+      "error": "Audio connection error"
+    },
     "leave": "Leave",
     "layoutZoneTopLeft": "Top left · status & elapsed",
     "layoutZoneTopMiddle": "Top middle · Quran menu",
-    "layoutZoneTopRight": "Top right · reserved",
+    "layoutZoneTopRight": "Top-right status",
+    "micStatus": {
+      "on": "Microphone on air",
+      "off": "Microphone muted"
+    },
     "layoutZoneBottomLeft": "Bottom left · leave & end session",
     "layoutZoneBottomMiddle": "Bottom middle · controls",
     "layoutZoneBottomRight": "Bottom right · info & chat",

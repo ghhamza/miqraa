@@ -3,25 +3,15 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::api::types::ErrorAnnotationPublic;
 
-/// Client → server messages. `offer` / `target` are kept for wire compatibility; SFU path ignores offers.
+/// Client → server messages.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 #[allow(dead_code)]
 pub enum ClientMessage {
-    #[serde(rename = "offer")]
-    Offer { sdp: String, target: Option<Uuid> },
-
-    #[serde(rename = "answer")]
-    Answer { sdp: String, target: Option<Uuid> },
-
-    #[serde(rename = "ice-candidate")]
-    IceCandidate { candidate: String, target: Option<Uuid> },
-
     #[serde(rename = "mute")]
     Mute { muted: bool },
 
@@ -64,38 +54,6 @@ pub enum ClientMessage {
 
     #[serde(rename = "ping")]
     Ping,
-
-    #[serde(rename = "ms-get-rtp-capabilities")]
-    MsGetRtpCapabilities,
-
-    #[serde(rename = "ms-create-transport")]
-    MsCreateTransport { direction: String },
-
-    #[serde(rename = "ms-connect-transport")]
-    MsConnectTransport {
-        transport_id: String,
-        dtls_parameters: JsonValue,
-    },
-
-    #[serde(rename = "ms-produce")]
-    MsProduce {
-        transport_id: String,
-        kind: String,
-        rtp_parameters: JsonValue,
-    },
-
-    #[serde(rename = "ms-consume")]
-    MsConsume {
-        transport_id: String,
-        producer_id: String,
-        rtp_capabilities: JsonValue,
-    },
-
-    #[serde(rename = "ms-resume-consumer")]
-    MsResumeConsumer { consumer_id: String },
-
-    #[serde(rename = "ms-close-producer")]
-    MsCloseProducer { producer_id: String },
 }
 
 #[derive(Serialize, Clone)]
@@ -132,17 +90,6 @@ pub enum ServerMessage {
     #[serde(rename = "current-page")]
     CurrentPage { page: i32 },
 
-    #[serde(rename = "offer")]
-    Offer { sdp: String, from: Uuid },
-
-    /// Reserved for legacy P2P; SFU uses client `answer` only.
-    #[allow(dead_code)]
-    #[serde(rename = "answer")]
-    Answer { sdp: String, from: Uuid },
-
-    #[serde(rename = "ice-candidate")]
-    IceCandidate { candidate: String, from: Uuid },
-
     #[serde(rename = "error")]
     Error { message: String },
 
@@ -160,46 +107,6 @@ pub enum ServerMessage {
 
     #[serde(rename = "annotation-removed")]
     AnnotationRemoved { annotation_id: Uuid },
-
-    #[serde(rename = "ms-rtp-capabilities")]
-    MsRtpCapabilities { rtp_capabilities: JsonValue },
-
-    #[serde(rename = "ms-transport-created")]
-    MsTransportCreated {
-        id: String,
-        ice_parameters: JsonValue,
-        ice_candidates: JsonValue,
-        dtls_parameters: JsonValue,
-    },
-
-    #[serde(rename = "ms-transport-connected")]
-    MsTransportConnected { transport_id: String },
-
-    #[serde(rename = "ms-produced")]
-    MsProduced { producer_id: String },
-
-    #[serde(rename = "ms-consumed")]
-    MsConsumed {
-        id: String,
-        producer_id: String,
-        kind: String,
-        rtp_parameters: JsonValue,
-    },
-
-    #[serde(rename = "ms-consumer-resumed")]
-    MsConsumerResumed { consumer_id: String },
-
-    #[serde(rename = "ms-new-producer")]
-    MsNewProducer {
-        producer_id: String,
-        user_id: Uuid,
-        kind: String,
-    },
-
-    /// Broadcast when a producer is closed (mediasoup path; wired in M2b+).
-    #[allow(dead_code)]
-    #[serde(rename = "ms-producer-closed")]
-    MsProducerClosed { producer_id: String },
 }
 
 #[derive(Serialize, Clone)]
