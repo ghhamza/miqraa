@@ -585,7 +585,16 @@
     "connected": "متصل",
     "disconnected": "غير متصل",
     "reconnecting": "إعادة الاتصال...",
-    "audioMigrationBanner": "الصوت قيد التحديث — سيعود قريباً بعد الانتقال إلى LiveKit.",
+    "tapToEnableAudio": "اضغط لتشغيل الصوت",
+    "muteMic": "كتم الميكروفون",
+    "unmuteMic": "تشغيل الميكروفون",
+    "audio": {
+      "idle": "الصوت غير متصل",
+      "connecting": "جاري الاتصال بالصوت…",
+      "connected": "الصوت متصل",
+      "disconnected": "الصوت منقطع",
+      "error": "خطأ في الاتصال بالصوت"
+    },
     "leave": "مغادرة",
     "layoutZoneTopLeft": "أعلى اليسار · الحالة والوقت",
     "layoutZoneTopMiddle": "أعلى الوسط · قائمة المصحف",

@@ -394,6 +394,7 @@ async fn handle_client_message(
                     .await;
                 return;
             }
+            let previous_active_reciter = state.rooms.get_active_reciter(session_id).await;
             if let Err(e) = state
                 .rooms
                 .set_active_reciter(session_id, *target, user_id)
@@ -406,6 +407,33 @@ async fn handle_client_message(
                     _ => "set-reciter failed",
                 };
                 state.rooms.send_error(session_id, user_id, m).await;
+            } else {
+                if let Some(old_reciter_id) = previous_active_reciter {
+                    if old_reciter_id != *target {
+                        if let Err(e) = state
+                            .livekit
+                            .set_participant_can_publish(session_id, old_reciter_id, false)
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to revoke publish rights for previous reciter {}: {}",
+                                old_reciter_id,
+                                e,
+                            );
+                        }
+                    }
+                }
+                if let Err(e) = state
+                    .livekit
+                    .set_participant_can_publish(session_id, *target, true)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to grant publish rights to new reciter {}: {}",
+                        target,
+                        e,
+                    );
+                }
             }
         }
         ClientMessage::ClearReciter => {
@@ -416,6 +444,7 @@ async fn handle_client_message(
                     .await;
                 return;
             }
+            let previous_active_reciter = state.rooms.get_active_reciter(session_id).await;
             if let Err(e) = state
                 .rooms
                 .clear_active_reciter(session_id, user_id)
@@ -427,6 +456,18 @@ async fn handle_client_message(
                     _ => "clear-reciter failed",
                 };
                 state.rooms.send_error(session_id, user_id, m).await;
+            } else if let Some(old_reciter_id) = previous_active_reciter {
+                if let Err(e) = state
+                    .livekit
+                    .set_participant_can_publish(session_id, old_reciter_id, false)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to revoke publish rights for previous reciter {}: {}",
+                        old_reciter_id,
+                        e,
+                    );
+                }
             }
         }
         ClientMessage::CurrentAyah { surah, ayah } => {

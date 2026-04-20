@@ -54,13 +54,13 @@ import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
-import { AudioMigrationBanner } from "../../components/session/AudioMigrationBanner";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
+import { useLivekitConnection } from "@/hooks/useLivekitConnection";
 import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
-import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users } from "lucide-react";
+import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users, Volume2 } from "lucide-react";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -350,9 +350,6 @@ export function LiveSessionPage() {
 
   isTeacherRef.current = sessionState.isTeacher;
 
-  // TODO(MEDIA-MIGRATION P4/P5): replace with useLivekitConnection
-  const audioMigrating = true;
-
   const browserSupported = typeof RTCPeerConnection !== "undefined";
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -398,6 +395,21 @@ export function LiveSessionPage() {
   }, [sessionState.state.activeReciterId, sessionState.state.participants, t]);
 
   const isTeacher = sessionState.isTeacher;
+  const isActiveReciter = sessionState.state.activeReciterId === (user?.id ?? "");
+  const canPublishAudio = isTeacher || isActiveReciter;
+  const livekit = useLivekitConnection({
+    sessionId: id ?? "",
+    canPublish: canPublishAudio,
+  });
+  const livekitDotMap: Record<typeof livekit.status, { color: string; i18nKey: string }> = {
+    idle: { color: "#9CA3AF", i18nKey: "liveSession.audio.idle" },
+    requesting_token: { color: "#D4A843", i18nKey: "liveSession.audio.connecting" },
+    connecting: { color: "#D4A843", i18nKey: "liveSession.audio.connecting" },
+    connected: { color: "#1B5E20", i18nKey: "liveSession.audio.connected" },
+    disconnected: { color: "#6B7280", i18nKey: "liveSession.audio.disconnected" },
+    error: { color: "#EF5350", i18nKey: "liveSession.audio.error" },
+  };
+  const livekitDot = livekitDotMap[livekit.status];
 
   /** When a student is set as active reciter, turn on pen/annotation mode so the teacher can mark without an extra click. */
   useEffect(() => {
@@ -853,7 +865,9 @@ export function LiveSessionPage() {
     setLeaveOpen(true);
   }, []);
 
-  const disconnectWebrtc = () => {};
+  const disconnectWebrtc = useCallback(() => {
+    void livekit.setMicEnabled(false);
+  }, [livekit.setMicEnabled]);
 
   const confirmLeave = useCallback(() => {
     skipGradingModalRef.current = true;
@@ -979,11 +993,16 @@ export function LiveSessionPage() {
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announce}
       </div>
-      {audioMigrating ? (
-        <div className="fixed inset-x-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[70]">
-          <AudioMigrationBanner />
-        </div>
-      ) : null}
+      {livekit.audioPlaybackBlocked && (
+        <button
+          type="button"
+          onClick={() => void livekit.startAudio()}
+          className="fixed inset-x-0 top-[max(0.5rem,env(safe-area-inset-top))] z-[70] flex items-center justify-center gap-2 bg-[#D4A843] px-4 py-2 text-sm text-white"
+        >
+          <Volume2 className="h-4 w-4" />
+          {t("liveSession.tapToEnableAudio")}
+        </button>
+      )}
       {!browserSupported ? (
         <div
           className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[60] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
@@ -1029,6 +1048,7 @@ export function LiveSessionPage() {
             page={page}
             juzN={navCornerLabels.juzN}
             hizbN={navCornerLabels.hizbN}
+            livekitStatusDot={{ color: livekitDot.color, label: t(livekitDot.i18nKey) }}
             onOpenMenu={() => setNavigatorOpen(true)}
           />
 
@@ -1061,12 +1081,20 @@ export function LiveSessionPage() {
                     <Menu className="h-5 w-5" strokeWidth={2.25} />
                   </button>
                   <div className="min-w-0 flex-1 text-start leading-snug">
-                    <p
-                      className="truncate text-sm font-semibold text-[#2c5f7c]"
-                      style={{ fontFamily: "var(--font-ui)" }}
-                    >
-                      {navCornerLabels.surahLabel}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className="truncate text-sm font-semibold text-[#2c5f7c]"
+                        style={{ fontFamily: "var(--font-ui)" }}
+                      >
+                        {navCornerLabels.surahLabel}
+                      </p>
+                      <span
+                        className="inline-block size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: livekitDot.color }}
+                        title={t(livekitDot.i18nKey)}
+                        aria-label={t(livekitDot.i18nKey)}
+                      />
+                    </div>
                     <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 text-xs">
                       <span className="font-medium text-[#374151]">{t("mushaf.pageOf", { n: page })}</span>
                       {navCornerLabels.juzN > 0 ? (
@@ -1112,7 +1140,12 @@ export function LiveSessionPage() {
 
           <LiveSessionMobileBottomBar
             isTeacher={isTeacher}
+            isActiveReciter={isActiveReciter}
+            canPublishAudio={canPublishAudio}
+            livekitConnected={livekit.status === "connected"}
+            isMicEnabled={livekit.isMicEnabled}
             annotationMode={annotationMode}
+            onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
             onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
             onOpenParticipants={() => setDrawerOpen(true)}
             onOpenMore={() => setMobileOverflowOpen(true)}
@@ -1163,6 +1196,11 @@ export function LiveSessionPage() {
             <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
               <SessionControlsCorner
                 isTeacher={isTeacher}
+                isActiveReciter={isActiveReciter}
+                canPublishAudio={canPublishAudio}
+                livekitConnected={livekit.status === "connected"}
+                isMicEnabled={livekit.isMicEnabled}
+                onToggleMic={() => void livekit.setMicEnabled(!livekit.isMicEnabled)}
                 annotationMode={annotationMode}
                 onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
               />

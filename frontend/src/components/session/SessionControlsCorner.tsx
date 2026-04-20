@@ -1,19 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { Circle, Hand, MousePointer2 } from "lucide-react";
+import { Circle, Hand, Mic, MicOff, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { MEET_ICON_BTN_BASE } from "./sessionMeetButtonStyles";
 
 interface SessionControlsCornerProps {
   isTeacher: boolean;
+  isActiveReciter?: boolean;
+  canPublishAudio?: boolean;
+  livekitConnected?: boolean;
+  isMicEnabled?: boolean;
+  onToggleMic?: () => void;
   annotationMode?: boolean;
   onToggleAnnotation?: () => void;
 }
 
 export function SessionControlsCorner({
   isTeacher,
+  isActiveReciter = false,
+  canPublishAudio = false,
+  livekitConnected = false,
+  isMicEnabled = false,
+  onToggleMic,
   annotationMode,
   onToggleAnnotation,
 }: SessionControlsCornerProps) {
@@ -23,8 +33,38 @@ export function SessionControlsCorner({
     window.alert(t("common.comingSoon"));
   };
 
+  const canToggleMic = canPublishAudio && livekitConnected;
+
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        onClick={canToggleMic ? onToggleMic : undefined}
+        disabled={!canToggleMic}
+        title={
+          canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.tooltip.micDisabled")
+        }
+        aria-label={
+          canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.micDisabledHint")
+        }
+        className={cn(
+          MEET_ICON_BTN_BASE,
+          canToggleMic && isMicEnabled
+            ? "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90"
+            : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
+          !canToggleMic && "cursor-not-allowed opacity-85",
+        )}
+      >
+        {canToggleMic && isMicEnabled ? (
+          <Mic className="h-5 w-5" strokeWidth={2.25} />
+        ) : (
+          <MicOff className="h-5 w-5" strokeWidth={2.25} />
+        )}
+      </button>
       <button
         type="button"
         onClick={showComingSoon}
@@ -68,8 +108,12 @@ export function SessionControlsCorner({
         <button
           type="button"
           onClick={showComingSoon}
-          title={t("liveSession.tooltip.pointerTool")}
-          aria-label={t("liveSession.pointerTool")}
+          title={
+            isActiveReciter
+              ? t("liveSession.tooltip.pointerTool")
+              : t("liveSession.tooltip.raiseHand")
+          }
+          aria-label={isActiveReciter ? t("liveSession.pointerTool") : t("liveSession.raiseHand")}
           className={cn(
             MEET_ICON_BTN_BASE,
             "bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-600 hover:from-slate-200 hover:to-slate-300/90",

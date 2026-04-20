@@ -10,6 +10,8 @@ import {
   Info,
   Menu,
   MessageSquare,
+  Mic,
+  MicOff,
   MoreHorizontal,
   MousePointer2,
   Users,
@@ -26,6 +28,10 @@ export interface LiveSessionMobileTopBarProps {
   page: number;
   juzN: number;
   hizbN: number;
+  livekitStatusDot?: {
+    color: string;
+    label: string;
+  };
   onOpenMenu: () => void;
 }
 
@@ -34,6 +40,7 @@ export function LiveSessionMobileTopBar({
   page,
   juzN,
   hizbN,
+  livekitStatusDot,
   onOpenMenu,
 }: LiveSessionMobileTopBarProps) {
   const { t } = useTranslation();
@@ -60,13 +67,26 @@ export function LiveSessionMobileTopBar({
       >
         {locationLine}
       </p>
+      {livekitStatusDot ? (
+        <span
+          className="inline-block size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: livekitStatusDot.color }}
+          title={livekitStatusDot.label}
+          aria-label={livekitStatusDot.label}
+        />
+      ) : null}
     </header>
   );
 }
 
 export interface LiveSessionMobileBottomBarProps {
   isTeacher: boolean;
+  isActiveReciter?: boolean;
+  canPublishAudio?: boolean;
+  livekitConnected?: boolean;
+  isMicEnabled?: boolean;
   annotationMode: boolean;
+  onToggleMic?: () => void;
   onToggleAnnotation?: () => void;
   onOpenParticipants: () => void;
   onOpenMore: () => void;
@@ -76,7 +96,12 @@ export interface LiveSessionMobileBottomBarProps {
 
 export function LiveSessionMobileBottomBar({
   isTeacher,
+  isActiveReciter = false,
+  canPublishAudio = false,
+  livekitConnected = false,
+  isMicEnabled = false,
   annotationMode,
+  onToggleMic,
   onToggleAnnotation,
   onOpenParticipants,
   onOpenMore,
@@ -88,12 +113,43 @@ export function LiveSessionMobileBottomBar({
   const showComingSoon = () => {
     window.alert(t("common.comingSoon"));
   };
+  const canToggleMic = canPublishAudio && livekitConnected;
 
   return (
     <nav
       className="flex h-16 min-h-[64px] shrink-0 items-center justify-between gap-1 border-t border-gray-200 bg-white/95 px-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-sm md:hidden"
       aria-label={t("liveSession.mobileBottomBar")}
     >
+      <button
+        type="button"
+        onClick={canToggleMic ? onToggleMic : undefined}
+        disabled={!canToggleMic}
+        title={
+          canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.tooltip.micDisabled")
+        }
+        aria-label={
+          canToggleMic
+            ? t(isMicEnabled ? "liveSession.muteMic" : "liveSession.unmuteMic")
+            : t("liveSession.micDisabledHint")
+        }
+        className={cn(
+          MEET_ICON_BTN_BASE,
+          "h-10 w-10",
+          canToggleMic && isMicEnabled
+            ? "bg-gradient-to-b from-emerald-50 to-emerald-100/90 text-emerald-800 hover:from-emerald-100 hover:to-emerald-200/90"
+            : "bg-gradient-to-b from-rose-50 to-rose-100/90 text-[#EF5350] hover:from-rose-100 hover:to-rose-200/90",
+          !canToggleMic && "cursor-not-allowed opacity-85",
+        )}
+      >
+        {canToggleMic && isMicEnabled ? (
+          <Mic className="h-5 w-5" strokeWidth={2.25} />
+        ) : (
+          <MicOff className="h-5 w-5" strokeWidth={2.25} />
+        )}
+      </button>
+
       {isTeacher ? (
         <button
           type="button"
@@ -113,8 +169,8 @@ export function LiveSessionMobileBottomBar({
         <button
           type="button"
           onClick={showComingSoon}
-          title={t("liveSession.tooltip.raiseHand")}
-          aria-label={t("liveSession.raiseHand")}
+          title={isActiveReciter ? t("liveSession.tooltip.pointerTool") : t("liveSession.tooltip.raiseHand")}
+          aria-label={isActiveReciter ? t("liveSession.pointerTool") : t("liveSession.raiseHand")}
           className={cn(
             MEET_ICON_BTN_BASE,
             "h-10 w-10 bg-gradient-to-b from-amber-50 to-amber-100/90 text-amber-800 hover:from-amber-100 hover:to-amber-200/90",

@@ -585,7 +585,16 @@
     "connected": "Connecté",
     "disconnected": "Déconnecté",
     "reconnecting": "Reconnexion...",
-    "audioMigrationBanner": "L'audio est en cours de migration vers LiveKit — il sera bientôt rétabli.",
+    "tapToEnableAudio": "Appuyez pour activer l'audio",
+    "muteMic": "Couper le microphone",
+    "unmuteMic": "Activer le microphone",
+    "audio": {
+      "idle": "Audio non connecté",
+      "connecting": "Connexion audio en cours…",
+      "connected": "Audio connecté",
+      "disconnected": "Audio déconnecté",
+      "error": "Erreur de connexion audio"
+    },
     "leave": "Quitter",
     "layoutZoneTopLeft": "Haut gauche · statut et durée",
     "layoutZoneTopMiddle": "Haut centre · menu Mushaf",
