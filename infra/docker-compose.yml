@@ -1,0 +1,12 @@
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: miqraa-livekit
+    restart: unless-stopped
+    ports:
+      - "7880:7880" # WebSocket signaling (client <-> LiveKit)
+      - "7881:7881" # TCP fallback for WebRTC
+      - "7882:7882/udp" # WebRTC media (UDP, dev)
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+    command: ["--dev", "--bind", "0.0.0.0"]
