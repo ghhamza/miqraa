@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import type { SessionWsStatus } from "@/hooks/useSessionWebSocket";
-import type { NetworkQuality } from "@/hooks/useWebRTCConnection";
 
 import type { ReactNode } from "react";
 import {
@@ -11,8 +10,6 @@ import {
   Info,
   Menu,
   MessageSquare,
-  Mic,
-  MicOff,
   MoreHorizontal,
   MousePointer2,
   Users,
@@ -69,9 +66,6 @@ export function LiveSessionMobileTopBar({
 
 export interface LiveSessionMobileBottomBarProps {
   isTeacher: boolean;
-  isMuted: boolean;
-  canToggleMute: boolean;
-  onToggleMute: () => void;
   annotationMode: boolean;
   onToggleAnnotation?: () => void;
   onOpenParticipants: () => void;
@@ -82,9 +76,6 @@ export interface LiveSessionMobileBottomBarProps {
 
 export function LiveSessionMobileBottomBar({
   isTeacher,
-  isMuted,
-  canToggleMute,
-  onToggleMute,
   annotationMode,
   onToggleAnnotation,
   onOpenParticipants,
@@ -103,28 +94,6 @@ export function LiveSessionMobileBottomBar({
       className="flex h-16 min-h-[64px] shrink-0 items-center justify-between gap-1 border-t border-gray-200 bg-white/95 px-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-sm md:hidden"
       aria-label={t("liveSession.mobileBottomBar")}
     >
-      <button
-        type="button"
-        disabled={!canToggleMute}
-        onClick={onToggleMute}
-        title={
-          !canToggleMute
-            ? t("liveSession.tooltip.micDisabled")
-            : isMuted
-              ? t("liveSession.tooltip.unmute")
-              : t("liveSession.tooltip.mute")
-        }
-        aria-label={isMuted ? t("liveSession.unmute") : t("liveSession.mute")}
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md ring-1 ring-black/10 transition hover:brightness-105 active:scale-[0.97] disabled:opacity-40",
-          isMuted
-            ? "bg-gradient-to-b from-[#EF5350] to-[#E53935]"
-            : "bg-gradient-to-b from-[#2E7D32] to-[#1B5E20]",
-        )}
-      >
-        {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-      </button>
-
       {isTeacher ? (
         <button
           type="button"
@@ -212,7 +181,6 @@ export interface LiveSessionOverflowSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connectionStatus: SessionWsStatus;
-  networkQuality: NetworkQuality | null;
   participantCount: number;
   elapsedLabel: string;
   isTeacher: boolean;
@@ -224,7 +192,6 @@ export function LiveSessionOverflowSheet({
   open,
   onOpenChange,
   connectionStatus,
-  networkQuality,
   participantCount,
   elapsedLabel,
   isTeacher,
@@ -247,15 +214,7 @@ export function LiveSessionOverflowSheet({
           : connectionStatus === "reconnecting"
             ? "reconnecting"
             : "disconnected";
-  const qualityLabelKey =
-    networkQuality === "good"
-      ? "networkGood"
-      : networkQuality === "fair"
-        ? "networkFair"
-        : networkQuality === "poor"
-          ? "networkPoor"
-          : "networkGood";
-  const statusLine = `${t(`liveSession.${statusLabelKey}`)} · ${t(`liveSession.${qualityLabelKey}`)}`;
+  const statusLine = t(`liveSession.${statusLabelKey}`);
 
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={t("liveSession.overflowMore")}>

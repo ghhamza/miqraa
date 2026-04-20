@@ -5,12 +5,10 @@ import { LogOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "./ConnectionStatus";
 import type { SessionWsStatus } from "../../hooks/useSessionWebSocket";
-import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
 import type { HalaqahType } from "../../types";
 
 interface FloatingTopBarProps {
   connectionStatus: SessionWsStatus;
-  networkQuality?: NetworkQuality | null;
   halaqahName: string;
   halaqahType?: HalaqahType;
   elapsedLabel: string;
@@ -29,7 +27,6 @@ const TYPE_KEYS: Record<string, string> = {
 
 export function FloatingTopBar({
   connectionStatus,
-  networkQuality,
   halaqahName,
   halaqahType,
   elapsedLabel,
@@ -46,7 +43,6 @@ export function FloatingTopBar({
     >
       <ConnectionStatus
         status={connectionStatus}
-        networkQuality={networkQuality}
         variant="onDark"
         className="text-xs"
       />

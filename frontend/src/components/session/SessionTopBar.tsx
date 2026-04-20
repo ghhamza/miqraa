@@ -5,11 +5,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/Button";
 import { ConnectionStatus } from "./ConnectionStatus";
 import type { SessionWsStatus } from "../../hooks/useSessionWebSocket";
-import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
 
 interface SessionTopBarProps {
   connectionStatus: SessionWsStatus;
-  networkQuality?: NetworkQuality | null;
   surahLabel: string;
   sessionTitle: string;
   elapsedLabel: string;
@@ -21,7 +19,6 @@ interface SessionTopBarProps {
 
 export function SessionTopBar({
   connectionStatus,
-  networkQuality = null,
   surahLabel,
   sessionTitle,
   elapsedLabel,
@@ -37,7 +34,7 @@ export function SessionTopBar({
       style={{ fontFamily: "var(--font-ui)" }}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
-        <ConnectionStatus status={connectionStatus} networkQuality={networkQuality} />
+        <ConnectionStatus status={connectionStatus} />
         <span className="truncate text-sm font-medium text-[var(--color-text)]" title={surahLabel}>
           {surahLabel}
         </span>

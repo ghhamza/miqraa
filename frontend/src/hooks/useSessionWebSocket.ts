@@ -117,7 +117,7 @@ function parseServerMessage(raw: string): Record<string, unknown> | null {
   }
 }
 
-/** Recursively rename snake_case keys to camelCase for mediasoup-client JSON shapes from the server. */
+/** Recursively rename snake_case keys to camelCase for JSON shapes from the server. */
 function jsonKeysToCamelCase(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map(jsonKeysToCamelCase);

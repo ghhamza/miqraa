@@ -54,11 +54,10 @@ import { AutoFollowBadge } from "../../components/session/AutoFollowBadge";
 import { GradingPanel } from "../../components/session/GradingPanel";
 import { GradeToast } from "../../components/session/GradeToast";
 import { ReconnectingOverlay } from "../../components/session/ReconnectingOverlay";
+import { AudioMigrationBanner } from "../../components/session/AudioMigrationBanner";
 import { AnnotationToolbar, type AnnotationTarget } from "../../components/session/AnnotationToolbar";
 import { StudentAnnotationPopover } from "../../components/session/StudentAnnotationPopover";
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
-import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
-import { useMediasoupConnection } from "../../hooks/useMediasoupConnection";
 import { cn } from "@/lib/utils";
 import { MEET_ICON_BTN_BASE, MENU_ICON_BUTTON_CLASS } from "../../components/session/sessionMeetButtonStyles";
 import { Info, LogOut, Menu, MessageSquare, PhoneOff, Users } from "lucide-react";
@@ -125,30 +124,6 @@ export function LiveSessionPage() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const hadServerCurrentAyahRef = useRef(false);
   const teacherSeededFromServer = useRef(false);
-  const webrtcHandlersRef = useRef({
-    handleOffer: (_sdp: string) => {},
-    handleIce: (_c: string) => {},
-  });
-  const mediasoupHandlersRef = useRef({
-    handleRtpCapabilities: (_caps: unknown) => {},
-    handleTransportCreated: (_params: {
-      id: string;
-      iceParameters: unknown;
-      iceCandidates: unknown;
-      dtlsParameters: unknown;
-    }) => {},
-    handleTransportConnected: (_id: string) => {},
-    handleProduced: (_producerId: string) => {},
-    handleConsumed: (_info: {
-      id: string;
-      producerId: string;
-      kind: string;
-      rtpParameters: unknown;
-    }) => {},
-    handleConsumerResumed: (_id: string) => {},
-    handleNewProducer: (_info: { producerId: string; userId: string; kind: string }) => {},
-    handleProducerClosed: (_id: string) => {},
-  });
   const [anotherTab, setAnotherTab] = useState(false);
   const [announce, setAnnounce] = useState("");
   const [reconnectedToast, setReconnectedToast] = useState(false);
@@ -327,14 +302,6 @@ export function LiveSessionPage() {
     myUserId: user?.id ?? "",
     teacherId: sessionDetail?.teacher_id ?? "",
     enabled: sessionReady && !anotherTab,
-    onMsRtpCapabilities: (caps) => mediasoupHandlersRef.current.handleRtpCapabilities(caps),
-    onMsTransportCreated: (params) => mediasoupHandlersRef.current.handleTransportCreated(params),
-    onMsTransportConnected: (tid) => mediasoupHandlersRef.current.handleTransportConnected(tid),
-    onMsProduced: (producerId) => mediasoupHandlersRef.current.handleProduced(producerId),
-    onMsConsumed: (info) => void mediasoupHandlersRef.current.handleConsumed(info),
-    onMsConsumerResumed: (id) => mediasoupHandlersRef.current.handleConsumerResumed(id),
-    onMsNewProducer: (info) => mediasoupHandlersRef.current.handleNewProducer(info),
-    onMsProducerClosed: (id) => mediasoupHandlersRef.current.handleProducerClosed(id),
     onSessionEnded: onSessionEndedNav,
     onGradeNotification,
     onAnnotationAdded: (annotation) => {
@@ -365,12 +332,6 @@ export function LiveSessionPage() {
         return { ...prev, annotations: next };
       });
     },
-    onOffer: (sdp) => {
-      void webrtcHandlersRef.current.handleOffer(sdp);
-    },
-    onIceCandidate: (c) => {
-      void webrtcHandlersRef.current.handleIce(c);
-    },
     onAnotherTab: () => setAnotherTab(true),
     onJoinRejected: (message) => {
       if (message === "Room is full") {
@@ -389,45 +350,10 @@ export function LiveSessionPage() {
 
   isTeacherRef.current = sessionState.isTeacher;
 
-  const shouldPublish = sessionState.isTeacher || sessionState.isActiveReciter;
-
-  const mediasoup = useMediasoupConnection({
-    enabled: sessionReady && !anotherTab,
-    wsStatus: sessionState.wsStatus,
-    shouldPublish,
-    myUserId: user?.id ?? "",
-    sendMsGetRtpCapabilities: sessionState.sendMsGetRtpCapabilities,
-    sendMsCreateTransport: sessionState.sendMsCreateTransport,
-    sendMsConnectTransport: sessionState.sendMsConnectTransport,
-    sendMsProduce: sessionState.sendMsProduce,
-    sendMsConsume: sessionState.sendMsConsume,
-    sendMsResumeConsumer: sessionState.sendMsResumeConsumer,
-    sendMsCloseProducer: sessionState.sendMsCloseProducer,
-  });
-
-  mediasoupHandlersRef.current = {
-    handleRtpCapabilities: mediasoup.handleRtpCapabilities,
-    handleTransportCreated: mediasoup.handleTransportCreated,
-    handleTransportConnected: mediasoup.handleTransportConnected,
-    handleProduced: mediasoup.handleProduced,
-    handleConsumed: mediasoup.handleConsumed,
-    handleConsumerResumed: mediasoup.handleConsumerResumed,
-    handleNewProducer: mediasoup.handleNewProducer,
-    handleProducerClosed: mediasoup.handleProducerClosed,
-  };
-
-  /* M3a: legacy WebRTC hook kept in repo for reference; live audio uses mediasoup-client.
-  const webrtc = useWebRTCConnection({
-    enabled: sessionReady && !anotherTab,
-    sendAnswer: sessionState.sendAnswer,
-    sendIceCandidate: sessionState.sendIceCandidate,
-    publishAudio: sessionState.isTeacher || sessionState.isActiveReciter,
-  });
-  */
+  // TODO(MEDIA-MIGRATION P4/P5): replace with useLivekitConnection
+  const audioMigrating = true;
 
   const browserSupported = typeof RTCPeerConnection !== "undefined";
-  const networkQuality: NetworkQuality | null = null;
-
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       sessionReady &&
@@ -923,15 +849,11 @@ export function LiveSessionPage() {
     setAnnotationTarget(null);
   }, [activeReciterParticipant?.userId]);
 
-  const canPublishMic = mediasoup.status === "ready" && shouldPublish;
-
-  const handleMicToggle = mediasoup.toggleManualMute;
-
   const handleLeave = useCallback(() => {
     setLeaveOpen(true);
   }, []);
 
-  const disconnectWebrtc = mediasoup.disconnect;
+  const disconnectWebrtc = () => {};
 
   const confirmLeave = useCallback(() => {
     skipGradingModalRef.current = true;
@@ -994,11 +916,6 @@ export function LiveSessionPage() {
         setDrawerOpen(false);
         return;
       }
-      if (e.key === "m" || e.key === "M") {
-        e.preventDefault();
-        if (canPublishMic) void handleMicToggle();
-        return;
-      }
       if (isTeacher) {
         if (e.key === "n" || e.key === "N") {
           e.preventDefault();
@@ -1014,7 +931,7 @@ export function LiveSessionPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canPublishMic, handleMicToggle, sessionState, isTeacher, stepAyah, mobileOverflowOpen]);
+  }, [sessionState, isTeacher, stepAyah, mobileOverflowOpen]);
 
   if (!id) {
     return null;
@@ -1062,19 +979,11 @@ export function LiveSessionPage() {
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announce}
       </div>
-      <div
-        className="pointer-events-none fixed left-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[70] max-w-[min(100vw-1rem,22rem)] rounded border border-amber-200/80 bg-amber-50/95 px-2 py-1 font-mono text-[11px] leading-snug text-amber-950 shadow-sm"
-        role="status"
-        aria-live="polite"
-      >
-        status: {mediasoup.status}
-        <br />
-        publishing: {mediasoup.isPublishing ? "yes" : "no"}
-        <br />
-        consumers: {mediasoup.consumerCount}
-        <br />
-        error: {mediasoup.error ?? "—"}
-      </div>
+      {audioMigrating ? (
+        <div className="fixed inset-x-[max(0.5rem,env(safe-area-inset-left))] top-[max(0.5rem,env(safe-area-inset-top))] z-[70]">
+          <AudioMigrationBanner />
+        </div>
+      ) : null}
       {!browserSupported ? (
         <div
           className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-0 right-0 z-[60] border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900"
@@ -1203,9 +1112,6 @@ export function LiveSessionPage() {
 
           <LiveSessionMobileBottomBar
             isTeacher={isTeacher}
-            isMuted={!mediasoup.isPublishing}
-            canToggleMute={canPublishMic}
-            onToggleMute={handleMicToggle}
             annotationMode={annotationMode}
             onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
             onOpenParticipants={() => setDrawerOpen(true)}
@@ -1256,9 +1162,6 @@ export function LiveSessionPage() {
           >
             <div className="flex min-h-10 flex-wrap items-center justify-center gap-2">
               <SessionControlsCorner
-                isMuted={!mediasoup.isPublishing}
-                canToggleMute={canPublishMic}
-                onToggleMute={handleMicToggle}
                 isTeacher={isTeacher}
                 annotationMode={annotationMode}
                 onToggleAnnotation={isTeacher ? () => setAnnotationMode((m) => !m) : undefined}
@@ -1331,7 +1234,6 @@ export function LiveSessionPage() {
         open={mobileOverflowOpen}
         onOpenChange={setMobileOverflowOpen}
         connectionStatus={sessionState.wsStatus}
-        networkQuality={networkQuality}
         participantCount={sessionState.state.participants.length}
         elapsedLabel={formatElapsed(elapsedMs)}
         isTeacher={isTeacher}

@@ -585,6 +585,7 @@
     "connected": "Connecté",
     "disconnected": "Déconnecté",
     "reconnecting": "Reconnexion...",
+    "audioMigrationBanner": "L'audio est en cours de migration vers LiveKit — il sera bientôt rétabli.",
     "leave": "Quitter",
     "layoutZoneTopLeft": "Haut gauche · statut et durée",
     "layoutZoneTopMiddle": "Haut centre · menu Mushaf",

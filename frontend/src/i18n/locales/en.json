@@ -585,6 +585,7 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "reconnecting": "Reconnecting...",
+    "audioMigrationBanner": "Audio is being migrated to LiveKit — it will be back shortly.",
     "leave": "Leave",
     "layoutZoneTopLeft": "Top left · status & elapsed",
     "layoutZoneTopMiddle": "Top middle · Quran menu",

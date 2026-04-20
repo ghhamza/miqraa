@@ -3,7 +3,6 @@
 
 import { useTranslation } from "react-i18next";
 import type { SessionWsStatus } from "../../hooks/useSessionWebSocket";
-import type { NetworkQuality } from "../../hooks/useWebRTCConnection";
 
 const DOT: Record<SessionWsStatus, { color: string; key: string }> = {
   connected: { color: "#1B5E20", key: "connected" },
@@ -13,49 +12,17 @@ const DOT: Record<SessionWsStatus, { color: string; key: string }> = {
   error: { color: "#EF5350", key: "disconnected" },
 };
 
-function SignalBars({ quality, qualityLabel }: { quality: NetworkQuality | null; qualityLabel: string }) {
-  const bars =
-    quality === "good" ? 3 : quality === "fair" ? 2 : quality === "poor" ? 1 : 3;
-  const color =
-    quality === "poor"
-      ? "#EF5350"
-      : quality === "fair"
-        ? "#F9A825"
-        : quality === "good"
-          ? "#1B5E20"
-          : "#9E9E9E";
-  const h = [4, 7, 10] as const;
-
-  return (
-    <span className="inline-flex items-end gap-0.5" title={qualityLabel} aria-hidden>
-      {h.map((px, i) => (
-        <span
-          key={i}
-          className="w-1 rounded-sm"
-          style={{
-            height: `${px}px`,
-            backgroundColor: i < bars ? color : "#E0E0E0",
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
 interface ConnectionStatusProps {
   status: SessionWsStatus;
-  /** WebRTC audio quality when connected; ignored when not connected. */
-  networkQuality?: NetworkQuality | null;
   className?: string;
   /** Light text for dark translucent bars (e.g. immersive live session). */
   variant?: "default" | "onDark";
-  /** Dot + signal bars only (no “Connected” / status text). */
+  /** Dot only (no status text). */
   iconsOnly?: boolean;
 }
 
 export function ConnectionStatus({
   status,
-  networkQuality = null,
   className = "",
   variant = "default",
   iconsOnly = false,
@@ -63,16 +30,6 @@ export function ConnectionStatus({
   const { t } = useTranslation();
   const cfg = DOT[status] ?? DOT.disconnected;
   const labelKey = `liveSession.${cfg.key}` as const;
-  const showBars = status === "connected";
-  const qualityLabelKey =
-    networkQuality === "good"
-      ? "networkGood"
-      : networkQuality === "fair"
-        ? "networkFair"
-        : networkQuality === "poor"
-          ? "networkPoor"
-          : "networkGood";
-  const qualityLabel = t(`liveSession.${qualityLabelKey}`);
 
   const labelClass =
     variant === "onDark" ? "text-white/80" : "text-[var(--color-text-muted)]";
@@ -86,7 +43,6 @@ export function ConnectionStatus({
           style={{ backgroundColor: cfg.color }}
           aria-hidden
         />
-        {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
       </div>
     );
   }
@@ -98,7 +54,6 @@ export function ConnectionStatus({
         style={{ backgroundColor: cfg.color }}
         aria-hidden
       />
-      {showBars ? <SignalBars quality={networkQuality} qualityLabel={qualityLabel} /> : null}
       <span className={labelClass}>{t(labelKey)}</span>
     </div>
   );

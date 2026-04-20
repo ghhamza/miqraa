@@ -1,24 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { Circle, Hand, Mic, MicOff, MousePointer2 } from "lucide-react";
+import { Circle, Hand, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { MEET_ICON_BTN_BASE } from "./sessionMeetButtonStyles";
 
 interface SessionControlsCornerProps {
-  isMuted: boolean;
-  canToggleMute: boolean;
-  onToggleMute: () => void;
   isTeacher: boolean;
   annotationMode?: boolean;
   onToggleAnnotation?: () => void;
 }
 
 export function SessionControlsCorner({
-  isMuted,
-  canToggleMute,
-  onToggleMute,
   isTeacher,
   annotationMode,
   onToggleAnnotation,
@@ -54,27 +48,6 @@ export function SessionControlsCorner({
         )}
       >
         <Hand className="h-5 w-5" strokeWidth={2.25} />
-      </button>
-      <button
-        type="button"
-        disabled={!canToggleMute}
-        onClick={onToggleMute}
-        title={
-          !canToggleMute
-            ? t("liveSession.tooltip.micDisabled")
-            : isMuted
-              ? t("liveSession.tooltip.unmute")
-              : t("liveSession.tooltip.mute")
-        }
-        aria-label={isMuted ? t("liveSession.unmute") : t("liveSession.mute")}
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md ring-1 ring-black/10 transition hover:brightness-105 active:scale-[0.97] disabled:opacity-40",
-          isMuted
-            ? "bg-gradient-to-b from-[#EF5350] to-[#E53935]"
-            : "bg-gradient-to-b from-[#2E7D32] to-[#1B5E20]",
-        )}
-      >
-        {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
       </button>
       {isTeacher ? (
         <button

@@ -28,7 +28,6 @@
     "i18next": "^24.2.0",
     "i18next-browser-languagedetector": "^8.0.2",
     "lucide-react": "^1.7.0",
-    "mediasoup-client": "^3.18.7",
     "quran-meta": "^6.0.17",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",

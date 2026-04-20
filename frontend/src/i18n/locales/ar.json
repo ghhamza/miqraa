@@ -585,6 +585,7 @@
     "connected": "متصل",
     "disconnected": "غير متصل",
     "reconnecting": "إعادة الاتصال...",
+    "audioMigrationBanner": "الصوت قيد التحديث — سيعود قريباً بعد الانتقال إلى LiveKit.",
     "leave": "مغادرة",
     "layoutZoneTopLeft": "أعلى اليسار · الحالة والوقت",
     "layoutZoneTopMiddle": "أعلى الوسط · قائمة المصحف",
