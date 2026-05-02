@@ -5,7 +5,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Link as LinkIcon, LogOut, Menu, User } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  Calendar,
+  DoorOpen,
+  Home,
+  Link as LinkIcon,
+  LogOut,
+  Menu,
+  User,
+  Users,
+} from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
@@ -103,11 +114,14 @@ export function AppLayout() {
   const isMushafRoute = location.pathname.startsWith("/mushaf");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [roomCount, setRoomCount] = useState<number | null>(null);
+  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
   const isAdmin = user?.role === "admin";
   const roomsBadgeCount = user ? roomCount : null;
+  const showPendingDot =
+    (user?.role === "teacher" || user?.role === "admin") && (pendingTotal ?? 0) > 0;
 
   const navActive = useMemo(() => {
     const p = location.pathname;
@@ -135,9 +149,11 @@ export function AppLayout() {
       try {
         const { data } = await api.get<RoomStats>("rooms/stats", { signal });
         setRoomCount(data.total);
+        setPendingTotal(data.pending_count_total);
       } catch (err) {
         if ((err as { name?: string })?.name === "CanceledError") return;
         setRoomCount(null);
+        setPendingTotal(null);
       }
     },
     [user],
@@ -150,6 +166,7 @@ export function AppLayout() {
 
   const roomsLabel = (
     <span className="inline-flex items-center gap-2">
+      <DoorOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
       <span>{t("nav.rooms")}</span>
       {roomsBadgeCount !== null ? (
         <span
@@ -174,7 +191,10 @@ export function AppLayout() {
           className={cn(navLinkClassName(navActive.home), linkWrap)}
           onClick={() => setMobileNavOpen(false)}
         >
-          {t("nav.home")}
+          <span className="inline-flex items-center gap-2">
+            <Home className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.home")}
+          </span>
         </NavLink>
         {isAdmin ? (
           <NavLink
@@ -182,7 +202,10 @@ export function AppLayout() {
             className={cn(navLinkClassName(navActive.users), linkWrap)}
             onClick={() => setMobileNavOpen(false)}
           >
-            {t("nav.users")}
+            <span className="inline-flex items-center gap-2">
+              <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              {t("nav.users")}
+            </span>
           </NavLink>
         ) : null}
         <NavLink
@@ -197,7 +220,10 @@ export function AppLayout() {
           className={cn(navLinkClassName(navActive.calendar), linkWrap)}
           onClick={() => setMobileNavOpen(false)}
         >
-          {t("nav.calendar")}
+          <span className="inline-flex items-center gap-2">
+            <Calendar className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            {t("nav.calendar")}
+          </span>
         </NavLink>
         <NavLink
           to="/recitations"
@@ -217,26 +243,6 @@ export function AppLayout() {
           onClick={() => setMobileNavOpen(false)}
         >
           <LiveNavChipLabel />
-        </NavLink>
-        <NavLink
-          to="/profile"
-          className={cn(navLinkClassName(navActive.profile), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <User className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            {t("nav.profile")}
-          </span>
-        </NavLink>
-        <NavLink
-          to="/settings"
-          className={cn(navLinkClassName(navActive.settings), linkWrap)}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <span className="inline-flex items-center gap-2">
-            <LinkIcon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            Quran.Foundation
-          </span>
         </NavLink>
       </div>
     );
@@ -312,7 +318,10 @@ export function AppLayout() {
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
                   <NavLink to="/" end className={navLinkClassName(navActive.home)}>
-                    {t("nav.home")}
+                    <span className="inline-flex items-center gap-2">
+                      <Home className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      {t("nav.home")}
+                    </span>
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>
@@ -320,7 +329,10 @@ export function AppLayout() {
                 <NavigationMenuItem>
                   <NavigationMenuLink asChild>
                     <NavLink to="/users" className={navLinkClassName(navActive.users)}>
-                      {t("nav.users")}
+                      <span className="inline-flex items-center gap-2">
+                        <Users className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                        {t("nav.users")}
+                      </span>
                     </NavLink>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
@@ -335,7 +347,10 @@ export function AppLayout() {
               <NavigationMenuItem>
                 <NavigationMenuLink asChild>
                   <NavLink to="/calendar" className={navLinkClassName(navActive.calendar)}>
-                    {t("nav.calendar")}
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      {t("nav.calendar")}
+                    </span>
                   </NavLink>
                 </NavigationMenuLink>
               </NavigationMenuItem>
@@ -370,11 +385,21 @@ export function AppLayout() {
                 <button
                   type="button"
                   className={cn(
-                    "rounded-full outline-none ring-offset-background transition-opacity hover:opacity-95",
+                    "relative rounded-full outline-none ring-offset-background transition-opacity hover:opacity-95",
                     "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   )}
-                  aria-label={user?.name ?? t("common.appName")}
+                  aria-label={
+                    showPendingDot
+                      ? `${user?.name ?? t("common.appName")}. ${t("nav.pendingIndicator")}`
+                      : (user?.name ?? t("common.appName"))
+                  }
                 >
+                  {showPendingDot ? (
+                    <span
+                      className="absolute end-0 top-0 z-10 size-2.5 rounded-full bg-destructive ring-2 ring-[var(--color-surface)]"
+                      aria-hidden
+                    />
+                  ) : null}
                   <Avatar className="size-9 border border-border">
                     <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
                       {user?.name ? nameToInitials(user.name) : "?"}
@@ -394,6 +419,18 @@ export function AppLayout() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {showPendingDot ? (
+                  <>
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2"
+                      onClick={() => navigate("/rooms?pending=1")}
+                    >
+                      <Bell className="h-4 w-4 shrink-0" aria-hidden />
+                      {t("nav.pendingRequests")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                ) : null}
                 <DropdownMenuItem
                   className="cursor-pointer gap-2"
                   onClick={() => navigate("/profile")}

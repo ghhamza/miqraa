@@ -8,6 +8,7 @@ import { BookOpen } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { AuthResponse } from "../../types";
+import { RoleChoiceCards } from "../../components/auth/RoleChoiceCards";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LanguageSwitcher } from "../../components/ui/LanguageSwitcher";
@@ -81,7 +82,7 @@ export function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg)] px-4 py-10">
       <div
-        className="relative w-full max-w-md rounded-2xl bg-[var(--color-surface)] p-8 shadow-md"
+        className="relative w-full max-w-[480px] rounded-2xl bg-[var(--color-surface)] p-8 shadow-md"
         style={{ fontFamily: "var(--font-ui)" }}
       >
         <div className="absolute end-4 top-4">
@@ -134,29 +135,17 @@ export function RegisterPage() {
           />
 
           <fieldset className="space-y-2">
-            <legend className="mb-2 text-sm font-medium text-[var(--color-text)]">{t("auth.accountType")}</legend>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="radio"
-                  name="role"
-                  checked={role === "student"}
-                  onChange={() => setRole("student")}
-                  className="text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                />
-                <span>{t("auth.student")}</span>
-              </label>
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="radio"
-                  name="role"
-                  checked={role === "teacher"}
-                  onChange={() => setRole("teacher")}
-                  className="text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                />
-                <span>{t("auth.teacher")}</span>
-              </label>
-            </div>
+            <legend
+              id="register-account-type-legend"
+              className="mb-2 text-sm font-medium text-[var(--color-text)]"
+            >
+              {t("auth.accountType")}
+            </legend>
+            <RoleChoiceCards
+              selected={role}
+              onSelect={setRole}
+              legendId="register-account-type-legend"
+            />
           </fieldset>
 
           {formError ? (

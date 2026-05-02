@@ -29,6 +29,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/auth/me",
             get(handlers::auth::me).put(handlers::auth::update_profile),
         )
+        .route("/api/me/whats-new", get(handlers::auth::whats_new))
         .route("/api/auth/password", put(handlers::auth::change_password))
         .route(
             "/api/auth/role-selection",

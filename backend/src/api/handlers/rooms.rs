@@ -6,7 +6,8 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::Deserialize;
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Deserializer};
 use sqlx::QueryBuilder;
 use uuid::Uuid;
 
@@ -15,12 +16,30 @@ use crate::api::types::{Paginated, RoomPublic, RoomStatsResponse, TeacherOption}
 use crate::api::AppState;
 use crate::riwaya::parse_riwaya;
 
+/// Distinguish "field absent" from "field present and null".
+/// Lets PUT requests express both "leave unchanged" and "clear to NULL".
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Ok(Some(Option::deserialize(deserializer)?))
+}
+
 #[derive(Deserialize)]
 pub struct ListRoomsQuery {
     pub search: Option<String>,
     pub active: Option<bool>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// One of: hifz | tilawa | muraja | tajweed.
+    pub halaqah_type: Option<String>,
+    /// Validated via `parse_riwaya`.
+    pub riwaya: Option<String>,
+    /// Student-only: approved | pending | rejected | none (no enrollment).
+    pub my_status: Option<String>,
+    /// `Some(true)` = only public rooms; omitted = no filter.
+    pub is_public: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +53,9 @@ pub struct CreateRoomRequest {
     pub is_public: Option<bool>,
     pub enrollment_open: Option<bool>,
     pub requires_approval: Option<bool>,
+    pub description: Option<String>,
+    /// ISO 8601 timestamp; NULL means continuous enrollment.
+    pub enrollment_deadline_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize)]
@@ -46,6 +68,32 @@ pub struct UpdateRoomRequest {
     pub is_public: Option<bool>,
     pub enrollment_open: Option<bool>,
     pub requires_approval: Option<bool>,
+    /// Pass `Some(Some(text))` to set, `Some(None)` to clear, `None` to leave unchanged.
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub enrollment_deadline_at: Option<Option<DateTime<Utc>>>,
+}
+
+fn validate_description(s: Option<&str>) -> Result<(), StatusCode> {
+    if let Some(text) = s {
+        if text.len() > 2000 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    Ok(())
+}
+
+fn validate_deadline(d: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Result<(), StatusCode> {
+    if let Some(dt) = d {
+        if dt < now - Duration::days(1) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if dt > now + Duration::days(365 * 10) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    Ok(())
 }
 
 fn require_admin(auth: &AuthenticatedUser) -> Result<(), StatusCode> {
@@ -90,11 +138,12 @@ pub async fn room_stats(
 ) -> Result<Json<RoomStatsResponse>, StatusCode> {
     match auth.role.as_str() {
         "admin" => {
-            let row: (i64, i64, i64) = sqlx::query_as(
-                "SELECT COUNT(*)::bigint,
-                        COUNT(*) FILTER (WHERE is_active)::bigint,
-                        COUNT(*) FILTER (WHERE NOT is_active)::bigint
-                 FROM rooms",
+            let row: (i64, i64, i64, i64, i64) = sqlx::query_as(
+                "SELECT (SELECT COUNT(*)::bigint FROM rooms) AS total,
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE is_active) AS active,
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE NOT is_active) AS inactive,
+                        (SELECT COUNT(*)::bigint FROM enrollments WHERE status = 'pending') AS pending,
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE is_active = false) AS archived",
             )
             .fetch_one(&state.db)
             .await
@@ -103,14 +152,18 @@ pub async fn room_stats(
                 total: row.0,
                 active: row.1,
                 inactive: row.2,
+                pending_count_total: row.3,
+                archived_count: row.4,
             }))
         }
         "teacher" => {
-            let row: (i64, i64, i64) = sqlx::query_as(
-                "SELECT COUNT(*)::bigint,
-                        COUNT(*) FILTER (WHERE is_active)::bigint,
-                        COUNT(*) FILTER (WHERE NOT is_active)::bigint
-                 FROM rooms WHERE teacher_id = $1",
+            let row: (i64, i64, i64, i64, i64) = sqlx::query_as(
+                "SELECT (SELECT COUNT(*)::bigint FROM rooms WHERE teacher_id = $1),
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE teacher_id = $1 AND is_active),
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE teacher_id = $1 AND NOT is_active),
+                        (SELECT COUNT(*)::bigint FROM enrollments e INNER JOIN rooms r ON r.id = e.room_id \
+                         WHERE r.teacher_id = $1 AND e.status = 'pending'),
+                        (SELECT COUNT(*)::bigint FROM rooms WHERE teacher_id = $1 AND is_active = false)",
             )
             .bind(auth.id)
             .fetch_one(&state.db)
@@ -120,6 +173,8 @@ pub async fn room_stats(
                 total: row.0,
                 active: row.1,
                 inactive: row.2,
+                pending_count_total: row.3,
+                archived_count: row.4,
             }))
         }
         "student" => {
@@ -131,6 +186,8 @@ pub async fn room_stats(
                 total,
                 active: total,
                 inactive: 0,
+                pending_count_total: 0,
+                archived_count: 0,
             }))
         }
         _ => Err(StatusCode::FORBIDDEN),
@@ -188,6 +245,47 @@ fn push_room_list_filters(
         qb.push(" AND r.is_active = ");
         qb.push_bind(active);
     }
+
+    if let Some(ref ht) = params.halaqah_type {
+        let v = parse_halaqah_type(ht.trim())?.to_string();
+        qb.push(" AND r.halaqah_type::text = ");
+        qb.push_bind(v);
+    }
+
+    if let Some(ref rw) = params.riwaya {
+        let v = parse_riwaya(rw.trim()).ok_or(StatusCode::BAD_REQUEST)?.to_string();
+        qb.push(" AND r.riwaya::text = ");
+        qb.push_bind(v);
+    }
+
+    if auth.role.as_str() == "student" {
+        if let Some(ref ms) = params.my_status {
+            match ms.trim() {
+                "approved" => {
+                    qb.push(" AND e_my.status = ");
+                    qb.push_bind("approved");
+                }
+                "pending" => {
+                    qb.push(" AND e_my.status = ");
+                    qb.push_bind("pending");
+                }
+                "rejected" => {
+                    qb.push(" AND e_my.status = ");
+                    qb.push_bind("rejected");
+                }
+                "none" => {
+                    qb.push(" AND e_my.status IS NULL");
+                }
+                _ => return Err(StatusCode::BAD_REQUEST),
+            }
+        }
+    }
+
+    if let Some(public) = params.is_public {
+        qb.push(" AND r.is_public = ");
+        qb.push_bind(public);
+    }
+
     Ok(())
 }
 
@@ -230,7 +328,8 @@ pub async fn list_rooms(
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
                  r.is_public, r.enrollment_open, r.requires_approval, \
                  COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-                 e_my.status AS my_status \
+                 e_my.status AS my_status, \
+                 r.description, r.enrollment_deadline_at \
                  FROM rooms r \
                  INNER JOIN users u ON u.id = r.teacher_id \
                  LEFT JOIN enrollments e_my ON e_my.room_id = r.id AND e_my.student_id = ",
@@ -245,7 +344,8 @@ pub async fn list_rooms(
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-             CAST(NULL AS TEXT) AS my_status \
+             CAST(NULL AS TEXT) AS my_status, \
+             r.description, r.enrollment_deadline_at \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE 1=1",
@@ -285,7 +385,8 @@ pub async fn get_room(
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-             (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status \
+             (SELECT e.status FROM enrollments e WHERE e.room_id = r.id AND e.student_id = $2 LIMIT 1) AS my_status, \
+             r.description, r.enrollment_deadline_at \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -301,7 +402,8 @@ pub async fn get_room(
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
              r.is_public, r.enrollment_open, r.requires_approval, \
              COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-             CAST(NULL AS TEXT) AS my_status \
+             CAST(NULL AS TEXT) AS my_status, \
+             r.description, r.enrollment_deadline_at \
              FROM rooms r \
              INNER JOIN users u ON u.id = r.teacher_id \
              WHERE r.id = $1",
@@ -385,9 +487,12 @@ pub async fn create_room(
     let enrollment_open = req.enrollment_open.unwrap_or(true);
     let requires_approval = req.requires_approval.unwrap_or(true);
 
+    validate_description(req.description.as_deref())?;
+    validate_deadline(req.enrollment_deadline_at, Utc::now())?;
+
     sqlx::query(
-        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, halaqah_type, is_public, enrollment_open, requires_approval) \
-         VALUES ($1, $2, $3, $4, true, $5, $6::halaqah_type, $7, $8, $9)",
+        "INSERT INTO rooms (id, name, teacher_id, max_students, is_active, riwaya, halaqah_type, is_public, enrollment_open, requires_approval, description, enrollment_deadline_at) \
+         VALUES ($1, $2, $3, $4, true, $5, $6::halaqah_type, $7, $8, $9, $10, $11)",
     )
     .bind(id)
     .bind(name)
@@ -398,6 +503,8 @@ pub async fn create_room(
     .bind(is_public)
     .bind(enrollment_open)
     .bind(requires_approval)
+    .bind(req.description)
+    .bind(req.enrollment_deadline_at)
     .execute(&state.db)
     .await
     .map_err(|e| {
@@ -411,7 +518,8 @@ pub async fn create_room(
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-         CAST(NULL AS TEXT) AS my_status \
+         CAST(NULL AS TEXT) AS my_status, \
+         r.description, r.enrollment_deadline_at \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -436,7 +544,8 @@ pub async fn update_room(
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-         CAST(NULL AS TEXT) AS my_status \
+         CAST(NULL AS TEXT) AS my_status, \
+         r.description, r.enrollment_deadline_at \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",
@@ -459,8 +568,17 @@ pub async fn update_room(
         && req.is_public.is_none()
         && req.enrollment_open.is_none()
         && req.requires_approval.is_none()
+        && req.description.is_none()
+        && req.enrollment_deadline_at.is_none()
     {
         return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if let Some(ref desc_opt) = req.description {
+        validate_description(desc_opt.as_deref())?;
+    }
+    if let Some(deadline_opt) = &req.enrollment_deadline_at {
+        validate_deadline(*deadline_opt, Utc::now())?;
     }
 
     let name = req.name.map(|n| n.trim().to_string()).unwrap_or(existing.name.clone());
@@ -486,9 +604,17 @@ pub async fn update_room(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let desc_present = req.description.is_some();
+    let desc_sql: Option<String> = req.description.clone().and_then(|x| x);
+    let deadline_present = req.enrollment_deadline_at.is_some();
+    let deadline_sql: Option<DateTime<Utc>> = req.enrollment_deadline_at.clone().and_then(|x| x);
+
     sqlx::query(
         "UPDATE rooms SET name = $1, max_students = $2, is_active = $3, riwaya = $4, \
-         halaqah_type = $5::halaqah_type, is_public = $6, enrollment_open = $7, requires_approval = $8 WHERE id = $9",
+         halaqah_type = $5::halaqah_type, is_public = $6, enrollment_open = $7, requires_approval = $8, \
+         description = CASE WHEN $9 THEN $10 ELSE description END, \
+         enrollment_deadline_at = CASE WHEN $11 THEN $12 ELSE enrollment_deadline_at END \
+         WHERE id = $13",
     )
     .bind(&name)
     .bind(max_students)
@@ -498,6 +624,10 @@ pub async fn update_room(
     .bind(is_public)
     .bind(enrollment_open)
     .bind(requires_approval)
+    .bind(desc_present)
+    .bind(desc_sql)
+    .bind(deadline_present)
+    .bind(deadline_sql)
     .bind(id)
     .execute(&state.db)
     .await
@@ -509,7 +639,8 @@ pub async fn update_room(
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'approved'), 0) AS enrolled_count, \
          r.is_public, r.enrollment_open, r.requires_approval, \
          COALESCE((SELECT COUNT(*)::bigint FROM enrollments e WHERE e.room_id = r.id AND e.status = 'pending'), 0) AS pending_count, \
-         CAST(NULL AS TEXT) AS my_status \
+         CAST(NULL AS TEXT) AS my_status, \
+         r.description, r.enrollment_deadline_at \
          FROM rooms r \
          INNER JOIN users u ON u.id = r.teacher_id \
          WHERE r.id = $1",

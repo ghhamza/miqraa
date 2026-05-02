@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useCancellableEffect } from "../hooks/useCancellableEffect";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Flame } from "lucide-react";
+import { BookMarked, Plus } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import type {
@@ -30,7 +30,14 @@ import { useLocaleDate } from "../hooks/useLocaleDate";
 import { intlLocaleForAppLanguage } from "../lib/intlLocale";
 import { riwayaBadgeClass } from "../lib/riwayaUi";
 import { PageShell } from "../components/layout/PageShell";
+import { EmptyState } from "../components/ui/EmptyState";
 import { LiveNowDashboardCard } from "../components/home/LiveNowDashboardCard";
+import { WhatsNewStrip } from "../components/home/WhatsNewStrip";
+import { CombinedStreakCard } from "../components/home/CombinedStreakCard";
+import { GettingStartedChecklist } from "../components/home/GettingStartedChecklist";
+import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
+import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
+import { RoomFormModal } from "../components/rooms/RoomFormModal";
 import { sessionNavigatePath } from "../lib/sessionNav";
 import { useQfStreak } from "../hooks/useQfStreak";
 
@@ -67,6 +74,11 @@ function useTodayDateLine(): string {
 export function HomePage() {
   const user = useAuthStore((s) => s.user);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const { t } = useTranslation();
+  const homeGreeting = useMemo(
+    () => (user ? t("home.welcome", { name: user.name }) : ""),
+    [t, user],
+  );
 
   if (isLoading) {
     return (
@@ -78,12 +90,12 @@ export function HomePage() {
   if (!user) {
     return null;
   }
-  if (user.role === "admin") return <AdminDashboard user={user} />;
-  if (user.role === "teacher") return <TeacherDashboard user={user} />;
-  return <StudentDashboard user={user} />;
+  if (user.role === "admin") return <AdminDashboard homeGreeting={homeGreeting} />;
+  if (user.role === "teacher") return <TeacherDashboard user={user} homeGreeting={homeGreeting} />;
+  return <StudentDashboard user={user} homeGreeting={homeGreeting} />;
 }
 
-function AdminDashboard({ user }: { user: User }) {
+function AdminDashboard({ homeGreeting }: { homeGreeting: string }) {
   const { t } = useTranslation();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -107,10 +119,11 @@ function AdminDashboard({ user }: { user: User }) {
   return (
     <PageShell
       title={t("common.appName")}
-      description={t("home.welcome", { name: user.name })}
+      description={homeGreeting}
       meta={t("home.dashboardSubtitle")}
       contentClassName="space-y-8"
     >
+      <WhatsNewStrip role="admin" />
       <LiveNowDashboardCard />
       <div>
         <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("home.adminStatsTitle")}</h2>
@@ -147,7 +160,7 @@ function AdminDashboard({ user }: { user: User }) {
   );
 }
 
-function TeacherDashboard({ user }: { user: User }) {
+function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
@@ -160,6 +173,8 @@ function TeacherDashboard({ user }: { user: User }) {
   const [recentRecs, setRecentRecs] = useState<RecitationPublic[]>([]);
   const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [roomFormOpen, setRoomFormOpen] = useState(false);
 
   useCancellableEffect(
     async (signal) => {
@@ -192,12 +207,36 @@ function TeacherDashboard({ user }: { user: User }) {
         if (!signal.aborted) setLoading(false);
       }
     },
-    [user.id],
+    [user.id, refreshToken],
   );
 
   const myStudents = useMemo(() => rooms.reduce((a, r) => a + r.enrolled_count, 0), [rooms]);
   const todaySession = useMemo(() => findFirstSessionToday(upcoming), [upcoming]);
   const sessionTitle = (s: SessionPublic) => s.title?.trim() || t("sessions.untitledTitle");
+  const isEmptyTeacher = (roomStats?.total ?? -1) === 0;
+
+  const headerActions = (
+    <Button type="button" variant="primary" onClick={() => setRoomFormOpen(true)}>
+      <span className="inline-flex items-center gap-2">
+        <Plus className="h-4 w-4" />
+        {t("home.createHalaqah")}
+      </span>
+    </Button>
+  );
+
+  const roomModal = (
+    <RoomFormModal
+      open={roomFormOpen}
+      mode="create"
+      room={null}
+      isAdmin={false}
+      onClose={() => setRoomFormOpen(false)}
+      onSaved={() => {
+        setRefreshToken((n) => n + 1);
+        setRoomFormOpen(false);
+      }}
+    />
+  );
 
   if (loading) {
     return (
@@ -207,14 +246,40 @@ function TeacherDashboard({ user }: { user: User }) {
     );
   }
 
+  if (isEmptyTeacher) {
+    return (
+      <PageShell
+        titleSize="hero"
+        title={homeGreeting}
+        meta={dateLine}
+        description={t("home.teacherDashboard")}
+        contentClassName="space-y-8"
+        actions={headerActions}
+      >
+        <WhatsNewStrip role="teacher" />
+        <LiveNowDashboardCard />
+        <TeacherEmptyHero onCreateClick={() => setRoomFormOpen(true)} />
+        <GettingStartedChecklist
+          roomTotal={roomStats?.total ?? 0}
+          sessionTotal={sessionStats?.total ?? 0}
+          hasEnrolledStudent={rooms.some((r) => r.enrolled_count > 0)}
+          firstRoomId={rooms[0]?.id ?? null}
+        />
+        {roomModal}
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       titleSize="hero"
-      title={t("home.teacherGreeting", { name: user.name })}
+      title={homeGreeting}
       meta={dateLine}
       description={t("home.teacherDashboard")}
       contentClassName="space-y-8"
+      actions={headerActions}
     >
+      <WhatsNewStrip role="teacher" />
       <LiveNowDashboardCard />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <button
@@ -247,37 +312,45 @@ function TeacherDashboard({ user }: { user: User }) {
             {recStats?.recent_count ?? 0}
           </p>
         </button>
-        <button
-          type="button"
-          onClick={() => void navigate("/recitations")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {recStats?.total ?? 0}
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={() => void navigate("/calendar")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.completedSessions")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {sessionStats?.completed ?? 0}
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={() => void navigate("/calendar")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.attendanceRate")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {sessionStats != null ? `${sessionStats.avg_attendance_pct.toFixed(1)}%` : "—"}
-          </p>
-        </button>
       </div>
+
+      <details className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
+        <summary className="cursor-pointer text-sm font-medium text-[var(--color-text-muted)]">
+          {t("home.moreStats")}
+        </summary>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => void navigate("/recitations")}
+            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+          >
+            <p className="text-xs text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+              {recStats?.total ?? 0}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/calendar")}
+            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+          >
+            <p className="text-xs text-[var(--color-text-muted)]">{t("home.completedSessions")}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+              {sessionStats?.completed ?? 0}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/calendar")}
+            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
+          >
+            <p className="text-xs text-[var(--color-text-muted)]">{t("home.attendanceRate")}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+              {sessionStats != null ? `${sessionStats.avg_attendance_pct.toFixed(1)}%` : "—"}
+            </p>
+          </button>
+        </div>
+      </details>
 
       {todaySession ? (
         <div
@@ -320,12 +393,17 @@ function TeacherDashboard({ user }: { user: User }) {
         </div>
       </section>
 
-      <UpcomingSessionsWidget maxItems={3} showViewCalendarLink />
+      <UpcomingSessionsWidget
+        maxItems={3}
+        showViewCalendarLink
+        excludeIds={todaySession ? [todaySession.id] : []}
+      />
+      {roomModal}
     </PageShell>
   );
 }
 
-function StudentDashboard({ user }: { user: User }) {
+function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: string }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const dateLine = useTodayDateLine();
@@ -335,6 +413,7 @@ function StudentDashboard({ user }: { user: User }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [recentRecs, setRecentRecs] = useState<RecitationPublic[]>([]);
   const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
+  const [publicRooms, setPublicRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
   useCancellableEffect(
@@ -344,27 +423,34 @@ function StudentDashboard({ user }: { user: User }) {
         setRooms([]);
         setRecentRecs([]);
         setUpcoming([]);
+        setPublicRooms([]);
         setLoading(false);
         return;
       }
       setLoading(true);
       try {
-        const [progressRes, roomsRes, recentRecsRes, upcomingRes] = await Promise.all([
+        const [progressRes, roomsRes, recentRecsRes, upcomingRes, publicRoomsRes] = await Promise.all([
           api.get<StudentProgress>(`students/${user.id}/progress`, { signal }),
           api.get<Paginated<Room>>("rooms", { signal }),
           api.get<Paginated<RecitationPublic>>("recitations", { params: { limit: 3 }, signal }),
           api.get<SessionPublic[]>("sessions/upcoming", { signal }),
+          api.get<Paginated<Room>>("rooms", {
+            params: { is_public: true, my_status: "none", limit: 4 },
+            signal,
+          }),
         ]);
         setProgress(progressRes.data);
         setRooms(roomsRes.data.items);
         setRecentRecs(recentRecsRes.data.items);
         setUpcoming(upcomingRes.data);
+        setPublicRooms(publicRoomsRes.data.items);
       } catch (err) {
         if ((err as { name?: string })?.name === "CanceledError") return;
         setProgress(null);
         setRooms([]);
         setRecentRecs([]);
         setUpcoming([]);
+        setPublicRooms([]);
       } finally {
         if (!signal.aborted) setLoading(false);
       }
@@ -373,6 +459,7 @@ function StudentDashboard({ user }: { user: User }) {
   );
 
   const nextSession = upcoming[0] ?? null;
+  const hasNoRecitations = (progress?.total_recitations ?? 0) === 0;
   const gd = progress?.grade_distribution;
   const surahCount = progress?.surahs_covered.length ?? 0;
   const gradeSum =
@@ -387,12 +474,118 @@ function StudentDashboard({ user }: { user: User }) {
     );
   }
 
+  if (rooms.length === 0) {
+    return (
+      <PageShell
+        titleSize="hero"
+        title={homeGreeting}
+        meta={dateLine}
+        description={t("home.studentSubtitle")}
+        contentClassName="space-y-8"
+      >
+        <WhatsNewStrip role="student" />
+        <LiveNowDashboardCard />
+        <StudentEmptyHero />
+      </PageShell>
+    );
+  }
+
+  if (rooms.length > 0 && hasNoRecitations) {
+    return (
+      <PageShell
+        titleSize="hero"
+        title={homeGreeting}
+        meta={dateLine}
+        description={t("home.studentSubtitle")}
+        contentClassName="space-y-8"
+      >
+        <WhatsNewStrip role="student" />
+        <LiveNowDashboardCard />
+
+        <EmptyState
+          size="large"
+          icon={<BookMarked className="h-16 w-16" />}
+          title={t("home.studentStartingTitle")}
+          description={t("home.studentStartingDescription")}
+        />
+
+        {nextSession ? (
+          <div
+            className="rounded-2xl border border-[var(--color-primary)]/20 p-5 shadow-sm"
+            style={{ backgroundColor: "#E8F5E9" }}
+          >
+            <p className="text-sm font-semibold text-[var(--color-primary)]">{t("home.nextSession")}</p>
+            <p className="mt-1 font-medium text-[var(--color-text)]">{nextSession.room_name}</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{mediumTime(nextSession.scheduled_at)}</p>
+            <p className="mt-1 text-xs text-[var(--color-primary)]">
+              {sessionCountdownLabel(nextSession.scheduled_at, t, intlLocaleForAppLanguage(i18n.language))}
+            </p>
+            <div className="mt-4">
+              <Button type="button" variant="primary" onClick={() => void navigate(sessionNavigatePath(nextSession))}>
+                {t("sessions.start")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.discoverHalaqatTitle")}</h2>
+              <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{t("home.discoverHalaqatDescription")}</p>
+            </div>
+            {publicRooms.length > 0 ? (
+              <Link to="/rooms" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+                {t("home.discoverHalaqatSeeAll")}
+              </Link>
+            ) : null}
+          </div>
+          {publicRooms.length === 0 ? (
+            <p className="text-sm text-[var(--color-text-muted)]">{t("home.discoverHalaqatEmpty")}</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {publicRooms.map((r) => (
+                <li key={r.id}>
+                  <Link
+                    to={`/rooms/${r.id}`}
+                    className="block rounded-xl border border-gray-100 bg-[var(--color-bg)] p-4 transition hover:border-[var(--color-primary)]/30"
+                  >
+                    <p className="font-medium text-[var(--color-text)]">{r.name}</p>
+                    <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{r.teacher_name}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex rounded-md border px-1.5 py-0.5 text-[0.65rem] font-semibold ${riwayaBadgeClass(r.riwaya)}`}
+                      >
+                        {t(`mushaf.${r.riwaya}`)}
+                      </span>
+                      <span className="text-xs text-[var(--color-text-muted)]">
+                        · {t("rooms.enrolledFraction", { enrolled: r.enrolled_count, max: r.max_students })}
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.quranMapTitle")}</h2>
+            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{t("home.quranMapDescription")}</p>
+          </div>
+          <SurahProgressGrid surahBestGrades={progress?.surah_best_grades ?? []} />
+        </section>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       titleSize="hero"
-      title={t("home.welcome", { name: user.name })}
+      title={homeGreeting}
       meta={dateLine}
-      description={t("home.welcomeSubtitle")}
+      description={t("home.studentSubtitle")}
       contentClassName="space-y-8"
       actions={
         <Button asChild variant="primary" size="lg">
@@ -400,6 +593,7 @@ function StudentDashboard({ user }: { user: User }) {
         </Button>
       }
     >
+      <WhatsNewStrip role="student" />
       <LiveNowDashboardCard />
       {progress ? (
         <section className="space-y-4">
@@ -409,55 +603,29 @@ function StudentDashboard({ user }: { user: User }) {
               <Link to={`/students/${user.id}/progress`}>{t("home.viewFullProgress")}</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
-            <SurahProgressRing covered={surahCount} />
-            <div>
-              <p className="text-sm text-[var(--color-text-muted)]">{t("recitations.surahsCovered")}</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--color-text)]">
-                {t("home.surahsCoveredCount", { count: surahCount })}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
+              <SurahProgressRing covered={surahCount} />
+              <div>
+                <p className="text-sm text-[var(--color-text-muted)]">{t("recitations.surahsCovered")}</p>
+                <p className="mt-1 text-lg font-semibold text-[var(--color-text)]">
+                  {t("home.surahsCoveredCount", { count: surahCount })}
+                </p>
+              </div>
+            </div>
+            <CombinedStreakCard
+              miqraaStreakDays={progress.streak_days}
+              qfLinked={user.qf_linked}
+              qfStreak={qfStreak}
+              qfLoading={qfStreakLoading}
+            />
+            <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
+              <p className="text-sm text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
+              <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
+                {progress.total_recitations}
               </p>
             </div>
           </div>
-          <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
-            <p className="text-sm text-[var(--color-text-muted)]">{t("recitations.streak")}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <Flame className="h-8 w-8 shrink-0 text-orange-500" aria-hidden />
-              {progress.streak_days > 0 ? (
-                <p className="text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-                  {t("home.dayStreak", { days: progress.streak_days })}
-                </p>
-              ) : (
-                <p className="text-sm font-medium text-[var(--color-text)]">{t("home.startStreak")}</p>
-              )}
-            </div>
-          </div>
-          {user.qf_linked ? (
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-              <div className="mt-2 flex items-center gap-2">
-                <Flame className="h-8 w-8 shrink-0 text-blue-600" aria-hidden />
-                <div>
-                  <p className="text-xs font-medium text-blue-700">{t("home.qfStreak")}</p>
-                  {qfStreak ? (
-                    <p className="text-lg font-bold text-blue-900">
-                      {t("home.dayStreak", { days: qfStreak.days })}
-                    </p>
-                  ) : (
-                    <p className="text-sm font-medium text-blue-900">
-                      {qfStreakLoading ? t("common.loading") : "—"}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-5 shadow-sm">
-            <p className="text-sm text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-              {progress.total_recitations}
-            </p>
-          </div>
-        </div>
         </section>
       ) : (
         <p className="text-sm text-[var(--color-text-muted)]">{t("home.statsLoadError")}</p>
@@ -479,7 +647,7 @@ function StudentDashboard({ user }: { user: User }) {
         </section>
       ) : null}
 
-      {progress ? (
+      {progress && progress.surahs_covered.length > 0 ? (
         <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("recitations.surahsCovered")}</h2>

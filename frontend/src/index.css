@@ -325,6 +325,11 @@
   animation: miqraa-live-pulse 1.8s ease-in-out infinite;
 }
 
+/** Room list card — LIVE entry link fades in/out via opacity. */
+.miqraa-room-live-link {
+  animation: miqraa-live-pulse 1.8s ease-in-out infinite;
+}
+
 /**
  * Header "LIVE" chip — plain CSS so Radix `NavigationMenuLink` defaults
  * (`hover:bg-muted`, `p-2`, `text-sm`) cannot wash out the red fill.

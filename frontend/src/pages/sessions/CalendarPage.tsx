@@ -5,15 +5,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import type { Paginated, Room, SessionPublic } from "../../types";
+import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
 import { SessionBlock } from "../../components/sessions/SessionBlock";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
+import { DaySessionsSheet } from "../../components/sessions/DaySessionsSheet";
+import { AgendaView } from "../../components/sessions/AgendaView";
+import { EmptyState } from "../../components/ui/EmptyState";
 import {
   calendarGridEnd,
   calendarGridStart,
@@ -25,7 +29,7 @@ import {
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { sessionNavigatePath } from "../../lib/sessionNav";
 
-type ViewMode = "month" | "week";
+type ViewMode = "month" | "week" | "agenda";
 
 function groupByDay(sessions: SessionPublic[]): Map<string, SessionPublic[]> {
   const m = new Map<string, SessionPublic[]>();
@@ -41,9 +45,14 @@ function groupByDay(sessions: SessionPublic[]): Map<string, SessionPublic[]> {
   return m;
 }
 
+function canSchedule(user: { role: string } | null): boolean {
+  return user?.role === "teacher" || user?.role === "admin";
+}
+
 export function CalendarPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [sessions, setSessions] = useState<SessionPublic[]>([]);
@@ -54,8 +63,26 @@ export function CalendarPage() {
   const [prefillDate, setPrefillDate] = useState<Date | null>(null);
   const [defaultRoom, setDefaultRoom] = useState<string | undefined>();
   const [presetMorning, setPresetMorning] = useState(false);
+  const [daySheetOpen, setDaySheetOpen] = useState(false);
+  const [daySheetDate, setDaySheetDate] = useState<Date | null>(null);
 
   const locale = intlLocaleForAppLanguage(i18n.language);
+  const manage = canSchedule(user);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches) {
+      setView("agenda");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || user.role !== "student") return;
+    if (rooms.length === 0) return;
+    if (roomFilter !== "") return;
+    if (rooms.length === 1) {
+      setRoomFilter(rooms[0].id);
+    }
+  }, [user, rooms, roomFilter]);
 
   const weekdayLabels = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
@@ -68,7 +95,7 @@ export function CalendarPage() {
   }, [locale]);
 
   const range = useMemo(() => {
-    if (view === "month") {
+    if (view === "month" || view === "agenda") {
       const from = calendarGridStart(cursor);
       const to = calendarGridEnd(cursor);
       return { from, to };
@@ -79,7 +106,7 @@ export function CalendarPage() {
   }, [view, cursor]);
 
   const periodLabel = useMemo(() => {
-    if (view === "month") {
+    if (view === "month" || view === "agenda") {
       return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(cursor);
     }
     const a = startOfWeekMonday(cursor);
@@ -128,6 +155,12 @@ export function CalendarPage() {
 
   const byDay = useMemo(() => groupByDay(sessions), [sessions]);
 
+  const daySheetSessions = useMemo(() => {
+    if (!daySheetDate) return [];
+    const key = toYmdLocal(daySheetDate);
+    return byDay.get(key) ?? [];
+  }, [daySheetDate, byDay]);
+
   const monthCells = useMemo(() => {
     const start = calendarGridStart(cursor);
     const cells: Date[] = [];
@@ -153,10 +186,10 @@ export function CalendarPage() {
   function goPrev() {
     setCursor((c) => {
       const n = new Date(c);
-      if (view === "month") {
-        n.setMonth(n.getMonth() - 1);
-      } else {
+      if (view === "week") {
         n.setDate(n.getDate() - 7);
+      } else {
+        n.setMonth(n.getMonth() - 1);
       }
       return n;
     });
@@ -165,10 +198,10 @@ export function CalendarPage() {
   function goNext() {
     setCursor((c) => {
       const n = new Date(c);
-      if (view === "month") {
-        n.setMonth(n.getMonth() + 1);
-      } else {
+      if (view === "week") {
         n.setDate(n.getDate() + 7);
+      } else {
+        n.setMonth(n.getMonth() + 1);
       }
       return n;
     });
@@ -178,7 +211,31 @@ export function CalendarPage() {
     setCursor(new Date());
   }
 
+  function openDaySheet(d: Date) {
+    setDaySheetDate(d);
+    setDaySheetOpen(true);
+  }
+
+  function openCreateForDay(d: Date) {
+    setPrefillDate(d);
+    setPresetMorning(true);
+    setDefaultRoom(roomFilter || undefined);
+    setFormOpen(true);
+  }
+
   const inMonth = (d: Date) => d.getMonth() === cursor.getMonth() && d.getFullYear() === cursor.getFullYear();
+
+  const scheduleDayLabel = (d: Date) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(d);
+
+  const roomSelectOptions = useMemo(() => {
+    const isStudent = user?.role === "student";
+    const allLabel = isStudent ? t("rooms.tabMyRooms") : t("sessions.allRooms");
+    return [{ value: "", label: allLabel }, ...rooms.map((r) => ({ value: r.id, label: r.name }))];
+  }, [user?.role, rooms, t]);
+
+  const showPeriodEmpty =
+    !loading && sessions.length === 0 && (view === "month" || view === "week");
 
   return (
     <PageShell
@@ -203,157 +260,268 @@ export function CalendarPage() {
           >
             {t("sessions.weekView")}
           </Button>
+          <Button
+            type="button"
+            variant={view === "agenda" ? "primary" : "secondary"}
+            onClick={() => setView("agenda")}
+          >
+            {t("sessions.agendaView")}
+          </Button>
         </div>
       }
     >
       <PageCard padding="md">
-      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" className="!p-2" onClick={goPrev} aria-label="prev">
-            <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
-          </Button>
-          <span className="min-w-[10rem] text-center text-lg font-semibold text-[var(--color-text)]">
-            {periodLabel}
-          </span>
-          <Button type="button" variant="secondary" className="!p-2" onClick={goNext} aria-label="next">
-            <ChevronRight className="h-5 w-5 rtl:rotate-180" />
-          </Button>
-          <Button type="button" variant="secondary" onClick={goToday}>
-            {t("sessions.today")}
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="room-filter" className="text-sm text-[var(--color-text-muted)]">
-            {t("sessions.room")}
-          </label>
-          <FormSelect
-            id="room-filter"
-            triggerClassName="min-w-[12rem] rounded-xl border border-gray-200 bg-white py-2 text-sm"
-            value={roomFilter}
-            onValueChange={setRoomFilter}
-            options={[
-              { value: "", label: t("sessions.allRooms") },
-              ...rooms.map((r) => ({ value: r.id, label: r.name })),
-            ]}
-          />
-        </div>
-      </div>
-
-      <div className="mt-6 space-y-6">
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
-        </div>
-      ) : view === "month" ? (
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[640px] grid-cols-7 gap-1">
-            {weekdayLabels.map((name) => (
-              <div key={name} className="p-2 text-center text-xs font-semibold text-[var(--color-text-muted)]">
-                {name}
-              </div>
-            ))}
-            {monthCells.map((d) => {
-              const key = toYmdLocal(d);
-              const daySessions = byDay.get(key) ?? [];
-              const muted = !inMonth(d);
-              const today = isToday(d);
-              return (
-                <div
-                  key={key}
-                  className={`min-h-[7rem] rounded-xl border p-1 ${
-                    today ? "border-[var(--color-primary)]/40 bg-[#E8F5E9]" : "border-gray-100 bg-[var(--color-surface)]"
-                  } ${muted ? "opacity-50" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className="mb-1 w-full text-start text-sm font-medium text-[var(--color-text)]"
-                    onClick={() => {
-                      setPrefillDate(d);
-                      setPresetMorning(true);
-                      setDefaultRoom(roomFilter || undefined);
-                      setFormOpen(true);
-                    }}
-                  >
-                    {d.getDate()}
-                  </button>
-                  <div className="flex max-h-[5.5rem] flex-col gap-1 overflow-y-auto">
-                    {daySessions.slice(0, 3).map((s) => (
-                      <SessionBlock
-                        key={s.id}
-                        session={s}
-                        compact
-                        onClick={() => navigate(sessionNavigatePath(s))}
-                      />
-                    ))}
-                    {daySessions.length > 3 ? (
-                      <span className="text-[0.65rem] text-[var(--color-text-muted)]">
-                        +{daySessions.length - 3}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="secondary" className="!p-2" onClick={goPrev} aria-label="prev">
+              <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
+            </Button>
+            <span className="min-w-[10rem] text-center text-lg font-semibold text-[var(--color-text)]">
+              {periodLabel}
+            </span>
+            <Button type="button" variant="secondary" className="!p-2" onClick={goNext} aria-label="next">
+              <ChevronRight className="h-5 w-5 rtl:rotate-180" />
+            </Button>
+            <Button type="button" variant="secondary" onClick={goToday}>
+              {t("sessions.today")}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="room-filter" className="text-sm text-[var(--color-text-muted)]">
+              {t("sessions.room")}
+            </label>
+            <FormSelect
+              id="room-filter"
+              triggerClassName="min-w-[12rem] rounded-xl border border-gray-200 bg-white py-2 text-sm"
+              value={roomFilter}
+              onValueChange={setRoomFilter}
+              options={roomSelectOptions}
+            />
           </div>
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[720px] grid-cols-7 gap-2">
-            {weekCells.map((d, i) => {
-              const key = toYmdLocal(d);
-              const daySessions = byDay.get(key) ?? [];
-              const today = isToday(d);
-              return (
-                <div
-                  key={key}
-                  className={`rounded-xl border p-2 ${
-                    today ? "border-[var(--color-primary)]/40 bg-[#E8F5E9]" : "border-gray-100 bg-[var(--color-surface)]"
-                  }`}
-                >
-                  <div className="mb-2 text-center text-xs font-semibold text-[var(--color-text-muted)]">
-                    {weekdayLabels[i]}
-                  </div>
-                  <p className="mb-2 text-center text-sm font-bold text-[var(--color-text)]">{d.getDate()}</p>
-                  <button
-                    type="button"
-                    className="mb-2 w-full rounded-lg border border-dashed border-gray-200 py-1 text-xs text-[var(--color-text-muted)]"
-                    onClick={() => {
-                      setPrefillDate(d);
-                      setPresetMorning(true);
-                      setDefaultRoom(roomFilter || undefined);
-                      setFormOpen(true);
-                    }}
-                  >
-                    {t("sessions.addSession")}
-                  </button>
-                  <div className="flex flex-col gap-2">
-                    {daySessions.map((s) => (
-                      <SessionBlock key={s.id} session={s} onClick={() => navigate(sessionNavigatePath(s))} />
+
+        <div className="mt-6 space-y-6">
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
+            </div>
+          ) : view === "agenda" ? (
+            sessions.length === 0 ? (
+              <EmptyState
+                icon={<Calendar className="h-12 w-12" />}
+                title={t("sessions.agendaEmptyTitle")}
+                description={manage ? t("sessions.agendaEmptyDescriptionTeacher") : t("sessions.agendaEmptyDescriptionStudent")}
+                primaryAction={
+                  manage
+                    ? {
+                        label: t("sessions.addSession"),
+                        onClick: () => {
+                          setPrefillDate(new Date());
+                          setPresetMorning(false);
+                          setDefaultRoom(roomFilter || undefined);
+                          setFormOpen(true);
+                        },
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              <AgendaView sessions={sessions} onSessionClick={(s) => navigate(sessionNavigatePath(s))} />
+            )
+          ) : (
+            <>
+              {showPeriodEmpty ? (
+                <EmptyState
+                  icon={<Calendar className="h-10 w-10" />}
+                  title={view === "week" ? t("sessions.weekEmptyTitle") : t("sessions.monthEmptyTitle")}
+                  description={manage ? t("sessions.monthEmptyDescriptionTeacher") : t("sessions.monthEmptyDescriptionStudent")}
+                  primaryAction={
+                    manage
+                      ? {
+                          label: t("sessions.addSession"),
+                          onClick: () => {
+                            setPrefillDate(new Date());
+                            setPresetMorning(false);
+                            setDefaultRoom(roomFilter || undefined);
+                            setFormOpen(true);
+                          },
+                        }
+                      : undefined
+                  }
+                  className="mb-4 py-8"
+                />
+              ) : null}
+
+              {view === "month" ? (
+                <div className="overflow-x-auto">
+                  <div className="grid min-w-[640px] grid-cols-7 gap-1">
+                    {weekdayLabels.map((name) => (
+                      <div key={name} className="p-2 text-center text-xs font-semibold text-[var(--color-text-muted)]">
+                        {name}
+                      </div>
                     ))}
+                    {monthCells.map((d) => {
+                      const key = toYmdLocal(d);
+                      const daySessions = byDay.get(key) ?? [];
+                      const muted = !inMonth(d);
+                      const today = isToday(d);
+                      return (
+                        <div
+                          key={key}
+                          className={`group relative min-h-[7rem] rounded-xl border p-1 ${
+                            today ? "border-[var(--color-primary)]/40 bg-[#E8F5E9]" : "border-gray-100 bg-[var(--color-surface)]"
+                          } ${muted ? "opacity-50" : ""}`}
+                        >
+                          {manage ? (
+                            <button
+                              type="button"
+                              aria-label={t("sessions.scheduleOnDay", { date: scheduleDayLabel(d) })}
+                              className="absolute end-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-[var(--color-primary)] sm:hidden"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreateForDay(d);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                          {manage ? (
+                            <button
+                              type="button"
+                              aria-label={t("sessions.scheduleOnDay", { date: scheduleDayLabel(d) })}
+                              className="absolute end-1 top-1 z-10 hidden h-6 w-6 items-center justify-center rounded-md border border-transparent text-[var(--color-primary)] opacity-0 transition group-hover:opacity-100 hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary)]/5 focus-visible:opacity-100 sm:flex"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreateForDay(d);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="relative z-[1] mb-1 w-full text-start text-sm font-medium text-[var(--color-text)]"
+                            onClick={() => openDaySheet(d)}
+                          >
+                            {d.getDate()}
+                          </button>
+                          <div className="relative z-[1] flex max-h-[5.5rem] flex-col gap-1 overflow-y-auto">
+                            {daySessions.slice(0, 3).map((s) => (
+                              <SessionBlock
+                                key={s.id}
+                                session={s}
+                                compact
+                                onClick={() => navigate(sessionNavigatePath(s))}
+                              />
+                            ))}
+                            {daySessions.length > 3 ? (
+                              <span className="text-[0.65rem] text-[var(--color-text-muted)]">
+                                +{daySessions.length - 3}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="grid min-w-[720px] grid-cols-7 gap-2">
+                    {weekCells.map((d, i) => {
+                      const key = toYmdLocal(d);
+                      const daySessions = byDay.get(key) ?? [];
+                      const today = isToday(d);
+                      return (
+                        <div
+                          key={key}
+                          className={`group relative rounded-xl border p-2 ${
+                            today ? "border-[var(--color-primary)]/40 bg-[#E8F5E9]" : "border-gray-100 bg-[var(--color-surface)]"
+                          }`}
+                        >
+                          <div className="mb-2 text-center text-xs font-semibold text-[var(--color-text-muted)]">
+                            {weekdayLabels[i]}
+                          </div>
+                          <button
+                            type="button"
+                            className="relative z-[1] mb-2 w-full text-center text-sm font-bold text-[var(--color-text)]"
+                            onClick={() => openDaySheet(d)}
+                          >
+                            {d.getDate()}
+                          </button>
+                          {manage ? (
+                            <button
+                              type="button"
+                              aria-label={t("sessions.scheduleOnDay", { date: scheduleDayLabel(d) })}
+                              className="absolute end-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-[var(--color-primary)] sm:hidden"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreateForDay(d);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                          {manage ? (
+                            <button
+                              type="button"
+                              aria-label={t("sessions.scheduleOnDay", { date: scheduleDayLabel(d) })}
+                              className="absolute end-2 top-2 z-10 hidden h-6 w-6 items-center justify-center rounded-md border border-transparent text-[var(--color-primary)] opacity-0 transition group-hover:opacity-100 hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary)]/5 focus-visible:opacity-100 sm:flex"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreateForDay(d);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                          <div className="relative z-[1] flex flex-col gap-2">
+                            {daySessions.map((s) => (
+                              <SessionBlock key={s.id} session={s} onClick={() => navigate(sessionNavigatePath(s))} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-      <div className="flex justify-end border-t border-gray-100 pt-4">
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => {
-            setPrefillDate(new Date());
-            setPresetMorning(false);
-            setDefaultRoom(roomFilter || undefined);
-            setFormOpen(true);
-          }}
-        >
-          {t("sessions.addSession")}
-        </Button>
-      </div>
-      </div>
+          {manage ? (
+            <div className="flex justify-end border-t border-gray-100 pt-4">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  setPrefillDate(new Date());
+                  setPresetMorning(false);
+                  setDefaultRoom(roomFilter || undefined);
+                  setFormOpen(true);
+                }}
+              >
+                {t("sessions.addSession")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </PageCard>
+
+      <DaySessionsSheet
+        open={daySheetOpen}
+        date={daySheetDate}
+        sessions={daySheetSessions}
+        user={user}
+        onClose={() => {
+          setDaySheetOpen(false);
+          setDaySheetDate(null);
+        }}
+        onSessionClick={(s) => navigate(sessionNavigatePath(s))}
+        onCreateSession={() => {
+          if (daySheetDate) openCreateForDay(daySheetDate);
+        }}
+      />
 
       <SessionFormModal
         open={formOpen}

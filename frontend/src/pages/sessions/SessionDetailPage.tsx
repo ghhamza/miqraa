@@ -5,20 +5,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Pencil, Repeat, Trash2 } from "lucide-react";
+import { BookMarked, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
 import type { Paginated, RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { Modal } from "../../components/ui/Modal";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
+import { RecurrenceScopeModal } from "../../components/sessions/RecurrenceScopeModal";
+import {
+  fetchSessionsInRecurrenceGroup,
+  filterDeletableScheduled,
+  filterTargetsForScope,
+} from "../../lib/recurrenceSessionTargets";
 import { AttendanceSheet, type GradeColor } from "../../components/sessions/AttendanceSheet";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 
@@ -64,8 +70,10 @@ export function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [editScope, setEditScope] = useState<"this" | "this_and_future" | "all" | undefined>(undefined);
+  const [recurrencePrompt, setRecurrencePrompt] = useState<"edit" | "delete" | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<"this" | "this_and_future" | "all" | null>(null);
   const [localAttendance, setLocalAttendance] = useState<Record<string, boolean>>({});
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
   const [studentGrades, setStudentGrades] = useState<Record<string, GradeColor>>({});
@@ -224,32 +232,31 @@ export function SessionDetailPage() {
   }
 
   async function confirmDelete() {
-    if (!id) return;
+    if (!id || !detail) return;
     setActionLoading(true);
     setError(null);
     try {
-      await api.delete(`sessions/${id}`);
+      const gid = detail.recurrence_group_id;
+      const scope = deleteScope ?? "this";
+      if (gid && scope === "all") {
+        await api.delete<{ deleted: number }>(`sessions/group/${gid}`);
+      } else if (gid && scope === "this_and_future") {
+        const groupSessions = await fetchSessionsInRecurrenceGroup(gid, detail.room_id);
+        const slice = filterTargetsForScope(groupSessions, detail, "this_and_future");
+        const targets = filterDeletableScheduled(slice);
+        for (const s of targets) {
+          await api.delete(`sessions/${s.id}`);
+        }
+      } else {
+        await api.delete(`sessions/${id}`);
+      }
       navigate("/calendar", { replace: true });
     } catch (err) {
       setError(userFacingApiError(err));
     } finally {
       setActionLoading(false);
       setDeleteOpen(false);
-    }
-  }
-
-  async function confirmDeleteSeries() {
-    if (!detail?.recurrence_group_id) return;
-    setActionLoading(true);
-    setError(null);
-    try {
-      await api.delete<{ deleted: number }>(`sessions/group/${detail.recurrence_group_id}`);
-      navigate("/calendar", { replace: true });
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionLoading(false);
-      setDeleteSeriesOpen(false);
+      setDeleteScope(null);
     }
   }
 
@@ -304,26 +311,38 @@ export function SessionDetailPage() {
       actions={
         showEditDelete ? (
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(true)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (detail.recurrence_group_id) setRecurrencePrompt("edit");
+                else {
+                  setEditScope(undefined);
+                  setFormOpen(true);
+                }
+              }}
+            >
               <span className="inline-flex items-center gap-2">
                 <Pencil className="h-4 w-4" />
                 {t("common.edit")}
               </span>
             </Button>
-            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                if (detail.recurrence_group_id) setRecurrencePrompt("delete");
+                else {
+                  setDeleteScope(null);
+                  setDeleteOpen(true);
+                }
+              }}
+            >
               <span className="inline-flex items-center gap-2">
                 <Trash2 className="h-4 w-4" />
                 {t("sessions.deleteSession")}
               </span>
             </Button>
-            {detail.recurrence_group_id && detail.status !== "completed" ? (
-              <Button type="button" variant="danger" onClick={() => setDeleteSeriesOpen(true)}>
-                <span className="inline-flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  {t("sessions.deleteAllUpcoming")}
-                </span>
-              </Button>
-            ) : null}
           </div>
         ) : undefined
       }
@@ -449,7 +468,20 @@ export function SessionDetailPage() {
         </div>
       ) : null}
 
-      {manage && detail.attendance.length > 0 ? (
+      {manage && detail.attendance.length === 0 ? (
+        <PageCard>
+          <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
+          <EmptyState
+            className="mt-4 border-0 bg-transparent py-10"
+            icon={<BookMarked className="h-12 w-12" />}
+            title={t("sessions.attendanceEmptyTitle")}
+            description={t("sessions.attendanceEmptyDescription")}
+            primaryAction={
+              manage ? { label: t("users.tabsStudents"), to: `/rooms/${detail.room_id}` } : undefined
+            }
+          />
+        </PageCard>
+      ) : manage && detail.attendance.length > 0 ? (
         <PageCard>
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("sessions.markAttendance")}</h2>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
@@ -501,7 +533,25 @@ export function SessionDetailPage() {
             </Button>
           ) : null}
         </div>
-        <RecentRecitationsList items={sessionRecitations} showStudent />
+        {sessionRecitations.length === 0 ? (
+          <EmptyState
+            className="border-0 bg-transparent py-10"
+            icon={<BookMarked className="h-12 w-12" />}
+            title={t("roomDetail.recitationsEmptyTitle")}
+            description={
+              manage
+                ? t("roomDetail.recitationsEmptyDescriptionTeacher")
+                : t("roomDetail.recitationsEmptyDescriptionStudent")
+            }
+            primaryAction={
+              manage
+                ? { label: t("recitations.addRecitation"), onClick: () => setRecitationFormOpen(true) }
+                : undefined
+            }
+          />
+        ) : (
+          <RecentRecitationsList items={sessionRecitations} showStudent />
+        )}
       </PageCard>
 
       <RecitationFormModal
@@ -516,35 +566,45 @@ export function SessionDetailPage() {
         onSaved={() => void load()}
       />
 
+      <RecurrenceScopeModal
+        open={recurrencePrompt !== null}
+        mode={recurrencePrompt === "delete" ? "delete" : "edit"}
+        sessionTitle={title}
+        onClose={() => setRecurrencePrompt(null)}
+        onChoose={(scope, mode) => {
+          setRecurrencePrompt(null);
+          if (mode === "edit") {
+            setEditScope(scope);
+            setFormOpen(true);
+          } else {
+            setDeleteScope(scope);
+            setDeleteOpen(true);
+          }
+        }}
+      />
+
       <SessionFormModal
         open={formOpen}
         mode="edit"
         session={detail}
-        onClose={() => setFormOpen(false)}
+        editScope={editScope}
+        onClose={() => {
+          setFormOpen(false);
+          setEditScope(undefined);
+        }}
         onSaved={() => void load()}
       />
 
       <DeleteSessionModal
         open={deleteOpen}
         session={detail}
-        onClose={() => setDeleteOpen(false)}
+        onClose={() => {
+          setDeleteOpen(false);
+          setDeleteScope(null);
+        }}
         onConfirm={() => void confirmDelete()}
         loading={actionLoading}
       />
-
-      <Modal open={deleteSeriesOpen} onClose={() => setDeleteSeriesOpen(false)} title={t("sessions.deleteAllUpcoming")}>
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--color-text)]">{t("sessions.deleteSeriesConfirm")}</p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setDeleteSeriesOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="button" variant="danger" loading={actionLoading} onClick={() => void confirmDeleteSeries()}>
-              {t("common.delete")}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </PageShell>
   );
 }

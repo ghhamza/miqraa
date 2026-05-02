@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { Link, useParams } from "react-router-dom";
-import { Flame } from "lucide-react";
+import { BookMarked, Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
 import type { RecitationPublic, StudentProgress } from "../../types";
@@ -12,6 +12,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { SurahProgressGrid } from "../../components/recitations/SurahProgressGrid";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -121,39 +122,49 @@ export function StudentProgressPage() {
         </div>
       </div>
 
-      <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
-          {t("recitations.gradeDistribution")}
-        </h2>
-        <div className="flex h-6 overflow-hidden rounded-full bg-gray-100">
-          {sum === 0 ? (
-            <div className="h-full w-full bg-gray-200" />
-          ) : (
-            <>
-              <div className="h-full bg-[#1B5E20]" style={{ width: `${(gd.excellent / sum) * 100}%` }} />
-              <div className="h-full bg-[#4CAF50]" style={{ width: `${(gd.good / sum) * 100}%` }} />
-              <div className="h-full bg-[#F57F17]" style={{ width: `${(gd.needs_work / sum) * 100}%` }} />
-              <div className="h-full bg-[#EF5350]" style={{ width: `${(gd.weak / sum) * 100}%` }} />
-            </>
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-[var(--color-text-muted)]">
-          <span>{t("recitations.excellent")}: {gd.excellent}</span>
-          <span>{t("recitations.good")}: {gd.good}</span>
-          <span>{t("recitations.needsWork")}: {gd.needs_work}</span>
-          <span>{t("recitations.weak")}: {gd.weak}</span>
-        </div>
-      </PageCard>
+      {progress.total_recitations === 0 ? (
+        <EmptyState
+          icon={<BookMarked className="h-12 w-12" />}
+          title={t("recitations.progressEmptyTitle")}
+          description={t("recitations.progressEmptyDescription")}
+        />
+      ) : (
+        <>
+          <PageCard>
+            <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">
+              {t("recitations.gradeDistribution")}
+            </h2>
+            <div className="flex h-6 overflow-hidden rounded-full bg-gray-100">
+              {sum === 0 ? (
+                <div className="h-full w-full bg-gray-200" />
+              ) : (
+                <>
+                  <div className="h-full bg-[#1B5E20]" style={{ width: `${(gd.excellent / sum) * 100}%` }} />
+                  <div className="h-full bg-[#4CAF50]" style={{ width: `${(gd.good / sum) * 100}%` }} />
+                  <div className="h-full bg-[#F57F17]" style={{ width: `${(gd.needs_work / sum) * 100}%` }} />
+                  <div className="h-full bg-[#EF5350]" style={{ width: `${(gd.weak / sum) * 100}%` }} />
+                </>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-[var(--color-text-muted)]">
+              <span>{t("recitations.excellent")}: {gd.excellent}</span>
+              <span>{t("recitations.good")}: {gd.good}</span>
+              <span>{t("recitations.needsWork")}: {gd.needs_work}</span>
+              <span>{t("recitations.weak")}: {gd.weak}</span>
+            </div>
+          </PageCard>
 
-      <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.surahsCovered")}</h2>
-        <SurahProgressGrid surahBestGrades={progress.surah_best_grades} />
-      </PageCard>
+          <PageCard>
+            <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.surahsCovered")}</h2>
+            <SurahProgressGrid surahBestGrades={progress.surah_best_grades} />
+          </PageCard>
 
-      <PageCard>
-        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.recentList")}</h2>
-        <RecentRecitationsList items={recent} />
-      </PageCard>
+          <PageCard>
+            <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("recitations.recentList")}</h2>
+            <RecentRecitationsList items={recent} />
+          </PageCard>
+        </>
+      )}
     </PageShell>
   );
 }

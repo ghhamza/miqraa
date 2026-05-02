@@ -76,6 +76,23 @@ export interface Room {
   pending_count: number;
   /** Set for students in room list/detail: current user's enrollment state */
   my_status: "pending" | "approved" | "rejected" | null;
+  /** Optional free-text description. */
+  description: string | null;
+  /** Optional ISO timestamp; null = continuous enrollment. */
+  enrollment_deadline_at: string | null;
+}
+
+/** Schedule row as returned by `GET /api/rooms/{room_id}/schedules` (preview / list). */
+export interface RoomSchedule {
+  id: string;
+  room_id: string;
+  room_name?: string;
+  title: string | null;
+  day_of_week: number; // 0=Mon..6=Sun
+  start_time_minutes: number;
+  duration_minutes: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface MyEnrollmentStatus {
@@ -116,6 +133,8 @@ export interface RoomStats {
   total: number;
   active: number;
   inactive: number;
+  pending_count_total: number;
+  archived_count: number;
 }
 
 export interface TeacherOption {

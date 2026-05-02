@@ -11,6 +11,7 @@ import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
 import { formatDatetimeLocalValue } from "../../lib/calendarUtils";
+import { fetchSessionsInRecurrenceGroup, filterTargetsForScope } from "../../lib/recurrenceSessionTargets";
 
 interface SessionFormModalProps {
   open: boolean;
@@ -20,6 +21,8 @@ interface SessionFormModalProps {
   defaultDatetime?: Date | null;
   /** When true (e.g. picked a day on the calendar), default time is 09:00 local */
   presetMorningStart?: boolean;
+  /** When editing a recurring session, controls bulk PUT targets */
+  editScope?: "this" | "this_and_future" | "all";
   onClose: () => void;
   onSaved: () => void;
 }
@@ -31,6 +34,7 @@ export function SessionFormModal({
   defaultRoomId,
   defaultDatetime,
   presetMorningStart,
+  editScope,
   onClose,
   onSaved,
 }: SessionFormModalProps) {
@@ -173,12 +177,31 @@ export function SessionFormModal({
           return;
         }
       } else if (session) {
-        await api.put(`sessions/${session.id}`, {
+        const bodyBase = {
           title: title.trim() || null,
-          scheduled_at: iso,
           duration_minutes: duration,
           notes: notes.trim() || null,
-        });
+        };
+        const gid = session.recurrence_group_id;
+        const scope =
+          gid && editScope && editScope !== "this" ? editScope : ("this" as const);
+
+        if (!gid || scope === "this") {
+          await api.put(`sessions/${session.id}`, {
+            ...bodyBase,
+            scheduled_at: iso,
+          });
+        } else {
+          const groupSessions = await fetchSessionsInRecurrenceGroup(gid, session.room_id);
+          const targets = filterTargetsForScope(groupSessions, session, scope);
+          for (const s of targets) {
+            const isCurrent = s.id === session.id;
+            await api.put(`sessions/${s.id}`, {
+              ...bodyBase,
+              scheduled_at: isCurrent ? iso : new Date(s.scheduled_at).toISOString(),
+            });
+          }
+        }
       }
       onSaved();
       onClose();

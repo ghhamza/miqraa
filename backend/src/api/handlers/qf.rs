@@ -389,6 +389,14 @@ pub async fn exchange(
                 "failed to create jwt",
             )
         })?;
+
+    let _ = sqlx::query(
+        "UPDATE users SET prev_seen_at = last_seen_at, last_seen_at = NOW() WHERE id = $1",
+    )
+    .bind(user_row.0)
+    .execute(&state.db)
+    .await;
+
     let user = UserResponse {
         id: user_row.0,
         name: user_row.1,

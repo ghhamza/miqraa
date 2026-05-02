@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { DoorOpen, RotateCcw } from "lucide-react";
+import { Archive, RotateCcw } from "lucide-react";
 import { BackLink } from "../../components/navigation/BackLink";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 export function ArchivedRoomsPage() {
   const { t } = useTranslation();
@@ -72,10 +73,11 @@ export function ArchivedRoomsPage() {
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
         </div>
       ) : rooms.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-[var(--color-surface)] py-16 text-center text-[var(--color-text-muted)]">
-          <DoorOpen className="mb-4 h-14 w-14 opacity-40" />
-          <p>{t("rooms.archivedRoomsEmpty")}</p>
-        </div>
+        <EmptyState
+          icon={<Archive className="h-14 w-14" />}
+          title={t("rooms.archivedRoomsEmpty")}
+          description={t("rooms.archivedEmptyDescription")}
+        />
       ) : (
         <ul className="space-y-3">
           {rooms.map((r) => (

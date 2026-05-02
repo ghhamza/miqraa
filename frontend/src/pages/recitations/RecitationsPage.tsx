@@ -4,7 +4,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookMarked, TrendingUp } from "lucide-react";
+import { BookMarked, SlidersHorizontal, TrendingUp } from "lucide-react";
 import { api } from "../../lib/api";
 import type {
   Paginated,
@@ -20,12 +20,15 @@ import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
 import { Table } from "../../components/ui/Table";
 import { GradeBadge } from "../../components/recitations/GradeBadge";
+import { GradeDistributionBar } from "../../components/recitations/GradeDistributionBar";
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { SurahPicker } from "../../components/recitations/SurahPicker";
 import { DeleteRecitationModal } from "../../components/recitations/DeleteRecitationModal";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { FilterSheet } from "../../components/recitations/FilterSheet";
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -59,9 +62,37 @@ export function RecitationsPage() {
   const [editRec, setEditRec] = useState<RecitationPublic | null>(null);
   const [deleteRec, setDeleteRec] = useState<RecitationPublic | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const isStudent = user?.role === "student";
   const canAdd = user?.role === "teacher" || user?.role === "admin";
+
+  const activeFilterCount = useMemo(
+    () =>
+      [surahFilter !== "", fromDate !== "", toDate !== "", studentFilter !== "", riwayaFilter !== ""].filter(Boolean)
+        .length,
+    [surahFilter, fromDate, toDate, studentFilter, riwayaFilter],
+  );
+
+  const hasAnyFilter = useMemo(
+    () =>
+      surahFilter !== "" ||
+      gradeTab !== "" ||
+      fromDate !== "" ||
+      toDate !== "" ||
+      studentFilter !== "" ||
+      riwayaFilter !== "",
+    [surahFilter, gradeTab, fromDate, toDate, studentFilter, riwayaFilter],
+  );
+
+  const clearAllFilters = useCallback(() => {
+    setSurahFilter("");
+    setGradeTab("");
+    setFromDate("");
+    setToDate("");
+    setStudentFilter("");
+    setRiwayaFilter("");
+  }, []);
 
   const fetchAll = useCallback(
     async (signal?: AbortSignal) => {
@@ -288,12 +319,24 @@ export function RecitationsPage() {
         { label: t("recitations.title") },
       ]}
       title={t("recitations.title")}
+      description={t("recitations.subtitle")}
       actions={
-        (isStudent && user?.id) || canAdd ? (
+        isStudent && user?.id ? (
           <div className="flex flex-wrap items-center gap-2">
-            {isStudent && user?.id ? (
-              <Button asChild variant={canAdd ? "secondary" : "primary"}>
-                <Link to={`/students/${user.id}/progress`}>{t("home.myProgress")}</Link>
+            <Button asChild variant={canAdd ? "secondary" : "primary"}>
+              <Link to={`/students/${user.id}/progress`}>{t("home.myProgress")}</Link>
+            </Button>
+            {canAdd ? (
+              <Button type="button" variant="primary" onClick={() => setFormOpen(true)}>
+                {t("recitations.addRecitation")}
+              </Button>
+            ) : null}
+          </div>
+        ) : canAdd || studentFilter ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {!isStudent && studentFilter ? (
+              <Button asChild variant="secondary">
+                <Link to={`/students/${studentFilter}/progress`}>{t("recitations.viewProgressForStudent")}</Link>
               </Button>
             ) : null}
             {canAdd ? (
@@ -322,108 +365,124 @@ export function RecitationsPage() {
             </div>
           </div>
           <div className="sm:col-span-2 rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
-            <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
+            <p className="mb-3 text-xs font-medium text-[var(--color-text-muted)]">
               {t("recitations.gradeDistribution")}
             </p>
-            <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
-              {(() => {
-                const sum =
-                  stats.by_grade.excellent +
-                  stats.by_grade.good +
-                  stats.by_grade.needs_work +
-                  stats.by_grade.weak;
-                if (sum === 0) return <div className="h-full w-full bg-gray-200" />;
-                const parts = [
-                  { c: stats.by_grade.excellent, cl: "bg-[#1B5E20]" },
-                  { c: stats.by_grade.good, cl: "bg-[#4CAF50]" },
-                  { c: stats.by_grade.needs_work, cl: "bg-[#F57F17]" },
-                  { c: stats.by_grade.weak, cl: "bg-[#EF5350]" },
-                ];
-                return parts.map((p, i) => (
-                  <div
-                    key={i}
-                    className={`${p.cl} h-full transition-all`}
-                    style={{ width: `${(p.c / sum) * 100}%` }}
-                  />
-                ));
-              })()}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-3 text-[0.65rem] text-[var(--color-text-muted)]">
-              <span>★ {stats.by_grade.excellent}</span>
-              <span>● {stats.by_grade.good}</span>
-              <span>▲ {stats.by_grade.needs_work}</span>
-              <span>▼ {stats.by_grade.weak}</span>
-            </div>
+            <GradeDistributionBar
+              excellent={stats.by_grade.excellent}
+              good={stats.by_grade.good}
+              needs_work={stats.by_grade.needs_work}
+              weak={stats.by_grade.weak}
+            />
           </div>
         </div>
       ) : null}
 
       <PageCard>
-        {hasMultipleRiwayat ? (
-          <div className="max-w-xs">
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.riwaya")}</label>
-            <FormSelect
-              triggerClassName={FILTER_FIELD_CLASS}
-              value={riwayaFilter || ""}
-              onValueChange={(v) => setRiwayaFilter((v || "") as QuranRiwaya | "")}
-              options={[
-                { value: "", label: t("common.all") },
-                ...getAvailableRiwayat().map((r) => ({
-                  value: r.id,
-                  label: t(`mushaf.${r.id}`),
-                })),
-              ]}
-            />
-          </div>
-        ) : null}
-        <div
-          className={cn(
-            "grid gap-3 md:grid-cols-2 lg:grid-cols-4",
-            hasMultipleRiwayat ? "mt-4" : null,
-          )}
-        >
-          <div className="space-y-2">
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.selectSurah")}</label>
-            <SurahPicker
-              value={surahFilter === "" ? null : surahFilter}
-              onChange={(n) => setSurahFilter(n === null ? "" : n)}
-              riwaya={riwayaFilter || "hafs"}
-              allowClear
-            />
-          </div>
-          {!isStudent ? (
-            <div>
-              <label className="mb-1 block text-xs text-[var(--color-text-muted)]">
-                {t("recitations.filterStudent")}
-              </label>
+        <div className="md:hidden">
+          <Button type="button" variant="secondary" onClick={() => setFilterSheetOpen(true)}>
+            <span className="inline-flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4" />
+              {t("recitations.filters")}
+              {activeFilterCount > 0 ? (
+                <span className="rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </span>
+          </Button>
+        </div>
+
+        <FilterSheet
+          open={filterSheetOpen}
+          onClose={() => setFilterSheetOpen(false)}
+          surahFilter={surahFilter}
+          fromDate={fromDate}
+          toDate={toDate}
+          studentFilter={studentFilter}
+          riwayaFilter={riwayaFilter}
+          students={students}
+          showStudentFilter={!isStudent}
+          showRiwayaFilter={hasMultipleRiwayat}
+          onSurahChange={setSurahFilter}
+          onFromDateChange={setFromDate}
+          onToDateChange={setToDate}
+          onStudentChange={setStudentFilter}
+          onRiwayaChange={setRiwayaFilter}
+          onClear={() => {
+            clearAllFilters();
+            setFilterSheetOpen(false);
+          }}
+          onApply={() => setFilterSheetOpen(false)}
+        />
+
+        <div className="hidden md:block">
+          {hasMultipleRiwayat ? (
+            <div className="max-w-xs">
+              <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.riwaya")}</label>
               <FormSelect
                 triggerClassName={FILTER_FIELD_CLASS}
-                value={studentFilter}
-                onValueChange={setStudentFilter}
+                value={riwayaFilter || ""}
+                onValueChange={(v) => setRiwayaFilter((v || "") as QuranRiwaya | "")}
                 options={[
-                  { value: "", label: t("recitations.allStudents") },
-                  ...students.map((s) => ({ value: s.id, label: s.name })),
+                  { value: "", label: t("common.all") },
+                  ...getAvailableRiwayat().map((r) => ({
+                    value: r.id,
+                    label: t(`mushaf.${r.id}`),
+                  })),
                 ]}
               />
             </div>
           ) : null}
-          <div>
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateFrom")}</label>
-            <input
-              type="date"
-              className={cn(FILTER_FIELD_CLASS, "min-h-11")}
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateTo")}</label>
-            <input
-              type="date"
-              className={cn(FILTER_FIELD_CLASS, "min-h-11")}
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
+          <div
+            className={cn(
+              "grid gap-3 md:grid-cols-2 lg:grid-cols-4",
+              hasMultipleRiwayat ? "mt-4" : null,
+            )}
+          >
+            <div className="space-y-2">
+              <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.selectSurah")}</label>
+              <SurahPicker
+                value={surahFilter === "" ? null : surahFilter}
+                onChange={(n) => setSurahFilter(n === null ? "" : n)}
+                riwaya={riwayaFilter || "hafs"}
+                allowClear
+              />
+            </div>
+            {!isStudent ? (
+              <div>
+                <label className="mb-1 block text-xs text-[var(--color-text-muted)]">
+                  {t("recitations.filterStudent")}
+                </label>
+                <FormSelect
+                  triggerClassName={FILTER_FIELD_CLASS}
+                  value={studentFilter}
+                  onValueChange={setStudentFilter}
+                  options={[
+                    { value: "", label: t("recitations.allStudents") },
+                    ...students.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
+              </div>
+            ) : null}
+            <div>
+              <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateFrom")}</label>
+              <input
+                type="date"
+                className={cn(FILTER_FIELD_CLASS, "min-h-11")}
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--color-text-muted)]">{t("recitations.dateTo")}</label>
+              <input
+                type="date"
+                className={cn(FILTER_FIELD_CLASS, "min-h-11")}
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
@@ -448,6 +507,22 @@ export function RecitationsPage() {
         <div className="flex justify-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
         </div>
+      ) : rows.length === 0 && !hasAnyFilter ? (
+        <EmptyState
+          icon={<BookMarked className="h-14 w-14" />}
+          title={isStudent ? t("recitations.emptyStudentTitle") : t("recitations.emptyTeacherTitle")}
+          description={isStudent ? t("recitations.emptyStudentDescription") : t("recitations.emptyTeacherDescription")}
+          primaryAction={
+            canAdd ? { label: t("recitations.addRecitation"), onClick: () => setFormOpen(true) } : undefined
+          }
+        />
+      ) : rows.length === 0 && hasAnyFilter ? (
+        <EmptyState
+          icon={<BookMarked className="h-14 w-14" />}
+          title={t("recitations.noMatchesTitle")}
+          description={t("recitations.noMatchesDescription")}
+          primaryAction={{ label: t("rooms.clearFilters"), onClick: clearAllFilters }}
+        />
       ) : (
         <Table<RecitationPublic>
           columns={columns}

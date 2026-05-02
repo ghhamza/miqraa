@@ -3,7 +3,7 @@
 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { api } from "../../lib/api";
 import type { SessionPublic } from "../../types";
@@ -44,15 +44,22 @@ export interface UpcomingSessionsWidgetProps {
   /** Max rows to show (default: all from API). */
   maxItems?: number;
   showViewCalendarLink?: boolean;
+  /** Session IDs to omit from the list (e.g. already highlighted as “today” above). */
+  excludeIds?: string[];
 }
 
-export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink }: UpcomingSessionsWidgetProps) {
+export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, excludeIds }: UpcomingSessionsWidgetProps) {
   const { t, i18n } = useTranslation();
   const { mediumTime } = useLocaleDate();
   const [sessions, setSessions] = useState<SessionPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const displaySessions = maxItems != null ? sessions.slice(0, maxItems) : sessions;
+  const excludeSet = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
+  const visibleSessions = useMemo(
+    () => sessions.filter((s) => !excludeSet.has(s.id)),
+    [sessions, excludeSet],
+  );
+  const displaySessions = maxItems != null ? visibleSessions.slice(0, maxItems) : visibleSessions;
 
   useCancellableEffect(
     async (signal) => {
@@ -78,7 +85,7 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink }: Upcom
     );
   }
 
-  if (sessions.length === 0) {
+  if (visibleSessions.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("home.upcomingSectionTitle")}</h2>

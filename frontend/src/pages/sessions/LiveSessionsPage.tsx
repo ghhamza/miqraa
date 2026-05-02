@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -60,6 +60,24 @@ export function LiveSessionsPage() {
   }, [reload]);
 
   const titleOf = (s: SessionPublic) => s.title?.trim() || t("sessions.untitledTitle");
+
+  const myImminentSession = useMemo(() => {
+    if (!user || (user.role !== "teacher" && user.role !== "admin")) return null;
+    const now = Date.now();
+    const fifteenMin = 15 * 60 * 1000;
+    return (
+      upcoming.find((s) => {
+        if (s.status !== "scheduled") return false;
+        if (s.teacher_id !== user.id) return false;
+        const at = new Date(s.scheduled_at).getTime();
+        return at - now <= fifteenMin && at - now >= -fifteenMin;
+      }) ?? null
+    );
+  }, [upcoming, user]);
+
+  const imminentAlreadyLive = myImminentSession ? live.some((l) => l.id === myImminentSession.id) : false;
+
+  const showImminentCard = Boolean(myImminentSession && !imminentAlreadyLive);
 
   async function handleJoinRoom(item: SessionLivePublicItem) {
     setJoinRoomId(item.room_id);
@@ -146,6 +164,35 @@ export function LiveSessionsPage() {
         </div>
       ) : (
         <>
+          {showImminentCard && myImminentSession ? (
+            <div className="rounded-2xl border-2 border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5 p-5 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+                    {t("livePage.imminentBadge")}
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-[var(--color-text)]">{titleOf(myImminentSession)}</p>
+                  <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                    {myImminentSession.room_name} · {mediumTime(myImminentSession.scheduled_at)}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="h-10 shrink-0"
+                  onClick={() => navigate(sessionNavigatePath(myImminentSession))}
+                >
+                  {t("livePage.startNow")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-900">
+            <p className="font-medium">{t("livePage.publicHeaderTitle")}</p>
+            <p className="mt-1 text-xs text-blue-900/80">{t("livePage.publicHeaderDescription")}</p>
+          </div>
+
           <PageCard>
             <h2 className="text-lg font-semibold text-[var(--color-text)]">{t("livePage.liveNow")}</h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">{t("livePage.liveNowHint")}</p>

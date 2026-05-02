@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
@@ -16,6 +16,7 @@ import { Input } from "../../components/ui/Input";
 import { Table, type TableColumn } from "../../components/ui/Table";
 import { PageCard } from "../../components/layout/PageCard";
 import { PageShell } from "../../components/layout/PageShell";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { roleTranslationKey } from "../../lib/roleLabels";
@@ -103,6 +104,16 @@ export function UsersPage() {
   const openDelete = useCallback((u: UserPublic) => {
     setDeleteTarget(u);
     setDeleteOpen(true);
+  }, []);
+
+  const hasFilters = useMemo(
+    () => debouncedSearch.trim() !== "" || roleFilter !== "",
+    [debouncedSearch, roleFilter],
+  );
+
+  const clearUserFilters = useCallback(() => {
+    setSearch("");
+    setRoleFilter("");
   }, []);
 
   const columns: TableColumn<UserPublic>[] = [
@@ -229,14 +240,21 @@ export function UsersPage() {
         <div className="flex justify-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--color-primary)] border-t-transparent" />
         </div>
-      ) : (
-        <Table
-          columns={columns}
-          data={users}
-          rowKey={(r) => r.id}
-          emptyMessage={t("users.noUsers")}
-          emptyIcon={<Users className="mx-auto h-12 w-12 text-gray-300" />}
+      ) : users.length === 0 && !hasFilters ? (
+        <EmptyState
+          icon={<Users className="h-14 w-14" />}
+          title={t("users.emptyTitle")}
+          description={t("users.emptyDescription")}
         />
+      ) : users.length === 0 && hasFilters ? (
+        <EmptyState
+          icon={<Users className="h-14 w-14" />}
+          title={t("users.noMatchesTitle")}
+          description={t("users.noMatchesDescription")}
+          primaryAction={{ label: t("rooms.clearFilters"), onClick: clearUserFilters }}
+        />
+      ) : (
+        <Table columns={columns} data={users} rowKey={(r) => r.id} emptyMessage="" />
       )}
 
       <UserFormModal

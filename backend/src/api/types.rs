@@ -70,6 +70,10 @@ pub struct RoomPublic {
     pub requires_approval: bool,
     pub pending_count: i64,
     pub my_status: Option<String>,
+    /// Optional free-text description shown on the room overview.
+    pub description: Option<String>,
+    /// Optional enrollment deadline. NULL means continuous (no deadline).
+    pub enrollment_deadline_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -122,6 +126,10 @@ pub struct RoomStatsResponse {
     pub total: i64,
     pub active: i64,
     pub inactive: i64,
+    /// Total pending enrollment requests across rooms visible to the caller.
+    pub pending_count_total: i64,
+    /// Total archived (`is_active = false`) rooms visible to the caller.
+    pub archived_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 use axum::{extract::State, http::StatusCode, Json};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -106,6 +107,13 @@ pub async fn login(
     let token = jwt::create_token(row.0, &row.4, &state.config.jwt_secret)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let _ = sqlx::query(
+        "UPDATE users SET prev_seen_at = last_seen_at, last_seen_at = NOW() WHERE id = $1",
+    )
+    .bind(row.0)
+    .execute(&state.db)
+    .await;
+
     let user = UserResponse {
         id: row.0,
         name: row.1,
@@ -117,6 +125,106 @@ pub async fn login(
     };
 
     Ok(Json(AuthResponse { token, user }))
+}
+
+#[derive(Serialize)]
+pub struct WhatsNewResponse {
+    pub since: Option<DateTime<Utc>>,
+    pub new_recitations: i64,
+    pub new_enrollments: i64,
+    pub completed_sessions: i64,
+    pub pending_requests: i64,
+}
+
+pub async fn whats_new(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<Json<WhatsNewResponse>, StatusCode> {
+    let prev: Option<DateTime<Utc>> = sqlx::query_scalar("SELECT prev_seen_at FROM users WHERE id = $1")
+        .bind(auth.id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let Some(since) = prev else {
+        return Ok(Json(WhatsNewResponse {
+            since: None,
+            new_recitations: 0,
+            new_enrollments: 0,
+            completed_sessions: 0,
+            pending_requests: 0,
+        }));
+    };
+
+    let (recitations, enrollments, sessions_completed, pending) = match auth.role.as_str() {
+        "teacher" => {
+            let r: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM recitations WHERE teacher_id = $1 AND created_at > $2",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            let e: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM enrollments e JOIN rooms r ON r.id = e.room_id \
+                 WHERE r.teacher_id = $1 AND e.enrolled_at > $2 AND e.status = 'approved'",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            let s: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM sessions WHERE room_id IN (SELECT id FROM rooms WHERE teacher_id = $1) \
+                 AND status::text = 'completed' AND scheduled_at > $2",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            let p: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM enrollments e JOIN rooms r ON r.id = e.room_id \
+                 WHERE r.teacher_id = $1 AND e.enrolled_at > $2 AND e.status = 'pending'",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            (r, e, s, p)
+        }
+        "student" => {
+            let r: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM recitations WHERE student_id = $1 AND created_at > $2",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            let s: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM session_attendance sa JOIN sessions ses ON ses.id = sa.session_id \
+                 WHERE sa.student_id = $1 AND sa.attended = true AND ses.status::text = 'completed' AND ses.scheduled_at > $2",
+            )
+            .bind(auth.id)
+            .bind(since)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            (r, 0, s, 0)
+        }
+        _ => (0, 0, 0, 0),
+    };
+
+    Ok(Json(WhatsNewResponse {
+        since: Some(since),
+        new_recitations: recitations,
+        new_enrollments: enrollments,
+        completed_sessions: sessions_completed,
+        pending_requests: pending,
+    }))
 }
 
 pub async fn me(

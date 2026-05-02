@@ -54,7 +54,12 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
       {!compact ? (
         <div className="space-y-0.5">
           <div className="flex items-center gap-1 truncate font-semibold">
-            {session.recurrence_group_id || session.schedule_id ? (
+            {session.recurrence_group_id ? (
+              <Repeat
+                className={cn("h-3.5 w-3.5 shrink-0 opacity-70", repeatIconClass)}
+                aria-label={t("sessions.recurringIndicator")}
+              />
+            ) : session.schedule_id ? (
               <Repeat className={cn("h-3.5 w-3.5 shrink-0", repeatIconClass)} aria-hidden />
             ) : null}
             <span className="truncate">{title}</span>
@@ -72,9 +77,6 @@ export function SessionBlock({ session, compact, onClick }: SessionBlockProps) {
       ) : (
         <div className="flex flex-col gap-0.5">
           <span className="flex flex-wrap items-center gap-1.5 truncate">
-            {session.recurrence_group_id || session.schedule_id ? (
-              <Repeat className={cn("h-3 w-3 shrink-0", repeatIconClass)} aria-hidden />
-            ) : null}
             <span className="truncate opacity-95">{timeStr}</span>
             {isLive ? (
               <span className="shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase leading-none text-white">

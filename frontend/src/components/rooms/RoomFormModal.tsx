@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
@@ -43,6 +43,15 @@ export function RoomFormModal({
   const [isPublic, setIsPublic] = useState(false);
   const [enrollmentOpen, setEnrollmentOpen] = useState(true);
   const [requiresApproval, setRequiresApproval] = useState(true);
+  const [description, setDescription] = useState("");
+  const [hasDeadline, setHasDeadline] = useState(false);
+  const [deadlineLocal, setDeadlineLocal] = useState("");
+
+  const todayLocalISO = useMemo(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +66,18 @@ export function RoomFormModal({
       setIsPublic(room.is_public);
       setEnrollmentOpen(room.enrollment_open);
       setRequiresApproval(room.requires_approval);
+      setDescription(room.description ?? "");
+      const hasD = room.enrollment_deadline_at != null;
+      setHasDeadline(hasD);
+      if (room.enrollment_deadline_at) {
+        const d = new Date(room.enrollment_deadline_at);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setDeadlineLocal(
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+        );
+      } else {
+        setDeadlineLocal("");
+      }
     } else {
       setName("");
       setMaxStudents(20);
@@ -67,6 +88,9 @@ export function RoomFormModal({
       setIsPublic(false);
       setEnrollmentOpen(true);
       setRequiresApproval(true);
+      setDescription("");
+      setHasDeadline(false);
+      setDeadlineLocal("");
     }
   }, [open, mode, room]);
 
@@ -92,6 +116,21 @@ export function RoomFormModal({
     e.preventDefault();
     if (loading) return;
     setError(null);
+
+    if (hasDeadline) {
+      if (!deadlineLocal.trim()) {
+        setError(t("rooms.deadlineRequired"));
+        return;
+      }
+      const parsed = new Date(deadlineLocal);
+      if (parsed.getTime() < Date.now()) {
+        setError(t("rooms.deadlinePast"));
+        return;
+      }
+    }
+
+    const enrollment_deadline_at = hasDeadline && deadlineLocal ? new Date(deadlineLocal).toISOString() : null;
+
     setLoading(true);
     try {
       if (mode === "create") {
@@ -108,6 +147,8 @@ export function RoomFormModal({
           is_public: isPublic,
           enrollment_open: enrollmentOpen,
           requires_approval: requiresApproval,
+          description: description.trim() || null,
+          enrollment_deadline_at,
           ...(isAdmin ? { teacher_id: teacherId } : {}),
         });
       } else if (room) {
@@ -120,6 +161,8 @@ export function RoomFormModal({
           is_public: isPublic,
           enrollment_open: enrollmentOpen,
           requires_approval: requiresApproval,
+          description: description.trim() || null,
+          enrollment_deadline_at,
         });
       }
       onSaved();
@@ -145,6 +188,23 @@ export function RoomFormModal({
           onChange={(e) => setName(e.target.value)}
           required
         />
+
+        <div>
+          <label htmlFor="room-description" className="block text-sm font-medium text-[var(--color-text)]">
+            {t("rooms.descriptionLabel")}
+          </label>
+          <textarea
+            id="room-description"
+            name="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder={t("rooms.descriptionPlaceholder")}
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)] shadow-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+          />
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t("rooms.descriptionHint")}</p>
+        </div>
 
         {isAdmin && mode === "create" ? (
           <div>
@@ -276,6 +336,38 @@ export function RoomFormModal({
               <p className="text-xs text-[var(--color-text-muted)]">{t("rooms.requiresApprovalHint")}</p>
             </div>
           </label>
+        ) : null}
+
+        {isPublic && enrollmentOpen ? (
+          <div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={hasDeadline}
+                onChange={(e) => setHasDeadline(e.target.checked)}
+                className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+              />
+              <span className="text-sm font-medium text-[var(--color-text)]">{t("rooms.deadlineToggleLabel")}</span>
+            </label>
+            <p className="ms-6 mt-1 text-xs text-[var(--color-text-muted)]">{t("rooms.deadlineToggleHint")}</p>
+
+            {hasDeadline ? (
+              <div className="ms-6 mt-3">
+                <label htmlFor="room-deadline" className="block text-sm font-medium text-[var(--color-text)]">
+                  {t("rooms.deadlineLabel")}
+                </label>
+                <input
+                  id="room-deadline"
+                  type="datetime-local"
+                  value={deadlineLocal}
+                  onChange={(e) => setDeadlineLocal(e.target.value)}
+                  min={todayLocalISO}
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[var(--color-text)] shadow-sm"
+                />
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t("rooms.deadlineHint")}</p>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {error ? (
