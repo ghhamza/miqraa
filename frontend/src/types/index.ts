@@ -251,6 +251,10 @@ export interface RecitationPublic {
   star_rating: number | null;
   qf_synced_at: string | null;
   qf_sync_error: string | null;
+  /** Display order for session plan rows (session-linked recitations). */
+  order_index: number;
+  /** Session plan lifecycle; null when not part of a session plan. */
+  plan_status: "planned" | "in_progress" | "completed" | null;
 }
 
 export type ErrorSeverity = "jali" | "khafi";

@@ -16,6 +16,8 @@ const TOKEN_REFRESH_BUFFER: Duration = Duration::from_secs(30);
 const CHAPTER_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// Default reciter — AbdulBaset AbdulSamad, Mujawwad style.
 pub const DEFAULT_RECITATION_ID: i32 = 1;
+/// Set on [`anyhow::Error`] when QF content API returns 404 for chapter audio (not a gateway failure).
+pub const QF_CHAPTER_AUDIO_NOT_FOUND: &str = "qf_chapter_audio_not_found";
 
 #[derive(Clone)]
 pub struct ContentApiClient {
@@ -183,8 +185,17 @@ impl ContentApiClient {
         if status == reqwest::StatusCode::UNAUTHORIZED {
             return Err(anyhow!("qf content api 401"));
         }
+        if status == reqwest::StatusCode::NOT_FOUND {
+            tracing::debug!(
+                qf_status = %status,
+                chapter,
+                recitation_id,
+                "QF chapter audio not available (404)"
+            );
+            return Err(anyhow::Error::msg(QF_CHAPTER_AUDIO_NOT_FOUND));
+        }
         if !status.is_success() {
-            tracing::error!(qf_status = %status, chapter, "QF audio fetch: HTTP error");
+            tracing::warn!(qf_status = %status, chapter, recitation_id, "QF audio fetch: HTTP error");
             return Err(anyhow!("qf content api http {}", status));
         }
         let body: AudioFilesResponse = resp.json().await.context("qf audio json parse failed")?;

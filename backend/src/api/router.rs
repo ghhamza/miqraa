@@ -178,6 +178,10 @@ pub fn build_router(state: AppState) -> Router {
             put(handlers::sessions::update_attendance),
         )
         .route(
+            "/api/sessions/{id}/plans/reorder",
+            put(handlers::recitations::reorder_session_plans),
+        )
+        .route(
             "/api/rooms",
             get(handlers::rooms::list_rooms).post(handlers::rooms::create_room),
         )

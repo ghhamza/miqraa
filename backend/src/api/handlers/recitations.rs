@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
+use serde_json::json;
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -92,7 +93,8 @@ async fn fetch_recitation_public(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error, \
+         rec.order_index, rec.plan_status \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -281,7 +283,8 @@ pub async fn list_recitations(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error, \
+         rec.order_index, rec.plan_status \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \
@@ -289,7 +292,11 @@ pub async fn list_recitations(
          WHERE 1=1",
     );
     push_recitation_list_filters(&mut qb, &auth, &params)?;
-    qb.push(" ORDER BY rec.created_at DESC");
+    if params.session_id.is_some() {
+        qb.push(" ORDER BY rec.order_index ASC, rec.created_at ASC");
+    } else {
+        qb.push(" ORDER BY rec.created_at DESC");
+    }
     qb.push(" LIMIT ");
     qb.push_bind(limit);
     qb.push(" OFFSET ");
@@ -391,10 +398,29 @@ pub async fn create_recitation(
         None => None,
         Some(r) => Some(validate_star_rating(r)?),
     };
+
+    let order_index: i32 = if let Some(sid) = session_id {
+        sqlx::query_scalar(
+            "SELECT COALESCE(MAX(order_index), -1) + 1 FROM recitations WHERE session_id = $1",
+        )
+        .bind(sid)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else {
+        0
+    };
+
+    let plan_status: Option<&'static str> = match (session_id, grade_sql) {
+        (Some(_), Some(_)) => Some("completed"),
+        (Some(_), None) => Some("planned"),
+        _ => None,
+    };
+
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO recitations \
-         (student_id, room_id, session_id, surah, ayah_start, ayah_end, grade, teacher_notes, teacher_id, riwaya, turn_type, pages_count, star_rating) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::turn_type, $12, $13) \
+         (student_id, room_id, session_id, surah, ayah_start, ayah_end, grade, teacher_notes, teacher_id, riwaya, turn_type, pages_count, star_rating, order_index, plan_status) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::turn_type, $12, $13, $14, $15) \
          RETURNING id",
     )
     .bind(req.student_id)
@@ -410,6 +436,8 @@ pub async fn create_recitation(
     .bind(turn_type)
     .bind(req.pages_count)
     .bind(star_rating)
+    .bind(order_index)
+    .bind(plan_status)
     .fetch_one(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -474,9 +502,20 @@ pub async fn update_recitation(
         None => existing.star_rating,
         Some(r) => Some(validate_star_rating(r)?),
     };
+
+    let plan_status_val: Option<String> = if existing.session_id.is_some() {
+        if grade_val.is_some() {
+            Some("completed".into())
+        } else {
+            existing.plan_status.clone().or(Some("planned".into()))
+        }
+    } else {
+        None
+    };
+
     sqlx::query(
         "UPDATE recitations SET surah = $1, ayah_start = $2, ayah_end = $3, grade = $4, teacher_notes = $5, \
-         turn_type = $6::turn_type, pages_count = $7, star_rating = $8 WHERE id = $9",
+         turn_type = $6::turn_type, pages_count = $7, star_rating = $8, plan_status = $9 WHERE id = $10",
     )
     .bind(surah)
     .bind(ayah_start)
@@ -486,6 +525,7 @@ pub async fn update_recitation(
     .bind(&turn_type)
     .bind(pages_count)
     .bind(star_rating)
+    .bind(plan_status_val.as_deref())
     .bind(id)
     .execute(&state.db)
     .await
@@ -512,6 +552,121 @@ pub async fn delete_recitation(
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub struct ReorderPlansRequest {
+    pub plan_ids: Vec<Uuid>,
+}
+
+async fn require_session_teacher_or_admin(
+    pool: &PgPool,
+    auth: &AuthenticatedUser,
+    session_id: Uuid,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT r.teacher_id FROM sessions s INNER JOIN rooms r ON r.id = s.room_id WHERE s.id = $1",
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "code": "server_error" })),
+        )
+    })?;
+
+    let teacher_id = row
+        .map(|(tid,)| tid)
+        .ok_or((StatusCode::NOT_FOUND, Json(json!({ "code": "not_found" }))))?;
+
+    if auth.role == "admin" {
+        return Ok(());
+    }
+    if auth.role == "teacher" && auth.id == teacher_id {
+        return Ok(());
+    }
+    Err((StatusCode::FORBIDDEN, Json(json!({ "code": "forbidden" }))))
+}
+
+pub async fn reorder_session_plans(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(session_id): Path<Uuid>,
+    Json(req): Json<ReorderPlansRequest>,
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    require_session_teacher_or_admin(&state.db, &auth, session_id).await?;
+
+    let mut tx = state.db.begin().await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "code": "server_error" })),
+        )
+    })?;
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recitations WHERE session_id = $1")
+        .bind(session_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "code": "server_error" })),
+            )
+        })?;
+
+    if total as usize != req.plan_ids.len() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "code": "stale_plan_list" })),
+        ));
+    }
+
+    for pid in &req.plan_ids {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM recitations WHERE id = $1 AND session_id = $2)",
+        )
+        .bind(pid)
+        .bind(session_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "code": "server_error" })),
+            )
+        })?;
+        if !exists {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "code": "plan_not_in_session" })),
+            ));
+        }
+    }
+
+    for (i, plan_id) in req.plan_ids.iter().enumerate() {
+        sqlx::query("UPDATE recitations SET order_index = $1 WHERE id = $2")
+            .bind(i as i32)
+            .bind(plan_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "code": "server_error" })),
+                )
+            })?;
+    }
+
+    tx.commit().await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "code": "server_error" })),
+        )
+    })?;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -628,7 +783,8 @@ pub async fn list_by_student(
         "SELECT rec.id, rec.student_id, u.name AS student_name, rec.room_id, rm.name AS room_name, \
          rec.session_id, rec.surah, rec.ayah_start, rec.ayah_end, rec.grade::text AS grade, \
          rec.teacher_notes, rec.teacher_id, t.name AS teacher_name, rec.recording_path, rec.created_at, \
-         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error \
+         rec.riwaya, rec.turn_type::text AS turn_type, rec.pages_count, rec.star_rating, rec.qf_synced_at, rec.qf_sync_error, \
+         rec.order_index, rec.plan_status \
          FROM recitations rec \
          LEFT JOIN users u ON u.id = rec.student_id \
          LEFT JOIN rooms rm ON rm.id = rec.room_id \

@@ -35,6 +35,7 @@ import {
 } from "../../components/ui/alert-dialog";
 import { RecitationFormModal } from "../../components/recitations/RecitationFormModal";
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
+import { SessionRecitationsSortableList } from "../../components/sessions/SessionRecitationsSortableList";
 import { SessionCountdown } from "../../components/sessions/SessionCountdown";
 import { Modal } from "../../components/ui/Modal";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
@@ -140,6 +141,7 @@ export function SessionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sessionRecitations, setSessionRecitations] = useState<RecitationPublic[]>([]);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
+  const [recitationEditing, setRecitationEditing] = useState<RecitationPublic | null>(null);
   const [liveSessionFlash, setLiveSessionFlash] = useState<string | null>(null);
   const [activeSessionConflictId, setActiveSessionConflictId] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -466,6 +468,7 @@ export function SessionDetailPage() {
     ? recitationEmpty.primaryLabel ?? t("recitations.addRecitation")
     : undefined;
   const showRecitationHeaderAdd = showRecitationAddButton && sessionRecitations.length > 0;
+  const sessionPlanSortable = manage && (status === "scheduled" || status === "in_progress");
 
   return (
     <PageShell
@@ -649,7 +652,14 @@ export function SessionDetailPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[var(--color-text)]">{recitationSectionTitle}</h2>
           {showRecitationHeaderAdd ? (
-            <Button type="button" variant="primary" onClick={() => setRecitationFormOpen(true)}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                setRecitationEditing(null);
+                setRecitationFormOpen(true);
+              }}
+            >
               {primaryRecitationActionLabel}
             </Button>
           ) : null}
@@ -662,12 +672,45 @@ export function SessionDetailPage() {
             {...(recitationEmpty.description ? { description: recitationEmpty.description } : {})}
             primaryAction={
               showRecitationAddButton && primaryRecitationActionLabel
-                ? { label: primaryRecitationActionLabel, onClick: () => setRecitationFormOpen(true) }
+                ? {
+                    label: primaryRecitationActionLabel,
+                    onClick: () => {
+                      setRecitationEditing(null);
+                      setRecitationFormOpen(true);
+                    },
+                  }
+                : undefined
+            }
+          />
+        ) : sessionPlanSortable ? (
+          <SessionRecitationsSortableList
+            items={sessionRecitations}
+            sessionId={detail.id}
+            showStudent
+            onItemsChange={setSessionRecitations}
+            onPersistFailed={() => setError(t("plan.reorderFailed"))}
+            onEditItem={
+              manage
+                ? (r) => {
+                    setRecitationEditing(r);
+                    setRecitationFormOpen(true);
+                  }
                 : undefined
             }
           />
         ) : (
-          <RecentRecitationsList items={sessionRecitations} showStudent />
+          <RecentRecitationsList
+            items={sessionRecitations}
+            showStudent
+            onItemClick={
+              manage
+                ? (r) => {
+                    setRecitationEditing(r);
+                    setRecitationFormOpen(true);
+                  }
+                : undefined
+            }
+          />
         )}
       </PageCard>
 
@@ -788,13 +831,16 @@ export function SessionDetailPage() {
 
       <RecitationFormModal
         open={recitationFormOpen}
-        mode="create"
-        recitation={null}
+        mode={recitationEditing ? "edit" : "create"}
+        recitation={recitationEditing}
         defaultRoomId={detail.room_id}
         defaultRoomName={detail.room_name}
         defaultSessionId={detail.id}
         defaultSessionSummary={`${detail.title?.trim() || detail.room_name} · ${mediumTime(detail.scheduled_at)}`}
-        onClose={() => setRecitationFormOpen(false)}
+        onClose={() => {
+          setRecitationFormOpen(false);
+          setRecitationEditing(null);
+        }}
         onSaved={() => void load()}
       />
 

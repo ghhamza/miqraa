@@ -28,6 +28,10 @@
     "genericTitle": "Rien ici pour l'instant",
     "genericDescription": "Le contenu apparaîtra ici dès qu'il sera disponible."
   },
+  "plan": {
+    "dragHandle": "Réorganiser",
+    "reorderFailed": "Impossible d'enregistrer le nouvel ordre."
+  },
   "layout": {
     "breadcrumbNav": "Fil d'Ariane"
   },

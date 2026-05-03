@@ -17,7 +17,7 @@ use crate::api::extractors::AuthenticatedUser;
 use crate::api::types::UserResponse;
 use crate::api::AppState;
 use crate::auth::{jwt, password};
-use crate::qf::content::DEFAULT_RECITATION_ID;
+use crate::qf::content::{DEFAULT_RECITATION_ID, QF_CHAPTER_AUDIO_NOT_FOUND};
 use crate::qf::user_api::SyncError;
 use crate::qf::{oauth, pkce};
 
@@ -470,38 +470,58 @@ pub async fn get_chapter_audio(
     };
     let mut chosen_recitation_id = recitation_id;
     let mut map_opt: Option<HashMap<String, String>> = None;
-    let mut last_error: Option<anyhow::Error> = None;
-    for candidate in candidates {
+    let mut fetch_errors: Vec<anyhow::Error> = Vec::new();
+    for candidate in &candidates {
         match state
             .content_api
-            .get_chapter_audio_files(chapter, candidate)
+            .get_chapter_audio_files(chapter, *candidate)
             .await
         {
             Ok(map) => {
-                chosen_recitation_id = candidate;
+                chosen_recitation_id = *candidate;
                 map_opt = Some(map);
                 break;
             }
             Err(e) => {
-                last_error = Some(e);
+                fetch_errors.push(e);
             }
         }
     }
-    let map = map_opt.ok_or_else(|| {
-        if let Some(e) = &last_error {
-            tracing::error!(
-                error = %e,
-                chapter,
-                requested_recitation_id = recitation_id,
-                "QF audio fetch failed"
-            );
+    let map = match map_opt {
+        Some(m) => m,
+        None => {
+            let all_not_found = !fetch_errors.is_empty()
+                && fetch_errors
+                    .iter()
+                    .all(|e| e.to_string() == QF_CHAPTER_AUDIO_NOT_FOUND);
+            if all_not_found {
+                tracing::debug!(
+                    chapter,
+                    requested_recitation_id = recitation_id,
+                    candidates = ?candidates,
+                    "QF chapter audio not available for any recitation fallback (404)"
+                );
+                return Err(qf_err(
+                    StatusCode::NOT_FOUND,
+                    "qf_audio_not_found",
+                    "Audio not available for this chapter from Quran Foundation",
+                ));
+            }
+            if let Some(e) = fetch_errors.last() {
+                tracing::error!(
+                    error = %e,
+                    chapter,
+                    requested_recitation_id = recitation_id,
+                    "QF audio fetch failed"
+                );
+            }
+            return Err(qf_err(
+                StatusCode::BAD_GATEWAY,
+                "qf_upstream_error",
+                "failed to fetch audio from Quran Foundation",
+            ));
         }
-        qf_err(
-            StatusCode::BAD_GATEWAY,
-            "qf_upstream_error",
-            "failed to fetch audio from Quran Foundation",
-        )
-    })?;
+    };
 
     let mut headers = HeaderMap::new();
     headers.insert(

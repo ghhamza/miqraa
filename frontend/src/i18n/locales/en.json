@@ -28,6 +28,10 @@
     "genericTitle": "Nothing here yet",
     "genericDescription": "Content will appear here once available."
   },
+  "plan": {
+    "dragHandle": "Reorder",
+    "reorderFailed": "Could not save the new order."
+  },
   "layout": {
     "breadcrumbNav": "Breadcrumb"
   },

@@ -12,9 +12,11 @@ import { useLocaleDate } from "../../hooks/useLocaleDate";
 interface RecentRecitationsListProps {
   items: RecitationPublic[];
   showStudent?: boolean;
+  /** When set, clicking the main row content (not the audio/grade side) opens edit. */
+  onItemClick?: (r: RecitationPublic) => void;
 }
 
-export function RecentRecitationsList({ items, showStudent }: RecentRecitationsListProps) {
+export function RecentRecitationsList({ items, showStudent, onItemClick }: RecentRecitationsListProps) {
   const { t, i18n } = useTranslation();
   const { medium } = useLocaleDate();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
@@ -30,22 +32,45 @@ export function RecentRecitationsList({ items, showStudent }: RecentRecitationsL
           key={r.id}
           className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-gray-100 bg-[var(--color-bg)] px-3 py-2 text-sm"
         >
-          <div className="min-w-0 flex-1 text-start">
-            {showStudent ? (
-              <p className="font-medium text-[var(--color-text)]">
-                {r.student_name ?? t("recitations.deletedStudent")}
+          {onItemClick ? (
+            <button
+              type="button"
+              className="min-w-0 flex-1 rounded-lg text-start text-[var(--color-text)] outline-none ring-[var(--color-primary)] transition-colors hover:bg-black/[0.04] focus-visible:ring-2 dark:hover:bg-white/[0.06]"
+              onClick={() => onItemClick(r)}
+            >
+              {showStudent ? (
+                <p className="font-medium text-[var(--color-text)]">
+                  {r.student_name ?? t("recitations.deletedStudent")}
+                </p>
+              ) : null}
+              <p style={{ fontFamily: "var(--font-quran)" }} className="text-[var(--color-text)]">
+                {getSurahNameWithArabic(r.surah, loc)} · {r.ayah_start}–{r.ayah_end}
               </p>
-            ) : null}
-            <p style={{ fontFamily: "var(--font-quran)" }} className="text-[var(--color-text)]">
-              {getSurahNameWithArabic(r.surah, loc)} · {r.ayah_start}–{r.ayah_end}
-            </p>
-            <p className="text-xs text-[var(--color-text-muted)]">{medium(r.created_at)}</p>
-            {r.teacher_notes ? (
-              <p dir="auto" className="mt-1 line-clamp-2 text-xs text-[var(--color-text-muted)]">
-                {r.teacher_notes}
+              <p className="text-xs text-[var(--color-text-muted)]">{medium(r.created_at)}</p>
+              {r.teacher_notes ? (
+                <p dir="auto" className="mt-1 line-clamp-2 text-xs text-[var(--color-text-muted)]">
+                  {r.teacher_notes}
+                </p>
+              ) : null}
+            </button>
+          ) : (
+            <div className="min-w-0 flex-1 text-start">
+              {showStudent ? (
+                <p className="font-medium text-[var(--color-text)]">
+                  {r.student_name ?? t("recitations.deletedStudent")}
+                </p>
+              ) : null}
+              <p style={{ fontFamily: "var(--font-quran)" }} className="text-[var(--color-text)]">
+                {getSurahNameWithArabic(r.surah, loc)} · {r.ayah_start}–{r.ayah_end}
               </p>
-            ) : null}
-          </div>
+              <p className="text-xs text-[var(--color-text-muted)]">{medium(r.created_at)}</p>
+              {r.teacher_notes ? (
+                <p dir="auto" className="mt-1 line-clamp-2 text-xs text-[var(--color-text-muted)]">
+                  {r.teacher_notes}
+                </p>
+              ) : null}
+            </div>
+          )}
           <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
             {r.qf_synced_at ? (
               <span

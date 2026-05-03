@@ -28,6 +28,10 @@
     "genericTitle": "لا يوجد شيء هنا بعد",
     "genericDescription": "سيظهر المحتوى هنا عند توفّره."
   },
+  "plan": {
+    "dragHandle": "إعادة الترتيب",
+    "reorderFailed": "تعذّر حفظ الترتيب الجديد."
+  },
   "layout": {
     "breadcrumbNav": "مسار التنقل"
   },
