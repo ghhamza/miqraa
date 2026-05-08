@@ -3,7 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { userKeys } from "../../lib/queryKeys";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 
@@ -23,26 +25,28 @@ export function DeleteConfirmModal({
   onDeleted,
 }: DeleteConfirmModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const deleteMutation = useApiMutation<unknown, string>({
+    mutationFn: (id) => api.delete(`users/${id}`),
+    invalidates: [userKeys.lists(), userKeys.stats()],
+    onSuccess: () => {
+      onDeleted();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const loading = deleteMutation.isPending;
 
   useEffect(() => {
     if (open) setError(null);
   }, [open]);
 
-  async function confirmDelete() {
+  function confirmDelete() {
     if (!userId || loading) return;
-    setLoading(true);
     setError(null);
-    try {
-      await api.delete(`users/${userId}`);
-      onDeleted();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    deleteMutation.mutate(userId);
   }
 
   return (

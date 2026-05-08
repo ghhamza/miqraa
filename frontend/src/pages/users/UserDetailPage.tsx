@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Pencil, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
+import { userKeys } from "../../lib/queryKeys";
 import type { UserPublic } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -28,27 +30,20 @@ export function UserDetailPage() {
   const { full } = useLocaleDate();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<UserPublic | null>(null);
-  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  async function load() {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const { data } = await api.get<UserPublic>(`users/${id}`);
-      setUser(data);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const userQuery = useQuery({
+    queryKey: userKeys.detail(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<UserPublic>(`users/${id}`, { signal });
+      return data;
+    },
+    enabled: !!id,
+  });
 
-  useEffect(() => {
-    void load();
-  }, [id]);
+  const user = userQuery.data ?? null;
+  const loading = userQuery.isPending;
 
   if (loading) {
     return (
@@ -107,7 +102,7 @@ export function UserDetailPage() {
         mode="edit"
         user={user}
         onClose={() => setFormOpen(false)}
-        onSaved={() => void load()}
+        onSaved={() => void userQuery.refetch()}
       />
 
       <DeleteConfirmModal

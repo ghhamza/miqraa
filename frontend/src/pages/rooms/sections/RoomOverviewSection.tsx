@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useMemo, useState, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Calendar, CalendarClock, CheckCircle, Clock, Users, XCircle } from "lucide-react";
 import { api } from "../../../lib/api";
+import { scheduleKeys } from "../../../lib/queryKeys";
 import { intlLocaleForAppLanguage } from "../../../lib/intlLocale";
 import {
   computeEnrollmentStatus,
   type EnrollmentStatusKind,
 } from "../../../lib/roomEnrollmentStatus";
-import { useCancellableEffect } from "../../../hooks/useCancellableEffect";
 import { useLocaleDate } from "../../../hooks/useLocaleDate";
 import type { Room, RoomSchedule, User } from "../../../types";
 import { Button } from "../../../components/ui/Button";
@@ -37,20 +38,17 @@ export function RoomOverviewSection({
 }: RoomOverviewSectionProps) {
   const { t, i18n } = useTranslation();
   const { full } = useLocaleDate();
-  const [schedules, setSchedules] = useState<RoomSchedule[]>([]);
-
-  useCancellableEffect(
-    async (signal) => {
-      if (!room.id) return;
-      try {
-        const { data } = await api.get<RoomSchedule[]>(`rooms/${room.id}/schedules`, { signal });
-        setSchedules(data.filter((s) => s.is_active));
-      } catch {
-        setSchedules([]);
-      }
+  const schedulesQuery = useQuery({
+    queryKey: scheduleKeys.list(room.id),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<RoomSchedule[]>(`rooms/${room.id}/schedules`, { signal });
+      return data;
     },
-    [room.id],
-  );
+    enabled: !!room.id,
+    select: (data) => data.filter((s) => s.is_active),
+  });
+
+  const schedules = schedulesQuery.data ?? [];
 
   const status = useMemo(() => computeEnrollmentStatus(room), [room]);
 

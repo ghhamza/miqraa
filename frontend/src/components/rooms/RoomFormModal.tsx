@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { roomKeys } from "../../lib/queryKeys";
 import type { HalaqahType, QuranRiwaya, Room, TeacherOption } from "../../types";
 import { getAvailableRiwayat } from "../../lib/quranService";
 import { Button } from "../ui/Button";
@@ -34,9 +36,6 @@ export function RoomFormModal({
   const [maxStudents, setMaxStudents] = useState(20);
   const [isActive, setIsActive] = useState(true);
   const [teacherId, setTeacherId] = useState("");
-  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
-  const [loadingTeachers, setLoadingTeachers] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
   const [halaqahType, setHalaqahType] = useState<HalaqahType>("hifz");
@@ -52,6 +51,7 @@ export function RoomFormModal({
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }, []);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!open) return;
@@ -94,25 +94,64 @@ export function RoomFormModal({
     }
   }, [open, mode, room]);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!open || !isAdmin || mode !== "create") return;
-      setLoadingTeachers(true);
-      try {
-        const { data } = await api.get<TeacherOption[]>("teachers", { signal });
-        setTeachers(data);
-        setTeacherId((prev) => prev || data[0]?.id || "");
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setTeachers([]);
-      } finally {
-        if (!signal.aborted) setLoadingTeachers(false);
-      }
+  const teachersQuery = useQuery({
+    queryKey: roomKeys.teachersList(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<TeacherOption[]>("teachers", { signal });
+      return data;
     },
-    [open, isAdmin, mode],
-  );
+    enabled: open && isAdmin && mode === "create",
+    staleTime: 5 * 60_000,
+  });
 
-  async function handleSubmit(e: React.FormEvent) {
+  const teachers = teachersQuery.data ?? [];
+  const loadingTeachers = teachersQuery.isPending && teachersQuery.fetchStatus !== "idle";
+
+  useEffect(() => {
+    if (!open || !isAdmin || mode !== "create") return;
+    if (teachers.length === 0) return;
+    setTeacherId((prev) => prev || teachers[0]?.id || "");
+  }, [open, isAdmin, mode, teachers]);
+
+  type CreateInput = {
+    name: string;
+    max_students: number;
+    riwaya: QuranRiwaya;
+    halaqah_type: HalaqahType;
+    is_public: boolean;
+    enrollment_open: boolean;
+    requires_approval: boolean;
+    description: string | null;
+    enrollment_deadline_at: string | null;
+    teacher_id?: string;
+  };
+  type UpdateInput = CreateInput & { id: string; is_active: boolean };
+
+  const createMutation = useApiMutation<unknown, CreateInput>({
+    mutationFn: (input) => api.post("rooms", input),
+    invalidates: [roomKeys.lists(), roomKeys.stats()],
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const updateMutation = useApiMutation<unknown, UpdateInput>({
+    mutationFn: ({ id, ...rest }) => api.put(`rooms/${id}`, rest),
+    onSuccess: async (_data, vars) => {
+      await queryClient.invalidateQueries({ queryKey: roomKeys.detail(vars.id) });
+      await queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
+      await queryClient.invalidateQueries({ queryKey: roomKeys.stats() });
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const loading = createMutation.isPending || updateMutation.isPending;
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
     setError(null);
@@ -131,46 +170,37 @@ export function RoomFormModal({
 
     const enrollment_deadline_at = hasDeadline && deadlineLocal ? new Date(deadlineLocal).toISOString() : null;
 
-    setLoading(true);
-    try {
-      if (mode === "create") {
-        if (isAdmin && !teacherId) {
-          setError(t("rooms.selectTeacher"));
-          setLoading(false);
-          return;
-        }
-        await api.post("rooms", {
-          name: name.trim(),
-          max_students: maxStudents,
-          riwaya,
-          halaqah_type: halaqahType,
-          is_public: isPublic,
-          enrollment_open: enrollmentOpen,
-          requires_approval: requiresApproval,
-          description: description.trim() || null,
-          enrollment_deadline_at,
-          ...(isAdmin ? { teacher_id: teacherId } : {}),
-        });
-      } else if (room) {
-        await api.put(`rooms/${room.id}`, {
-          name: name.trim(),
-          max_students: maxStudents,
-          is_active: isActive,
-          riwaya,
-          halaqah_type: halaqahType,
-          is_public: isPublic,
-          enrollment_open: enrollmentOpen,
-          requires_approval: requiresApproval,
-          description: description.trim() || null,
-          enrollment_deadline_at,
-        });
+    if (mode === "create") {
+      if (isAdmin && !teacherId) {
+        setError(t("rooms.selectTeacher"));
+        return;
       }
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err, "errors.saveFailed"));
-    } finally {
-      setLoading(false);
+      createMutation.mutate({
+        name: name.trim(),
+        max_students: maxStudents,
+        riwaya,
+        halaqah_type: halaqahType,
+        is_public: isPublic,
+        enrollment_open: enrollmentOpen,
+        requires_approval: requiresApproval,
+        description: description.trim() || null,
+        enrollment_deadline_at,
+        ...(isAdmin ? { teacher_id: teacherId } : {}),
+      });
+    } else if (room) {
+      updateMutation.mutate({
+        id: room.id,
+        name: name.trim(),
+        max_students: maxStudents,
+        is_active: isActive,
+        riwaya,
+        halaqah_type: halaqahType,
+        is_public: isPublic,
+        enrollment_open: enrollmentOpen,
+        requires_approval: requiresApproval,
+        description: description.trim() || null,
+        enrollment_deadline_at,
+      });
     }
   }
 

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { api, userFacingApiError } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { roomKeys } from "../../lib/queryKeys";
 import type { EnrollmentWithStatus } from "../../types";
 import { Button } from "../ui/Button";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
@@ -16,55 +19,63 @@ interface PendingRequestsListProps {
 export function PendingRequestsList({ roomId, onChanged }: PendingRequestsListProps) {
   const { t } = useTranslation();
   const { full } = useLocaleDate();
-  const [items, setItems] = useState<EnrollmentWithStatus[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get<EnrollmentWithStatus[]>(`rooms/${roomId}/enrollments/pending`);
-      setItems(data);
-    } catch (err) {
-      setItems([]);
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [roomId]);
+  const pendingQuery = useQuery({
+    queryKey: roomKeys.pending(roomId),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<EnrollmentWithStatus[]>(
+        `rooms/${roomId}/enrollments/pending`,
+        { signal },
+      );
+      return data;
+    },
+  });
+
+  const items = pendingQuery.data ?? [];
+  const loading = pendingQuery.isPending;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (pendingQuery.error) {
+      setError((prev) => prev ?? userFacingApiError(pendingQuery.error));
+    }
+  }, [pendingQuery.error]);
 
-  async function approve(id: string) {
+  const approveMutation = useApiMutation<unknown, string>({
+    mutationFn: (enrollmentId) =>
+      api.put(`rooms/${roomId}/enrollments/${enrollmentId}/approve`),
+    invalidates: [
+      roomKeys.pending(roomId),
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+    ],
+    onSuccess: () => onChanged(),
+    onError: (message) => setError(message),
+  });
+
+  const rejectMutation = useApiMutation<unknown, string>({
+    mutationFn: (enrollmentId) =>
+      api.put(`rooms/${roomId}/enrollments/${enrollmentId}/reject`),
+    invalidates: [
+      roomKeys.pending(roomId),
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+    ],
+    onSuccess: () => onChanged(),
+    onError: (message) => setError(message),
+  });
+
+  function approve(id: string) {
     setActionId(id);
     setError(null);
-    try {
-      await api.put(`rooms/${roomId}/enrollments/${id}/approve`);
-      await load();
-      onChanged();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionId(null);
-    }
+    approveMutation.mutate(id, { onSettled: () => setActionId(null) });
   }
 
-  async function reject(id: string) {
+  function reject(id: string) {
     setActionId(id);
     setError(null);
-    try {
-      await api.put(`rooms/${roomId}/enrollments/${id}/reject`);
-      await load();
-      onChanged();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setActionId(null);
-    }
+    rejectMutation.mutate(id, { onSettled: () => setActionId(null) });
   }
 
   if (loading) {

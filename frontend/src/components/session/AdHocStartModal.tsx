@@ -2,8 +2,11 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { recitationKeys, sessionKeys, userKeys } from "../../lib/queryKeys";
 import type { QuranRiwaya, RecitationPublic, TurnType } from "../../types";
 import { getSurahAyahCount } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
@@ -34,43 +37,80 @@ export function AdHocStartModal({
   onErrorMessage,
 }: AdHocStartModalProps) {
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const isRtl = i18n.language === "ar";
   const riw = riwaya as Riwaya;
   const [surah, setSurah] = useState<number | null>(1);
   const [ayahStart, setAyahStart] = useState(1);
   const [ayahEnd, setAyahEnd] = useState(1);
   const [turnType, setTurnType] = useState<TurnType>("dars");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const surahNum = surah ?? 1;
   const maxAyah = getSurahAyahCount(surahNum, riw);
 
-  const handleSubmit = async () => {
-    if (!studentId || surah == null) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const { data: created } = await api.post<RecitationPublic>("recitations", {
-        student_id: studentId,
-        room_id: roomId,
-        session_id: sessionId,
-        surah: surahNum,
-        ayah_start: Math.min(Math.max(1, ayahStart), maxAyah),
-        ayah_end: Math.min(Math.max(1, ayahEnd, ayahStart), maxAyah),
-        turn_type: turnType,
-        riwaya,
+  type AdHocInput = {
+    studentId: string;
+    surahNum: number;
+    ayahStart: number;
+    ayahEnd: number;
+    turnType: TurnType;
+  };
+
+  const adHocMutation = useApiMutation<RecitationPublic, AdHocInput>({
+    mutationFn: async (input) => {
+      const { data: created } = await api.request<RecitationPublic>({
+        method: "post",
+        url: "recitations",
+        data: {
+          student_id: input.studentId,
+          room_id: roomId,
+          session_id: sessionId,
+          surah: input.surahNum,
+          ayah_start: Math.min(Math.max(1, input.ayahStart), maxAyah),
+          ayah_end: Math.min(Math.max(1, input.ayahEnd, input.ayahStart), maxAyah),
+          turn_type: input.turnType,
+          riwaya,
+        },
       });
-      const { data: started } = await api.post<RecitationPublic>(`recitations/${created.id}/start`, {});
+      const { data: started } = await api.request<RecitationPublic>({
+        method: "post",
+        url: `recitations/${created.id}/start`,
+        data: {},
+      });
+      return started;
+    },
+    invalidates: [
+      recitationKeys.lists(),
+      recitationKeys.list({ session: sessionId }),
+      sessionKeys.detail(sessionId),
+    ],
+    onSuccess: async (started, vars) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(vars.studentId) }),
+        queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(vars.studentId) }),
+      ]);
       onSuccess(started);
       onClose();
-    } catch (e: unknown) {
-      const msg = userFacingApiError(e);
-      setError(msg);
-      onErrorMessage(msg);
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    onError: (message) => {
+      setError(message);
+      onErrorMessage(message);
+    },
+  });
+
+  const submitting = adHocMutation.isPending;
+
+  const handleSubmit = () => {
+    if (!studentId || surah == null) return;
+    setError(null);
+    adHocMutation.mutate({
+      studentId,
+      surahNum,
+      ayahStart,
+      ayahEnd,
+      turnType,
+    });
   };
 
   return (

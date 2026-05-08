@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "../../lib/api";
+import { roomKeys } from "../../lib/queryKeys";
 import { useAuthStore } from "../../stores/authStore";
 import type { RoomStats } from "../../types";
 import { Button } from "../ui/Button";
@@ -113,8 +114,20 @@ export function AppLayout() {
   const location = useLocation();
   const isMushafRoute = location.pathname.startsWith("/mushaf");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [roomCount, setRoomCount] = useState<number | null>(null);
-  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
+
+  const roomStatsQuery = useQuery({
+    queryKey: roomKeys.stats(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<RoomStats>("rooms/stats", { signal });
+      return data;
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const roomCount = roomStatsQuery.data?.total ?? null;
+  const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
 
   const localeBase = (i18n.language || "ar").split("-")[0] ?? "ar";
   const isRtl = localeBase === "ar";
@@ -143,22 +156,6 @@ export function AppLayout() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change (incl. back/forward)
     setMobileNavOpen(false);
   }, [location.pathname]);
-
-  useCancellableEffect(
-    async (signal) => {
-      if (!user) return;
-      try {
-        const { data } = await api.get<RoomStats>("rooms/stats", { signal });
-        setRoomCount(data.total);
-        setPendingTotal(data.pending_count_total);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRoomCount(null);
-        setPendingTotal(null);
-      }
-    },
-    [user],
-  );
 
   const sheetSide = isRtl ? "right" : "left";
 

@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Archive, RotateCcw } from "lucide-react";
 import { BackLink } from "../../components/navigation/BackLink";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { roomKeys } from "../../lib/queryKeys";
 import type { Paginated, Room } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -17,40 +20,36 @@ import { EmptyState } from "../../components/ui/EmptyState";
 export function ArchivedRoomsPage() {
   const { t } = useTranslation();
   const { medium } = useLocaleDate();
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get<Paginated<Room>>("rooms", { params: { active: false } });
-      setRooms(data.items);
-    } catch (err) {
-      setError(userFacingApiError(err));
-      setRooms([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const archivedQuery = useQuery({
+    queryKey: roomKeys.archived(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<Room>>("rooms", {
+        signal,
+        params: { active: false },
+      });
+      return data.items;
+    },
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rooms = archivedQuery.data ?? [];
+  const loading = archivedQuery.isPending;
+  const error = errorMessage ?? (archivedQuery.error ? userFacingApiError(archivedQuery.error) : null);
 
-  async function restore(id: string) {
+  const restoreMutation = useApiMutation<unknown, string>({
+    mutationFn: (id) => api.put(`rooms/${id}`, { is_active: true }),
+    invalidates: [roomKeys.archived(), roomKeys.lists(), roomKeys.stats()],
+    onError: (message) => setErrorMessage(message),
+  });
+
+  function restore(id: string) {
+    setErrorMessage(null);
     setRestoringId(id);
-    setError(null);
-    try {
-      await api.put(`rooms/${id}`, { is_active: true });
-      await load();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setRestoringId(null);
-    }
+    restoreMutation.mutate(id, {
+      onSettled: () => setRestoringId(null),
+    });
   }
 
   return (

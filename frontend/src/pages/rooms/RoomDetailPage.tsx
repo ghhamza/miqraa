@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Archive, Pencil, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { roomKeys } from "../../lib/queryKeys";
+import { useApiMutation } from "../../lib/useApiMutation";
 import type { Enrollment, Paginated, RecitationPublic, Room, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
@@ -55,17 +57,10 @@ export function RoomDetailPage() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
 
-  const [room, setRoom] = useState<Room | null>(null);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [forbidden, setForbidden] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [restoreLoading, setRestoreLoading] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [removeEnrollment, setRemoveEnrollment] = useState<Enrollment | null>(null);
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsViewMode, setSessionsViewMode] = useState<RoomSessionsViewMode>("calendar");
   const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [listMonthCursor, setListMonthCursor] = useState(() => {
@@ -75,155 +70,149 @@ export function RoomDetailPage() {
   const [sessionFormOpen, setSessionFormOpen] = useState(false);
   const [sessionPrefillDate, setSessionPrefillDate] = useState<Date | null>(null);
   const [sessionPresetMorning, setSessionPresetMorning] = useState(false);
-  const [roomRecitations, setRoomRecitations] = useState<RecitationPublic[]>([]);
-  const [recitationsLoading, setRecitationsLoading] = useState(false);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
-  const [studentActionLoading, setStudentActionLoading] = useState(false);
   const [studentConfirm, setStudentConfirm] = useState<"leave" | "cancel" | null>(null);
+  const queryClient = useQueryClient();
 
-  const loadRoom = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    const { data } = await api.get<Room>(`rooms/${id}`, signal ? { signal } : {});
-    setRoom(data);
-  }, [id]);
+  const roomQuery = useQuery({
+    queryKey: roomKeys.detail(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Room>(`rooms/${id}`, { signal });
+      return data;
+    },
+    enabled: !!id,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 403) return false;
+      return failureCount < 2;
+    },
+  });
 
-  const loadEnrollments = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`, signal ? { signal } : {});
-    setEnrollments(data);
-  }, [id]);
+  const room = roomQuery.data ?? null;
+  const forbidden =
+    (roomQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
+  const canManageRoom = !!room && !!user && canManage(user, room);
 
-  const refreshSessions = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    const sig = signal ? { signal } : {};
+  const enrollmentsQuery = useQuery({
+    queryKey: roomKeys.enrollments(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`, { signal });
+      return data;
+    },
+    enabled: !!id && canManageRoom,
+  });
+
+  const enrollments = enrollmentsQuery.data ?? [];
+
+  const sessionsRange = useMemo(() => {
     if (sessionsViewMode === "calendar") {
-      const from = calendarGridStart(calendarCursor);
-      const to = calendarGridEnd(calendarCursor);
+      return {
+        from: calendarGridStart(calendarCursor).toISOString(),
+        to: calendarGridEnd(calendarCursor).toISOString(),
+      };
+    }
+    return {
+      from: startOfMonth(listMonthCursor).toISOString(),
+      to: endOfMonth(listMonthCursor).toISOString(),
+    };
+  }, [sessionsViewMode, calendarCursor, listMonthCursor]);
+
+  const sessionsQuery = useQuery({
+    queryKey: roomKeys.sessions(id ?? ""),
+    queryFn: async ({ signal }) => {
       const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
+        signal,
         params: {
           room_id: id,
-          from: from.toISOString(),
-          to: to.toISOString(),
+          from: sessionsRange.from,
+          to: sessionsRange.to,
           limit: "500",
         },
-        ...sig,
       });
-      setSessions(data.items);
-      return;
-    }
-    const from = startOfMonth(listMonthCursor);
-    const to = endOfMonth(listMonthCursor);
-    const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
-      params: {
-        room_id: id,
-        from: from.toISOString(),
-        to: to.toISOString(),
-        limit: "500",
-      },
-      ...sig,
-    });
-    const sorted = [...data.items].sort(
-      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
-    );
-    setSessions(sorted);
-  }, [id, sessionsViewMode, calendarCursor, listMonthCursor]);
-
-  const loadRoomRecitations = useCallback(async (signal?: AbortSignal) => {
-    if (!id) return;
-    const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-      params: { room_id: id },
-      ...(signal ? { signal } : {}),
-    });
-    setRoomRecitations(data.items.slice(0, 15));
-  }, [id]);
-
-  const refreshAfterMutation = useCallback(async () => {
-    if (!id || !user) return;
-    const { data: r } = await api.get<Room>(`rooms/${id}`);
-    setRoom(r);
-    if (canManage(user, r)) {
-      try {
-        const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`);
-        setEnrollments(data);
-      } catch {
-        setEnrollments([]);
+      if (sessionsViewMode === "list") {
+        return [...data.items].sort(
+          (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+        );
       }
-    } else {
-      setEnrollments([]);
-    }
-  }, [id, user]);
-
-  useCancellableEffect(
-    async (signal) => {
-      if (!id) return;
-      setLoading(true);
-      setForbidden(false);
-      try {
-        await loadRoom(signal);
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 403) {
-          setForbidden(true);
-          setRoom(null);
-        } else {
-          setRoom(null);
-        }
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
+      return data.items;
     },
-    [id, loadRoom],
-  );
+    enabled: !!id && !!room,
+  });
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !room || !user) return;
-      if (!canManage(user, room)) {
-        setEnrollments([]);
-        return;
-      }
-      try {
-        await loadEnrollments(signal);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setEnrollments([]);
-      }
-    },
-    [id, room, user, loadEnrollments],
-  );
+  useEffect(() => {
+    if (!id || !room) return;
+    void queryClient.invalidateQueries({ queryKey: roomKeys.sessions(id) });
+  }, [id, room, sessionsRange.from, sessionsRange.to, queryClient]);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !room) return;
-      setSessionsLoading(true);
-      try {
-        await refreshSessions(signal);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setSessions([]);
-      } finally {
-        if (!signal.aborted) setSessionsLoading(false);
-      }
-    },
-    [id, room, refreshSessions],
-  );
+  const sessions = sessionsQuery.data ?? [];
+  const sessionsLoading = sessionsQuery.isFetching;
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !room) return;
-      setRecitationsLoading(true);
-      try {
-        await loadRoomRecitations(signal);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRoomRecitations([]);
-      } finally {
-        if (!signal.aborted) setRecitationsLoading(false);
-      }
+  const recitationsQuery = useQuery({
+    queryKey: roomKeys.recitations(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+        signal,
+        params: { room_id: id },
+      });
+      return data.items.slice(0, 15);
     },
-    [id, room, loadRoomRecitations],
-  );
+    enabled: !!id && !!room,
+  });
+
+  const roomRecitations = recitationsQuery.data ?? [];
+  const recitationsLoading = recitationsQuery.isPending;
+  const loading = roomQuery.isPending;
+
+  const restoreMutation = useApiMutation({
+    mutationFn: () => api.put(`rooms/${room?.id}`, { is_active: true }),
+    invalidates: [
+      roomKeys.detail(id ?? ""),
+      roomKeys.lists(),
+      roomKeys.archived(),
+      roomKeys.stats(),
+    ],
+  });
+
+  const joinMutation = useApiMutation({
+    mutationFn: () => api.post(`rooms/${room?.id}/join`),
+    invalidates: [
+      roomKeys.detail(id ?? ""),
+      roomKeys.enrollments(id ?? ""),
+      roomKeys.lists(),
+      roomKeys.stats(),
+    ],
+    onError: (message) => window.alert(message),
+  });
+
+  const withdrawMutation = useApiMutation({
+    mutationFn: () => api.delete(`rooms/${room?.id}/my-enrollment`),
+    invalidates: [
+      roomKeys.detail(id ?? ""),
+      roomKeys.enrollments(id ?? ""),
+      roomKeys.lists(),
+      roomKeys.stats(),
+    ],
+    onSuccess: () => setStudentConfirm(null),
+    onError: (message) => window.alert(message),
+  });
+
+  const restoreLoading = restoreMutation.isPending;
+  const studentActionLoading = joinMutation.isPending || withdrawMutation.isPending;
+
+  function handleRestore() {
+    if (!room || restoreLoading) return;
+    restoreMutation.mutate();
+  }
+
+  function handleStudentJoin() {
+    if (!room || !id || studentActionLoading) return;
+    joinMutation.mutate();
+  }
+
+  function confirmStudentWithdrawal() {
+    if (!room || !id || studentActionLoading) return;
+    withdrawMutation.mutate();
+  }
 
   const showActions = room ? canManage(user, room) : false;
   const enrolledCount = room?.enrolled_count ?? 0;
@@ -262,44 +251,6 @@ export function RoomDetailPage() {
         </Link>
       </div>
     );
-  }
-
-  async function handleRestore() {
-    if (!room || restoreLoading) return;
-    setRestoreLoading(true);
-    try {
-      await api.put(`rooms/${room.id}`, { is_active: true });
-      await refreshAfterMutation();
-    } finally {
-      setRestoreLoading(false);
-    }
-  }
-
-  async function handleStudentJoin() {
-    if (!room || !id || studentActionLoading) return;
-    setStudentActionLoading(true);
-    try {
-      await api.post(`rooms/${room.id}/join`);
-      await refreshAfterMutation();
-    } catch (err) {
-      window.alert(userFacingApiError(err));
-    } finally {
-      setStudentActionLoading(false);
-    }
-  }
-
-  async function confirmStudentWithdrawal() {
-    if (!room || !id || studentActionLoading) return;
-    setStudentActionLoading(true);
-    try {
-      await api.delete(`rooms/${room.id}/my-enrollment`);
-      setStudentConfirm(null);
-      await refreshAfterMutation();
-    } catch (err) {
-      window.alert(userFacingApiError(err));
-    } finally {
-      setStudentActionLoading(false);
-    }
   }
 
   return (
@@ -380,7 +331,9 @@ export function RoomDetailPage() {
             enrolledCount={enrolledCount}
             showActions={showActions}
             isArchived={isArchived}
-            onRefresh={() => void refreshAfterMutation()}
+            onRefresh={() => {
+              // No-op: PendingRequestsList invalidates its own keys.
+            }}
             onEnrollOpen={() => setEnrollOpen(true)}
             onRemoveEnrollment={(e) => setRemoveEnrollment(e)}
           />
@@ -435,7 +388,9 @@ export function RoomDetailPage() {
           setSessionPrefillDate(null);
           setSessionPresetMorning(false);
         }}
-        onSaved={() => void refreshSessions()}
+        onSaved={() => {
+          void queryClient.invalidateQueries({ queryKey: roomKeys.sessions(id ?? "") });
+        }}
       />
 
       <RecitationFormModal
@@ -445,7 +400,9 @@ export function RoomDetailPage() {
         defaultRoomId={room.id}
         defaultRoomName={room.name}
         onClose={() => setRecitationFormOpen(false)}
-        onSaved={() => void loadRoomRecitations()}
+        onSaved={() => {
+          void queryClient.invalidateQueries({ queryKey: roomKeys.recitations(id ?? "") });
+        }}
       />
 
       <RoomFormModal
@@ -454,7 +411,9 @@ export function RoomDetailPage() {
         room={room}
         isAdmin={isAdmin}
         onClose={() => setFormOpen(false)}
-        onSaved={() => void refreshAfterMutation()}
+        onSaved={() => {
+          // No-op: RoomFormModal invalidates room keys itself.
+        }}
       />
 
       <ArchiveRoomModal
@@ -471,7 +430,9 @@ export function RoomDetailPage() {
         maxStudents={room.max_students}
         currentCount={enrolledCount}
         onClose={() => setEnrollOpen(false)}
-        onEnrolled={() => void refreshAfterMutation()}
+        onEnrolled={() => {
+          // No-op: EnrollStudentModal invalidates enrollment keys itself.
+        }}
       />
 
       <RemoveStudentModal
@@ -479,7 +440,9 @@ export function RoomDetailPage() {
         roomId={room.id}
         enrollment={removeEnrollment}
         onClose={() => setRemoveEnrollment(null)}
-        onRemoved={() => void refreshAfterMutation()}
+        onRemoved={() => {
+          // No-op: RemoveStudentModal invalidates enrollment keys itself.
+        }}
       />
 
       <AlertDialog

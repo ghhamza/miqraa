@@ -3,7 +3,10 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { userKeys } from "../../lib/queryKeys";
 import type { UserPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -30,8 +33,49 @@ export function UserFormModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"student" | "teacher" | "admin">("student");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  interface CreateInput {
+    name: string;
+    email: string;
+    password: string;
+    role: "student" | "teacher" | "admin";
+  }
+  interface UpdateInput {
+    id: string;
+    name: string;
+    email: string;
+    role: "student" | "teacher" | "admin";
+  }
+
+  const createMutation = useApiMutation<unknown, CreateInput>({
+    mutationFn: (input) => api.post("users", input),
+    invalidates: [userKeys.lists(), userKeys.stats()],
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const updateMutation = useApiMutation<unknown, UpdateInput>({
+    mutationFn: (input) =>
+      api.put(`users/${input.id}`, {
+        name: input.name,
+        email: input.email,
+        role: input.role,
+      }),
+    invalidates: [userKeys.lists(), userKeys.stats()],
+    onSuccess: async (_data, vars) => {
+      await queryClient.invalidateQueries({ queryKey: userKeys.detail(vars.id) });
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const loading = createMutation.isPending || updateMutation.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -53,33 +97,25 @@ export function UserFormModal({
     e.preventDefault();
     if (loading) return;
     setError(null);
-    setLoading(true);
-    try {
-      if (mode === "create") {
-        if (password.length < 8) {
-          setError(t("auth.passwordMin"));
-          setLoading(false);
-          return;
-        }
-        await api.post("users", {
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          role,
-        });
-      } else if (user) {
-        await api.put(`users/${user.id}`, {
-          name: name.trim(),
-          email: email.trim(),
-          role,
-        });
+
+    if (mode === "create") {
+      if (password.length < 8) {
+        setError(t("auth.passwordMin"));
+        return;
       }
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err, "users.saveFailed"));
-    } finally {
-      setLoading(false);
+      createMutation.mutate({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        role,
+      });
+    } else if (user) {
+      updateMutation.mutate({
+        id: user.id,
+        name: name.trim(),
+        email: email.trim(),
+        role,
+      });
     }
   }
 

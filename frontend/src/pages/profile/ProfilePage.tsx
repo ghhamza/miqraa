@@ -42,9 +42,13 @@ export function ProfilePage() {
     setProfileSuccess(false);
     setProfileLoading(true);
     try {
-      const { data } = await api.put<User>("auth/me", {
-        name: name.trim(),
-        email: email.trim(),
+      const { data } = await api.request<User>({
+        method: "put",
+        url: "auth/me",
+        data: {
+          name: name.trim(),
+          email: email.trim(),
+        },
       });
       setUser(data);
       setProfileSuccess(true);
@@ -71,9 +75,13 @@ export function ProfilePage() {
     }
     setPasswordLoading(true);
     try {
-      await api.put("auth/password", {
-        current_password: currentPassword,
-        new_password: newPassword,
+      await api.request({
+        method: "put",
+        url: "auth/password",
+        data: {
+          current_password: currentPassword,
+          new_password: newPassword,
+        },
       });
       setCurrentPassword("");
       setNewPassword("");

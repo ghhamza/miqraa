@@ -3,7 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { roomKeys } from "../../lib/queryKeys";
 import type { Enrollment } from "../../types";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
@@ -24,26 +26,32 @@ export function RemoveStudentModal({
   onRemoved,
 }: RemoveStudentModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const removeMutation = useApiMutation<unknown, string>({
+    mutationFn: (enrollmentId) => api.delete(`rooms/${roomId}/enrollments/${enrollmentId}`),
+    invalidates: [
+      roomKeys.enrollments(roomId),
+      roomKeys.detail(roomId),
+      roomKeys.pending(roomId),
+    ],
+    onSuccess: () => {
+      onRemoved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const loading = removeMutation.isPending;
 
   useEffect(() => {
     if (open) setError(null);
   }, [open]);
 
-  async function confirm() {
+  function confirm() {
     if (!enrollment || loading) return;
-    setLoading(true);
     setError(null);
-    try {
-      await api.delete(`rooms/${roomId}/enrollments/${enrollment.id}`);
-      onRemoved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    removeMutation.mutate(enrollment.id);
   }
 
   return (

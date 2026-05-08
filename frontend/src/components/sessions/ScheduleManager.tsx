@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { scheduleKeys, sessionKeys } from "../../lib/queryKeys";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import type { GenerateResult, Schedule } from "../../types";
 import { Button } from "../ui/Button";
@@ -46,8 +49,6 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
   const locale = intlLocaleForAppLanguage(i18n.language);
   const isRtl = (i18n.language || "ar").startsWith("ar");
 
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [slotModal, setSlotModal] = useState<"add" | "edit" | null>(null);
@@ -57,33 +58,29 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
   const [duration, setDuration] = useState(60);
   const [slotTitle, setSlotTitle] = useState("");
   const [slotActive, setSlotActive] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const [genOpen, setGenOpen] = useState(false);
   const [genWeeks, setGenWeeks] = useState(4);
-  const [genLoading, setGenLoading] = useState(false);
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await api.get<Schedule[]>(`rooms/${roomId}/schedules`);
-      setSchedules(data);
-    } catch (err) {
-      setError(userFacingApiError(err));
-      setSchedules([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [roomId]);
+  const schedulesQuery = useQuery({
+    queryKey: scheduleKeys.list(roomId),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Schedule[]>(`rooms/${roomId}/schedules`, { signal });
+      return data;
+    },
+  });
+
+  const schedules = schedulesQuery.data ?? [];
+  const loading = schedulesQuery.isPending;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (schedulesQuery.error) {
+      setError((prev) => prev ?? userFacingApiError(schedulesQuery.error));
+    }
+  }, [schedulesQuery.error]);
 
   const byDay = useMemo(() => {
     const m = new Map<number, Schedule[]>();
@@ -121,86 +118,142 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
     setSlotActive(s.is_active);
   }
 
-  async function saveSlot() {
+  type SaveSlotInput = {
+    mode: "edit" | "single" | "batch";
+    editingId: string | null;
+    days: number[];
+    title: string | null;
+    mins: number;
+    duration: number;
+    isActive: boolean;
+  };
+
+  const saveSlotMutation = useApiMutation<unknown, SaveSlotInput>({
+    mutationFn: async (input) => {
+      if (input.mode === "edit" && input.editingId) {
+        return api.request({
+          method: "put",
+          url: `schedules/${input.editingId}`,
+          data: {
+            title: input.title,
+            day_of_week: input.days[0] ?? 0,
+            start_time_minutes: input.mins,
+            duration_minutes: input.duration,
+            is_active: input.isActive,
+          },
+        });
+      }
+      if (input.mode === "single") {
+        return api.request({
+          method: "post",
+          url: "schedules",
+          data: {
+            room_id: roomId,
+            title: input.title,
+            day_of_week: input.days[0] ?? 0,
+            start_time_minutes: input.mins,
+            duration_minutes: input.duration,
+          },
+        });
+      }
+      return api.request({
+        method: "post",
+        url: "schedules/batch",
+        data: {
+          room_id: roomId,
+          title: input.title,
+          slots: input.days.map((day_of_week) => ({
+            day_of_week,
+            start_time_minutes: input.mins,
+            duration_minutes: input.duration,
+          })),
+        },
+      });
+    },
+    invalidates: [scheduleKeys.list(roomId)],
+    onSuccess: () => {
+      setSlotModal(null);
+    },
+    onError: (message) => setError(message),
+  });
+
+  const saving = saveSlotMutation.isPending;
+
+  function saveSlot() {
     if (saving) return;
     const mins = timeStringToMinutes(startTime);
     if (mins < 0 || mins >= 1440 || duration <= 0) {
       setError(t("errors.badRequest"));
       return;
     }
-    setSaving(true);
     setError(null);
-    try {
-      if (slotModal === "edit" && editingId) {
-        await api.put(`schedules/${editingId}`, {
-          title: slotTitle.trim() || null,
-          day_of_week: [...selectedDays][0] ?? 0,
-          start_time_minutes: mins,
-          duration_minutes: duration,
-          is_active: slotActive,
-        });
-      } else if (selectedDays.size === 1) {
-        const d = [...selectedDays][0] ?? 0;
-        await api.post("schedules", {
-          room_id: roomId,
-          title: slotTitle.trim() || null,
-          day_of_week: d,
-          start_time_minutes: mins,
-          duration_minutes: duration,
-        });
-      } else {
-        await api.post("schedules/batch", {
-          room_id: roomId,
-          title: slotTitle.trim() || null,
-          slots: [...selectedDays].map((day_of_week) => ({
-            day_of_week,
-            start_time_minutes: mins,
-            duration_minutes: duration,
-          })),
-        });
-      }
-      setSlotModal(null);
-      await load();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setSaving(false);
-    }
+
+    const days = [...selectedDays];
+    saveSlotMutation.mutate({
+      mode:
+        slotModal === "edit" && editingId
+          ? "edit"
+          : days.length === 1
+          ? "single"
+          : "batch",
+      editingId,
+      days,
+      title: slotTitle.trim() || null,
+      mins,
+      duration,
+      isActive: slotActive,
+    });
   }
 
-  async function confirmDelete() {
+  const deleteMutation = useApiMutation<unknown, string>({
+    mutationFn: (id) => api.request({ method: "delete", url: `schedules/${id}` }),
+    invalidates: [scheduleKeys.list(roomId)],
+    onSuccess: () => setDeleteId(null),
+    onError: (message) => setError(message),
+  });
+
+  const deleting = deleteMutation.isPending;
+
+  function confirmDelete() {
     if (!deleteId || deleting) return;
-    setDeleting(true);
     setError(null);
-    try {
-      await api.delete(`schedules/${deleteId}`);
-      setDeleteId(null);
-      await load();
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setDeleting(false);
-    }
+    deleteMutation.mutate(deleteId);
   }
 
-  async function runGenerate() {
-    setGenLoading(true);
-    setError(null);
-    setGenResult(null);
-    try {
+  const generateMutation = useApiMutation<
+    GenerateResult,
+    { roomId: string; weeks: number }
+  >({
+    mutationFn: async (input) => {
       const tz_offset_minutes = -new Date().getTimezoneOffset();
-      const { data } = await api.post<GenerateResult>("schedules/generate", {
-        room_id: roomId,
-        weeks: genWeeks,
-        tz_offset_minutes,
+      const { data } = await api.request<GenerateResult>({
+        method: "post",
+        url: "schedules/generate",
+        data: {
+          room_id: input.roomId,
+          weeks: input.weeks,
+          tz_offset_minutes,
+        },
       });
+      return data;
+    },
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+    ],
+    onSuccess: (data) => {
       setGenResult(data);
       setGenOpen(false);
-    } catch (err) {
-      setError(userFacingApiError(err));
-    } finally {
-      setGenLoading(false);
-    }
+    },
+    onError: (message) => setError(message),
+  });
+
+  const genLoading = generateMutation.isPending;
+
+  function runGenerate() {
+    setError(null);
+    setGenResult(null);
+    generateMutation.mutate({ roomId, weeks: genWeeks });
   }
 
   function toggleDay(d: number) {

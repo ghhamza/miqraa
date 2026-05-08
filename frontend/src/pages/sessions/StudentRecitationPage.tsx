@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, History } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { sessionKeys, roomKeys, recitationKeys } from "../../lib/queryKeys";
 import type { Paginated, RecitationPublic, Room, SessionDetail, SessionPublic, TurnType } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { PageShell } from "../../components/layout/PageShell";
@@ -16,85 +18,124 @@ export function StudentRecitationPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const [session, setSession] = useState<SessionDetail | null>(null);
-  const [room, setRoom] = useState<Room | null>(null);
-  const [studentName, setStudentName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(true);
-
-  const [existingByType, setExistingByType] = useState<Record<TurnType, RecitationPublic | null>>({
-    dars: null,
-    tathbit: null,
-    muraja: null,
-  });
-
-  const [periodStats, setPeriodStats] = useState<{
-    attendanceCount: number;
-    totalSessions: number;
-    avgStarRating: number;
-    totalRecitations: number;
-  } | null>(null);
-
   const [activeTab, setActiveTab] = useState<TurnType>("dars");
 
-  const load = useCallback(async () => {
-    if (!sessionId || !studentId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const sessionRes = await api.get<SessionDetail>(`/sessions/${sessionId}`);
-      setSession(sessionRes.data);
+  const sessionQuery = useQuery({
+    queryKey: sessionKeys.detail(sessionId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<SessionDetail>(`/sessions/${sessionId}`, { signal });
+      return data;
+    },
+    enabled: !!sessionId && !!studentId,
+  });
 
-      const att = sessionRes.data.attendance.find((a) => a.student_id === studentId);
-      setStudentName(att?.student_name ?? "");
+  const session = sessionQuery.data ?? null;
+  const roomId = session?.room_id ?? null;
 
-      const roomRes = await api.get<Room>(`/rooms/${sessionRes.data.room_id}`);
-      setRoom(roomRes.data);
+  const roomQuery = useQuery({
+    queryKey: roomKeys.detail(roomId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Room>(`/rooms/${roomId}`, { signal });
+      return data;
+    },
+    enabled: !!roomId,
+  });
 
-      const recRes = await api.get<Paginated<RecitationPublic>>("/recitations", {
+  const room = roomQuery.data ?? null;
+
+  const sessionRecitationsQuery = useQuery({
+    queryKey: recitationKeys.list({ student: studentId, session: sessionId }),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<RecitationPublic>>("/recitations", {
+        signal,
         params: { student_id: studentId, session_id: sessionId, limit: 10 },
       });
-      const byType: Record<TurnType, RecitationPublic | null> = { dars: null, tathbit: null, muraja: null };
-      for (const rec of recRes.data.items) {
-        if (rec.turn_type in byType) {
-          byType[rec.turn_type as TurnType] = rec;
-        }
+      return data;
+    },
+    enabled: !!sessionId && !!studentId,
+  });
+
+  const roomSessionsQuery = useQuery({
+    queryKey: roomKeys.sessions(roomId ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<SessionPublic>>("/sessions", {
+        signal,
+        params: { room_id: roomId, status: "completed", limit: 100 },
+      });
+      return data;
+    },
+    enabled: !!roomId,
+  });
+
+  const roomRecitationsQuery = useQuery({
+    queryKey: recitationKeys.list({ student: studentId, room: roomId ?? undefined }),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<RecitationPublic>>("/recitations", {
+        signal,
+        params: { student_id: studentId, room_id: roomId, limit: 100 },
+      });
+      return data;
+    },
+    enabled: !!roomId && !!studentId,
+  });
+
+  const studentName = useMemo(() => {
+    if (!session) return "";
+    return session.attendance.find((a) => a.student_id === studentId)?.student_name ?? "";
+  }, [session, studentId]);
+
+  const existingByType = useMemo<Record<TurnType, RecitationPublic | null>>(() => {
+    const result: Record<TurnType, RecitationPublic | null> = { dars: null, tathbit: null, muraja: null };
+    const items = sessionRecitationsQuery.data?.items ?? [];
+    for (const rec of items) {
+      if (rec.turn_type in result) {
+        result[rec.turn_type as TurnType] = rec;
       }
-      setExistingByType(byType);
-
-      const allSessionsRes = await api.get<Paginated<SessionPublic>>("/sessions", {
-        params: { room_id: sessionRes.data.room_id, status: "completed", limit: 100 },
-      });
-      const allRecsRes = await api.get<Paginated<RecitationPublic>>("/recitations", {
-        params: { student_id: studentId, room_id: sessionRes.data.room_id, limit: 100 },
-      });
-      const rated = allRecsRes.data.items.filter((r) => r.star_rating != null);
-      const avgRating =
-        rated.length > 0
-          ? rated.reduce((sum, r) => sum + (r.star_rating ?? 0), 0) / rated.length
-          : 0;
-
-      setPeriodStats({
-        attendanceCount: allRecsRes.data.items.length,
-        totalSessions: allSessionsRes.data.total,
-        avgStarRating: Math.round(avgRating * 10) / 10,
-        totalRecitations: allRecsRes.data.total,
-      });
-
-      const ht = roomRes.data.halaqah_type;
-      if (ht === "muraja") setActiveTab("tathbit");
-      else setActiveTab("dars");
-    } catch (e) {
-      setError(userFacingApiError(e));
-    } finally {
-      setLoading(false);
     }
-  }, [sessionId, studentId]);
+    return result;
+  }, [sessionRecitationsQuery.data]);
+
+  const periodStats = useMemo(() => {
+    const recs = roomRecitationsQuery.data;
+    const sessions = roomSessionsQuery.data;
+    if (!recs || !sessions) return null;
+    const rated = recs.items.filter((r) => r.star_rating != null);
+    const avgRating =
+      rated.length > 0
+        ? rated.reduce((sum, r) => sum + (r.star_rating ?? 0), 0) / rated.length
+        : 0;
+    return {
+      attendanceCount: recs.items.length,
+      totalSessions: sessions.total,
+      avgStarRating: Math.round(avgRating * 10) / 10,
+      totalRecitations: recs.total,
+    };
+  }, [roomRecitationsQuery.data, roomSessionsQuery.data]);
+
+  const loading = sessionQuery.isPending || (!!roomId && roomQuery.isPending);
+
+  const error = useMemo(() => {
+    const firstError =
+      sessionQuery.error ??
+      roomQuery.error ??
+      sessionRecitationsQuery.error ??
+      roomSessionsQuery.error ??
+      roomRecitationsQuery.error;
+    return firstError ? userFacingApiError(firstError) : null;
+  }, [
+    sessionQuery.error,
+    roomQuery.error,
+    sessionRecitationsQuery.error,
+    roomSessionsQuery.error,
+    roomRecitationsQuery.error,
+  ]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!room) return;
+    if (room.halaqah_type === "muraja") setActiveTab("tathbit");
+    else setActiveTab("dars");
+  }, [room]);
 
   const activeTabs = useMemo<TurnType[]>(() => {
     if (!room) return ["dars", "tathbit", "muraja"];
@@ -235,7 +276,7 @@ export function StudentRecitationPage() {
         roomId={room.id}
         riwaya={room.riwaya}
         existing={existingByType[activeTab]}
-        onSaved={load}
+        onSaved={() => sessionRecitationsQuery.refetch()}
       />
     </PageShell>
   );

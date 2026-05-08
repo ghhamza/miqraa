@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, SlidersHorizontal, TrendingUp } from "lucide-react";
@@ -32,7 +33,8 @@ import { FilterSheet } from "../../components/recitations/FilterSheet";
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { recitationKeys, roomKeys, userKeys } from "../../lib/queryKeys";
 import { cn } from "@/lib/utils";
 
 /** Align with SurahPicker + native date inputs (Radix trigger defaults include `sm:text-base`). */
@@ -47,9 +49,6 @@ export function RecitationsPage() {
   const user = useAuthStore((s) => s.user);
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
 
-  const [stats, setStats] = useState<RecitationStats | null>(null);
-  const [rows, setRows] = useState<RecitationPublic[]>([]);
-  const [loading, setLoading] = useState(true);
   const [surahFilter, setSurahFilter] = useState<number | "">("");
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [gradeTab, setGradeTab] = useState<GradeFilter>("");
@@ -57,11 +56,9 @@ export function RecitationsPage() {
   const [toDate, setToDate] = useState("");
   const [studentFilter, setStudentFilter] = useState("");
   const [riwayaFilter, setRiwayaFilter] = useState<QuranRiwaya | "">("");
-  const [students, setStudents] = useState<StudentOption[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editRec, setEditRec] = useState<RecitationPublic | null>(null);
   const [deleteRec, setDeleteRec] = useState<RecitationPublic | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const isStudent = user?.role === "student";
@@ -94,83 +91,96 @@ export function RecitationsPage() {
     setRiwayaFilter("");
   }, []);
 
-  const fetchAll = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true);
-      try {
-        const params: Record<string, string> = {};
-        if (surahFilter !== "") params.surah = String(surahFilter);
-        if (gradeTab) params.grade = gradeTab;
-        if (fromDate) params.from = new Date(fromDate + "T00:00:00").toISOString();
-        if (toDate) params.to = new Date(toDate + "T23:59:59").toISOString();
-        if (studentFilter && (user?.role === "teacher" || user?.role === "admin")) {
-          params.student_id = studentFilter;
-        }
-        if (riwayaFilter) params.riwaya = riwayaFilter;
-        const [statsRes, listRes] = await Promise.all([
-          api.get<RecitationStats>("recitations/stats", { signal }),
-          api.get<Paginated<RecitationPublic>>("recitations", { params, signal }),
-        ]);
-        setStats(statsRes.data);
-        setRows(listRes.data.items);
-      } catch (err) {
-        const name = (err as { name?: string })?.name;
-        const code = (err as { code?: string })?.code;
-        if (name === "CanceledError" || name === "AbortError" || code === "ERR_CANCELED") return;
-        setStats(null);
-        setRows([]);
-      } finally {
-        setLoading(false);
+  const filters = useMemo(
+    () => ({
+      surah: surahFilter !== "" ? Number(surahFilter) : undefined,
+      grade: gradeTab || undefined,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      student:
+        studentFilter && (user?.role === "teacher" || user?.role === "admin")
+          ? studentFilter
+          : undefined,
+    }),
+    [surahFilter, gradeTab, fromDate, toDate, studentFilter, user?.role],
+  );
+
+  const listQuery = useQuery({
+    queryKey: [
+      ...recitationKeys.list(filters),
+      { riwaya: riwayaFilter || null },
+    ] as const,
+    queryFn: async ({ signal }) => {
+      const params: Record<string, string> = {};
+      if (surahFilter !== "") params.surah = String(surahFilter);
+      if (gradeTab) params.grade = gradeTab;
+      if (fromDate) params.from = new Date(fromDate + "T00:00:00").toISOString();
+      if (toDate) params.to = new Date(toDate + "T23:59:59").toISOString();
+      if (studentFilter && (user?.role === "teacher" || user?.role === "admin")) {
+        params.student_id = studentFilter;
       }
+      if (riwayaFilter) params.riwaya = riwayaFilter;
+      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+        signal,
+        params,
+      });
+      return data.items;
     },
-    [surahFilter, gradeTab, fromDate, toDate, studentFilter, riwayaFilter, user?.role],
-  );
+    placeholderData: (prev) => prev,
+  });
 
-  useCancellableEffect(
-    async (signal) => {
-      await fetchAll(signal);
+  const statsQuery = useQuery({
+    queryKey: recitationKeys.stats(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<RecitationStats>("recitations/stats", { signal });
+      return data;
     },
-    [fetchAll],
-  );
+    staleTime: 60_000,
+  });
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!user || user.role === "student") return;
-      try {
-        if (user.role === "admin") {
-          const { data } = await api.get<StudentOption[]>("students", { signal });
-          setStudents(data);
-        } else {
-          const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
-          const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
-          const map = new Map<string, StudentOption>();
-          for (const r of mine) {
-            try {
-              const { data: ens } = await api.get<
-                { student_id: string; student_name: string; student_email: string }[]
-              >(`rooms/${r.id}/enrollments`, { signal });
-              for (const e of ens) {
-                if (!map.has(e.student_id)) {
-                  map.set(e.student_id, {
-                    id: e.student_id,
-                    name: e.student_name,
-                    email: e.student_email,
-                  });
-                }
-              }
-            } catch (err) {
-              if ((err as { name?: string })?.name === "CanceledError") throw err;
+  const rows = listQuery.data ?? [];
+  const stats = statsQuery.data ?? null;
+  const loading = listQuery.isPending && !listQuery.isPlaceholderData;
+
+  const studentsQuery = useQuery({
+    queryKey: [
+      ...roomKeys.studentsList(),
+      { scope: user?.role === "admin" ? "all" : `teacher:${user?.id ?? ""}` },
+    ] as const,
+    queryFn: async ({ signal }) => {
+      if (!user) return [] as StudentOption[];
+      if (user.role === "admin") {
+        const { data } = await api.get<StudentOption[]>("students", { signal });
+        return data;
+      }
+      const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
+      const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
+      const map = new Map<string, StudentOption>();
+      for (const r of mine) {
+        try {
+          const { data: ens } = await api.get<
+            { student_id: string; student_name: string; student_email: string }[]
+          >(`rooms/${r.id}/enrollments`, { signal });
+          for (const e of ens) {
+            if (!map.has(e.student_id)) {
+              map.set(e.student_id, {
+                id: e.student_id,
+                name: e.student_name,
+                email: e.student_email,
+              });
             }
           }
-          setStudents([...map.values()].sort((a, b) => a.name.localeCompare(b.name)));
+        } catch (err) {
+          if ((err as { name?: string })?.name === "CanceledError") throw err;
         }
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setStudents([]);
       }
+      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
     },
-    [user],
-  );
+    enabled: !!user && user.role !== "student",
+    staleTime: 60_000,
+  });
+
+  const students = studentsQuery.data ?? [];
 
   const canEditRow = useCallback(
     (r: RecitationPublic) => {
@@ -292,16 +302,27 @@ export function RecitationsPage() {
     return base;
   }, [t, isStudent, loc, medium, canEditRow]);
 
-  async function confirmDelete() {
-    if (!deleteRec) return;
-    setActionLoading(true);
-    try {
-      await api.delete(`recitations/${deleteRec.id}`);
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useApiMutation<void, RecitationPublic>({
+    mutationFn: (rec) => api.delete(`recitations/${rec.id}`).then(() => undefined),
+    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
+    onSuccess: async (_data, rec) => {
+      if (rec.student_id) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(rec.student_id) }),
+          queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(rec.student_id) }),
+        ]);
+      }
       setDeleteRec(null);
-      void fetchAll();
-    } finally {
-      setActionLoading(false);
-    }
+    },
+  });
+
+  const actionLoading = deleteMutation.isPending;
+
+  function confirmDelete() {
+    if (!deleteRec) return;
+    deleteMutation.mutate(deleteRec);
   }
 
   const gradeTabs: { id: GradeFilter; label: string }[] = [
@@ -547,14 +568,18 @@ export function RecitationsPage() {
         mode="create"
         recitation={null}
         onClose={() => setFormOpen(false)}
-        onSaved={() => void fetchAll()}
+        onSaved={() => {
+          // No-op: RecitationFormModal invalidates recitation keys itself.
+        }}
       />
       <RecitationFormModal
         open={editRec !== null}
         mode="edit"
         recitation={editRec}
         onClose={() => setEditRec(null)}
-        onSaved={() => void fetchAll()}
+        onSaved={() => {
+          // No-op: RecitationFormModal invalidates recitation keys itself.
+        }}
       />
       <DeleteRecitationModal
         open={deleteRec !== null}

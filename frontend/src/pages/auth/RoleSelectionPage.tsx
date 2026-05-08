@@ -26,7 +26,11 @@ export function RoleSelectionPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.post<User>("auth/role-selection", { role: selectedRole });
+      const { data } = await api.request<User>({
+        method: "post",
+        url: "auth/role-selection",
+        data: { role: selectedRole },
+      });
       setUser(data);
       navigate("/", { replace: true });
     } catch (err) {

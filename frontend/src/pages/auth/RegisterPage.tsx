@@ -64,11 +64,15 @@ export function RegisterPage() {
     setFormError(null);
     setLoading(true);
     try {
-      const { data } = await api.post<AuthResponse>("auth/register", {
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        role,
+      const { data } = await api.request<AuthResponse>({
+        method: "post",
+        url: "auth/register",
+        data: {
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          role,
+        },
       });
       login(data.token, data.user);
       navigate("/", { replace: true });

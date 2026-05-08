@@ -39,7 +39,10 @@ export function AccountLinksPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("auth/qf/unlink");
+      await api.request({
+        method: "post",
+        url: "auth/qf/unlink",
+      });
       await loadUser();
     } catch (err) {
       setError(userFacingApiError(err));

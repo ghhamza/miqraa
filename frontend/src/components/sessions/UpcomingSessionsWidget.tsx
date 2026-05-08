@@ -3,9 +3,10 @@
 
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useMemo, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { sessionKeys } from "../../lib/queryKeys";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { Badge } from "../ui/Badge";
@@ -51,8 +52,18 @@ export interface UpcomingSessionsWidgetProps {
 export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, excludeIds }: UpcomingSessionsWidgetProps) {
   const { t, i18n } = useTranslation();
   const { mediumTime } = useLocaleDate();
-  const [sessions, setSessions] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const upcomingQuery = useQuery({
+    queryKey: sessionKeys.upcoming(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
+      return data;
+    },
+    staleTime: 30_000,
+  });
+
+  const sessions = upcomingQuery.data ?? [];
+  const loading = upcomingQuery.isPending;
 
   const excludeSet = useMemo(() => new Set(excludeIds ?? []), [excludeIds]);
   const visibleSessions = useMemo(
@@ -60,22 +71,6 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, exclude
     [sessions, excludeSet],
   );
   const displaySessions = maxItems != null ? visibleSessions.slice(0, maxItems) : visibleSessions;
-
-  useCancellableEffect(
-    async (signal) => {
-      setLoading(true);
-      try {
-        const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-        setSessions(data);
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setSessions([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [i18n.language],
-  );
 
   if (loading) {
     return (

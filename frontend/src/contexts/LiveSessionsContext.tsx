@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { sessionKeys } from "../lib/queryKeys";
 import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
 import type { Paginated, SessionPublic } from "../types";
@@ -35,7 +36,7 @@ export function LiveSessionsProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
 
   const query = useQuery({
-    queryKey: ["live-sessions", user?.id ?? null],
+    queryKey: sessionKeys.live(user?.id ?? null),
     queryFn: ({ signal }) => fetchLiveSessions(signal),
     enabled: !!user,
     refetchInterval: POLL_MS,

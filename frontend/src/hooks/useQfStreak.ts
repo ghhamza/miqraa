@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useState } from "react";
-import { useCancellableEffect } from "./useCancellableEffect";
+import { useQuery } from "@tanstack/react-query";
+import { qfKeys } from "../lib/queryKeys";
 import { api } from "../lib/api";
 
 export interface QfStreak {
@@ -11,37 +11,31 @@ export interface QfStreak {
 }
 
 export function useQfStreak(enabled: boolean) {
-  const [data, setData] = useState<QfStreak | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [linked, setLinked] = useState(true);
-
-  useCancellableEffect(
-    async (signal) => {
-      if (!enabled) {
-        setData(null);
-        setLoading(false);
-        setLinked(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await api.get<QfStreak>("qf/me/streak", { signal });
-        setData(res.data);
-        setLinked(true);
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 404) {
-          setLinked(false);
-          return;
-        }
-        setLinked(true);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
+  const query = useQuery({
+    queryKey: qfKeys.streak(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<QfStreak>("qf/me/streak", { signal });
+      return data;
     },
-    [enabled],
-  );
+    enabled,
+    staleTime: 60_000,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status && status >= 400 && status < 500) return false;
+      return failureCount < 2;
+    },
+  });
 
-  return { data, loading, linked };
+  if (!enabled) {
+    return { data: null as QfStreak | null, loading: false, linked: false };
+  }
+
+  const status = (query.error as { response?: { status?: number } } | null)?.response?.status;
+  const linked = status !== 404;
+
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    linked,
+  };
 }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { sessionKeys } from "../../lib/queryKeys";
 import { useAuthStore } from "../../stores/authStore";
 import type { JoinResult, SessionLivePublicItem, SessionPublic } from "../../types";
 import { PageShell } from "../../components/layout/PageShell";
@@ -31,33 +34,35 @@ export function LiveSessionsPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { mediumTime, full } = useLocaleDate();
-  const [live, setLive] = useState<SessionLivePublicItem[]>([]);
-  const [upcoming, setUpcoming] = useState<SessionPublic[]>([]);
-  const [loading, setLoading] = useState(true);
   const [joinRoomId, setJoinRoomId] = useState<string | null>(null);
-  const [joinRoomError, setJoinRoomError] = useState<{ roomId: string; message: string } | null>(null);
+  const [joinRoomError, setJoinRoomError] = useState<
+    { roomId: string; message: string } | null
+  >(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setJoinRoomError(null);
-    try {
-      const [liveRes, upRes] = await Promise.all([
-        api.get<SessionLivePublicItem[]>("sessions/live-public"),
-        api.get<SessionPublic[]>("sessions/upcoming"),
-      ]);
-      setLive(liveRes.data);
-      setUpcoming(upRes.data);
-    } catch {
-      setLive([]);
-      setUpcoming([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const liveQuery = useQuery({
+    queryKey: [...sessionKeys.live(null), { kind: "live-public" }] as const,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<SessionLivePublicItem[]>("sessions/live-public", {
+        signal,
+      });
+      return data;
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const upcomingQuery = useQuery({
+    queryKey: sessionKeys.upcoming(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
+      return data;
+    },
+    staleTime: 30_000,
+  });
+
+  const live = liveQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
+  const loading = liveQuery.isPending || upcomingQuery.isPending;
 
   const titleOf = (s: SessionPublic) => s.title?.trim() || t("sessions.untitledTitle");
 
@@ -79,17 +84,30 @@ export function LiveSessionsPage() {
 
   const showImminentCard = Boolean(myImminentSession && !imminentAlreadyLive);
 
-  async function handleJoinRoom(item: SessionLivePublicItem) {
+  const joinMutation = useApiMutation<JoinResult, SessionLivePublicItem>({
+    mutationFn: async (item) => {
+      const { data } = await api.request<JoinResult>({
+        method: "post",
+        url: `rooms/${item.room_id}/join`,
+      });
+      return data;
+    },
+    invalidates: [
+      [...sessionKeys.live(null), { kind: "live-public" }] as const,
+      sessionKeys.upcoming(),
+    ],
+    onError: (message, _err, item) => {
+      setJoinRoomError({ roomId: item.room_id, message });
+    },
+    onSettled: () => {
+      setJoinRoomId(null);
+    },
+  });
+
+  function handleJoinRoom(item: SessionLivePublicItem) {
     setJoinRoomId(item.room_id);
     setJoinRoomError(null);
-    try {
-      await api.post<JoinResult>(`rooms/${item.room_id}/join`);
-      await reload();
-    } catch (e) {
-      setJoinRoomError({ roomId: item.room_id, message: userFacingApiError(e) });
-    } finally {
-      setJoinRoomId(null);
-    }
+    joinMutation.mutate(item);
   }
 
   function renderLiveActions(item: SessionLivePublicItem) {

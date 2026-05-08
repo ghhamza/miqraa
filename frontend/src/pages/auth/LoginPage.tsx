@@ -42,9 +42,13 @@ export function LoginPage() {
     setFormError(null);
     setLoading(true);
     try {
-      const res = await api.post<AuthResponse>("auth/login", {
-        email: email.trim(),
-        password,
+      const res = await api.request<AuthResponse>({
+        method: "post",
+        url: "auth/login",
+        data: {
+          email: email.trim(),
+          password,
+        },
       });
       const body = res.data;
       if (!body?.token || !body?.user) {

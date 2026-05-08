@@ -21,6 +21,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Check, GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { recitationKeys } from "../../lib/queryKeys";
 import type { RecitationPublic } from "../../types";
 import { GradeBadge } from "../recitations/GradeBadge";
 import { AyahRangeAudioButton } from "../recitations/AyahRangeAudioButton";
@@ -313,11 +315,31 @@ export function SessionRecitationsSortableList({
 }: SessionRecitationsSortableListProps) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
+  void recitationKeys;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  type ReorderInput = {
+    plan_ids: string[];
+    previousItems: RecitationPublic[];
+    fullSnapshot: RecitationPublic[] | null;
+  };
+
+  const reorderMutation = useApiMutation<unknown, ReorderInput>({
+    mutationFn: ({ plan_ids }) =>
+      api.put(`sessions/${sessionId}/plans/reorder`, { plan_ids }),
+    onError: (_message, _err, vars) => {
+      if (vars.fullSnapshot && vars.fullSnapshot.length > 0) {
+        onItemsChange(vars.fullSnapshot);
+      } else {
+        onItemsChange(vars.previousItems);
+      }
+      onPersistFailed();
+    },
+  });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -344,19 +366,11 @@ export function SessionRecitationsSortableList({
     const { merged, plan_ids } = mergeFull();
     onItemsChange(merged);
 
-    const persist = async () => {
-      try {
-        await api.put(`sessions/${sessionId}/plans/reorder`, { plan_ids });
-      } catch {
-        if (fullPlansForReorderMerge?.length) {
-          onItemsChange(fullPlansForReorderMerge);
-        } else {
-          onItemsChange(previousItems);
-        }
-        onPersistFailed();
-      }
-    };
-    void persist();
+    reorderMutation.mutate({
+      plan_ids,
+      previousItems,
+      fullSnapshot: fullPlansForReorderMerge ?? null,
+    });
   };
 
   if (items.length === 0) {

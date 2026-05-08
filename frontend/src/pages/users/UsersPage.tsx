@@ -4,11 +4,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { api } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { userKeys } from "../../lib/queryKeys";
 import type { Paginated, UserPublic, UserStats } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -33,9 +34,6 @@ export function UsersPage() {
   const { t } = useTranslation();
   const { mediumTime } = useLocaleDate();
 
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [users, setUsers] = useState<UserPublic[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
@@ -47,47 +45,36 @@ export function UsersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserPublic | null>(null);
 
-  /** Shared fetch; callers decide when to commit to React state (avoids stale tab overwrites). */
-  const fetchUsersPage = useCallback(async () => {
-    return Promise.all([
-      api.get<UserStats>("users/stats"),
-      api.get<Paginated<UserPublic>>("users", {
+  const usersQuery = useQuery({
+    queryKey: userKeys.list({
+      search: debouncedSearch.trim(),
+      role: roleFilter || undefined,
+    }),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<UserPublic>>("users", {
+        signal,
         params: {
           ...(roleFilter ? { role: roleFilter } : {}),
           ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
         },
-      }),
-    ]);
-  }, [roleFilter, debouncedSearch]);
-
-  const refreshAll = useCallback(async () => {
-    const [statsRes, usersRes] = await fetchUsersPage();
-    setStats(statsRes.data);
-    setUsers(usersRes.data.items);
-  }, [fetchUsersPage]);
-
-  useCancellableEffect(
-    async (signal) => {
-      setLoading(true);
-      try {
-        const [statsRes, usersRes] = await Promise.all([
-          api.get<UserStats>("users/stats", { signal }),
-          api.get<Paginated<UserPublic>>("users", {
-            signal,
-            params: {
-              ...(roleFilter ? { role: roleFilter } : {}),
-              ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-            },
-          }),
-        ]);
-        setStats(statsRes.data);
-        setUsers(usersRes.data.items);
-      } finally {
-        setLoading(false);
-      }
+      });
+      return data.items;
     },
-    [roleFilter, debouncedSearch],
-  );
+    placeholderData: (previous) => previous,
+  });
+
+  const statsQuery = useQuery({
+    queryKey: userKeys.stats(),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<UserStats>("users/stats", { signal });
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const users = usersQuery.data ?? [];
+  const stats = statsQuery.data ?? null;
+  const loading = usersQuery.isPending && !usersQuery.isPlaceholderData;
 
   const openCreate = useCallback(() => {
     setFormMode("create");
@@ -262,7 +249,10 @@ export function UsersPage() {
         mode={formMode}
         user={editingUser}
         onClose={() => setFormOpen(false)}
-        onSaved={() => void refreshAll()}
+        onSaved={() => {
+          // No-op: UserFormModal's mutation invalidates userKeys.lists() / .stats()
+          // Keep the prop for now; remove from the modal's API in a later cleanup.
+        }}
       />
 
       <DeleteConfirmModal
@@ -273,7 +263,9 @@ export function UsersPage() {
           setDeleteOpen(false);
           setDeleteTarget(null);
         }}
-        onDeleted={() => void refreshAll()}
+        onDeleted={() => {
+          // No-op: DeleteConfirmModal's mutation invalidates userKeys.lists() / .stats()
+        }}
       />
     </PageShell>
   );

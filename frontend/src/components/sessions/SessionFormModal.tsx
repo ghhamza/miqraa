@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
+import { roomKeys, sessionKeys } from "../../lib/queryKeys";
 import type { CreateSessionsResponse, Paginated, Room, SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
@@ -39,14 +41,11 @@ export function SessionFormModal({
   onSaved,
 }: SessionFormModalProps) {
   const { t } = useTranslation();
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [roomId, setRoomId] = useState("");
   const [title, setTitle] = useState("");
   const [datetimeLocal, setDatetimeLocal] = useState("");
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState("");
-  const [loadingRooms, setLoadingRooms] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [repeatDays, setRepeatDays] = useState<number[]>([]);
@@ -89,28 +88,32 @@ export function SessionFormModal({
     }
   }, [open, mode, session, defaultRoomId, defaultDatetime, presetMorningStart]);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!open) return;
-      setLoadingRooms(true);
-      try {
-        const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-        const items = data.items;
-        setRooms(items);
-        setRoomId((prev) => {
-          if (prev && items.some((r) => r.id === prev)) return prev;
-          if (defaultRoomId && items.some((r) => r.id === defaultRoomId)) return defaultRoomId;
-          return items[0]?.id ?? "";
-        });
-      } catch (err) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        setRooms([]);
-      } finally {
-        if (!signal.aborted) setLoadingRooms(false);
-      }
+  const roomsQuery = useQuery({
+    queryKey: roomKeys.list({
+      search: "",
+      active: "all",
+      role: "session-form-modal",
+    }),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
+      return data.items;
     },
-    [open, defaultRoomId],
-  );
+    enabled: open,
+    staleTime: 5 * 60_000,
+  });
+
+  const rooms = roomsQuery.data ?? [];
+  const loadingRooms = roomsQuery.isPending && open;
+
+  useEffect(() => {
+    if (!open) return;
+    if (rooms.length === 0) return;
+    setRoomId((prev) => {
+      if (prev && rooms.some((r) => r.id === prev)) return prev;
+      if (defaultRoomId && rooms.some((r) => r.id === defaultRoomId)) return defaultRoomId;
+      return rooms[0]?.id ?? "";
+    });
+  }, [open, rooms, defaultRoomId]);
 
   useEffect(() => {
     if (!repeatEnabled || !datetimeLocal) return;
@@ -120,9 +123,87 @@ export function SessionFormModal({
     setRepeatDays((prev) => (prev.includes(mondayBased) ? prev : [...prev, mondayBased]));
   }, [repeatEnabled, datetimeLocal]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  type CreatePayload = Record<string, unknown>;
+  type UpdatePayload = {
+    session: SessionPublic;
+    bodyBase: { title: string | null; duration_minutes: number; notes: string | null };
+    iso: string;
+    scope: "this" | "this_and_future" | "all";
+  };
+
+  const createMutation = useApiMutation<CreateSessionsResponse, CreatePayload>({
+    mutationFn: async (payload) => {
+      const { data } = await api.request<CreateSessionsResponse>({
+        method: "post",
+        url: "sessions",
+        data: payload,
+      });
+      return data;
+    },
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+      sessionKeys.details(),
+    ],
+    onSuccess: (data) => {
+      if (data.count > 1) {
+        setCreatedCount(data.count);
+        setTimeout(() => {
+          onSaved();
+          onClose();
+          setCreatedCount(null);
+        }, 1500);
+        return;
+      }
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const updateMutation = useApiMutation<void, UpdatePayload>({
+    mutationFn: async ({ session: target, bodyBase, iso, scope }) => {
+      const gid = target.recurrence_group_id;
+      if (!gid || scope === "this") {
+        await api.request({
+          method: "put",
+          url: `sessions/${target.id}`,
+          data: { ...bodyBase, scheduled_at: iso },
+        });
+        return;
+      }
+      const groupSessions = await fetchSessionsInRecurrenceGroup(gid, target.room_id);
+      const targets = filterTargetsForScope(groupSessions, target, scope);
+      for (const s of targets) {
+        const isCurrent = s.id === target.id;
+        await api.request({
+          method: "put",
+          url: `sessions/${s.id}`,
+          data: {
+            ...bodyBase,
+            scheduled_at: isCurrent ? iso : new Date(s.scheduled_at).toISOString(),
+          },
+        });
+      }
+    },
+    invalidates: [
+      sessionKeys.calendars(),
+      sessionKeys.upcoming(),
+      sessionKeys.details(),
+    ],
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: (message) => setError(message),
+  });
+
+  const loading = createMutation.isPending || updateMutation.isPending;
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading || !roomId) return;
+
     const scheduled = new Date(datetimeLocal);
     if (Number.isNaN(scheduled.getTime())) {
       setError(t("errors.badRequest"));
@@ -143,72 +224,41 @@ export function SessionFormModal({
         return;
       }
     }
+
     setError(null);
     setCreatedCount(null);
-    setLoading(true);
-    try {
-      const iso = scheduled.toISOString();
-      if (mode === "create") {
-        const payload: Record<string, unknown> = {
-          room_id: roomId,
-          title: title.trim() || null,
-          scheduled_at: iso,
-          duration_minutes: duration,
-          notes: notes.trim() || null,
-        };
+    const iso = scheduled.toISOString();
 
-        if (repeatEnabled && repeatDays.length > 0) {
-          payload.repeat_days = [...repeatDays].sort((a, b) => a - b);
-          if (repeatEndMode === "weeks") {
-            payload.repeat_weeks = Math.max(1, Math.min(12, repeatWeeks));
-          } else if (repeatEndDate) {
-            payload.repeat_end_date = new Date(`${repeatEndDate}T23:59:59`).toISOString();
-          }
-        }
+    if (mode === "create") {
+      const payload: CreatePayload = {
+        room_id: roomId,
+        title: title.trim() || null,
+        scheduled_at: iso,
+        duration_minutes: duration,
+        notes: notes.trim() || null,
+      };
 
-        const { data } = await api.post<CreateSessionsResponse>("sessions", payload);
-        if (data.count > 1) {
-          setCreatedCount(data.count);
-          setTimeout(() => {
-            onSaved();
-            onClose();
-            setCreatedCount(null);
-          }, 1500);
-          return;
-        }
-      } else if (session) {
-        const bodyBase = {
-          title: title.trim() || null,
-          duration_minutes: duration,
-          notes: notes.trim() || null,
-        };
-        const gid = session.recurrence_group_id;
-        const scope =
-          gid && editScope && editScope !== "this" ? editScope : ("this" as const);
-
-        if (!gid || scope === "this") {
-          await api.put(`sessions/${session.id}`, {
-            ...bodyBase,
-            scheduled_at: iso,
-          });
-        } else {
-          const groupSessions = await fetchSessionsInRecurrenceGroup(gid, session.room_id);
-          const targets = filterTargetsForScope(groupSessions, session, scope);
-          for (const s of targets) {
-            const isCurrent = s.id === session.id;
-            await api.put(`sessions/${s.id}`, {
-              ...bodyBase,
-              scheduled_at: isCurrent ? iso : new Date(s.scheduled_at).toISOString(),
-            });
-          }
+      if (repeatEnabled && repeatDays.length > 0) {
+        payload.repeat_days = [...repeatDays].sort((a, b) => a - b);
+        if (repeatEndMode === "weeks") {
+          payload.repeat_weeks = Math.max(1, Math.min(12, repeatWeeks));
+        } else if (repeatEndDate) {
+          payload.repeat_end_date = new Date(`${repeatEndDate}T23:59:59`).toISOString();
         }
       }
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(userFacingApiError(err, "errors.saveFailed"));
-    } finally {
-      setLoading(false);
+
+      createMutation.mutate(payload);
+    } else if (session) {
+      const bodyBase = {
+        title: title.trim() || null,
+        duration_minutes: duration,
+        notes: notes.trim() || null,
+      };
+      const gid = session.recurrence_group_id;
+      const scope =
+        gid && editScope && editScope !== "this" ? editScope : ("this" as const);
+
+      updateMutation.mutate({ session, bodyBase, iso, scope });
     }
   }
 

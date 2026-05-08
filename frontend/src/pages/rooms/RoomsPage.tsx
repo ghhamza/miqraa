@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, DoorOpen } from "lucide-react";
 import { api, userFacingApiError } from "../../lib/api";
+import { roomKeys } from "../../lib/queryKeys";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import type { HalaqahType, JoinResult, Paginated, Room, RoomStats } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
@@ -58,7 +59,14 @@ export function RoomsPage() {
   const scrolledPendingRef = useRef(false);
 
   const roomsQuery = useQuery({
-    queryKey: ["rooms", debouncedSearch, activeFilter, halaqahFilter, riwayaFilter, myStatusFilter, user?.role] as const,
+    queryKey: roomKeys.list({
+      search: debouncedSearch,
+      active: activeFilter === "inactive" ? "archived" : activeFilter,
+      halaqahType: halaqahFilter || undefined,
+      riwaya: riwayaFilter || undefined,
+      myStatus: myStatusFilter || undefined,
+      role: user?.role,
+    }),
     queryFn: async ({ signal }) => {
       const [statsRes, roomsRes] = await Promise.all([
         api.get<RoomStats>("rooms/stats", { signal }),
@@ -116,7 +124,7 @@ export function RoomsPage() {
   }, [searchParams, loading, displayRooms.length]);
 
   const refreshAll = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    await queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
   }, [queryClient]);
 
   function clearAllFilters() {
@@ -147,7 +155,11 @@ export function RoomsPage() {
 
   async function restoreRoom(r: Room) {
     try {
-      await api.put(`rooms/${r.id}`, { is_active: true });
+      await api.request({
+        method: "put",
+        url: `rooms/${r.id}`,
+        data: { is_active: true },
+      });
       await refreshAll();
     } catch {
       /* optional */
@@ -159,7 +171,10 @@ export function RoomsPage() {
     setJoinLoading(room.id);
     setJoinMessage(null);
     try {
-      const { data } = await api.post<JoinResult>(`rooms/${room.id}/join`);
+      const { data } = await api.request<JoinResult>({
+        method: "post",
+        url: `rooms/${room.id}/join`,
+      });
       setJoinMessage(data.status === "pending" ? t("enrollment.requestSent") : t("enrollment.joinedSuccess"));
       await refreshAll();
     } catch (err) {

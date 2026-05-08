@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
-import { useState } from "react";
-import { useCancellableEffect } from "../../hooks/useCancellableEffect";
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { BookMarked, Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
+import { userKeys } from "../../lib/queryKeys";
 import type { RecitationPublic, StudentProgress } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
@@ -24,42 +25,39 @@ export function StudentProgressPage() {
   const { full } = useLocaleDate();
   const user = useAuthStore((s) => s.user);
 
-  const [progress, setProgress] = useState<StudentProgress | null>(null);
-  const [recent, setRecent] = useState<RecitationPublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
+  const allowed = !!id && !!user && (user.role !== "student" || user.id === id);
 
-  useCancellableEffect(
-    async (signal) => {
-      if (!id || !user) return;
-      if (user.role === "student" && user.id !== id) {
-        setForbidden(true);
-        setLoading(false);
-        return;
-      }
-      setForbidden(false);
-      setLoading(true);
-      try {
-        const [pRes, rRes] = await Promise.all([
-          api.get<StudentProgress>(`students/${id}/progress`, { signal }),
-          api.get<RecitationPublic[]>(`students/${id}/recitations`, { signal }),
-        ]);
-        setProgress(pRes.data);
-        setRecent(rRes.data.slice(0, 10));
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === "CanceledError") return;
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 403) {
-          setForbidden(true);
-        }
-        setProgress(null);
-        setRecent([]);
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
+  const progressQuery = useQuery({
+    queryKey: userKeys.studentProgress(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<StudentProgress>(`students/${id}/progress`, { signal });
+      return data;
     },
-    [id, user],
-  );
+    enabled: allowed,
+  });
+
+  const recentQuery = useQuery({
+    queryKey: userKeys.studentRecitations(id ?? ""),
+    queryFn: async ({ signal }) => {
+      const { data } = await api.get<RecitationPublic[]>(`students/${id}/recitations`, { signal });
+      return data;
+    },
+    enabled: allowed,
+    select: (data) => data.slice(0, 10),
+  });
+
+  const progress = progressQuery.data ?? null;
+  const recent = recentQuery.data ?? [];
+  const loading = allowed && (progressQuery.isPending || recentQuery.isPending);
+
+  const forbidden = useMemo(() => {
+    if (!allowed) return true;
+    const progressForbidden =
+      (progressQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
+    const recentForbidden =
+      (recentQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
+    return progressForbidden || recentForbidden;
+  }, [allowed, progressQuery.error, recentQuery.error]);
 
   if (loading) {
     return (

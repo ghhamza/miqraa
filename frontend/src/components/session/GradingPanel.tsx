@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
-import { api, userFacingApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiMutation } from "../../lib/useApiMutation";
 import type { Paginated, RecitationGrade, RecitationPublic } from "../../types";
 import type { SessionParticipant } from "../../hooks/useSessionState";
 import {
@@ -18,6 +20,7 @@ import { FormSelect } from "@/components/ui/select";
 import { GradeBadge } from "../recitations/GradeBadge";
 import { waitForQfSyncStatus } from "../../lib/qfSync";
 import { QfSyncToast } from "../recitations/QfSyncToast";
+import { recitationKeys, userKeys } from "../../lib/queryKeys";
 
 const GRADE_ORDER: RecitationGrade[] = ["excellent", "good", "needs_work", "weak"];
 const GRADE_COLORS: Record<RecitationGrade, string> = {
@@ -64,6 +67,7 @@ export function GradingPanel({
   className,
 }: GradingPanelProps) {
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const isRtl = i18n.language === "ar";
   const riwayaTyped = riwaya as Riwaya;
   const [surah, setSurah] = useState(() => {
@@ -82,9 +86,6 @@ export function GradingPanel({
     return 1;
   });
   const [notes, setNotes] = useState("");
-  const [list, setList] = useState<RecitationPublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okFlash, setOkFlash] = useState(false);
   const [qfSyncToast, setQfSyncToast] = useState<{ kind: "success" | "error"; relinkNeeded?: boolean } | null>(null);
@@ -117,22 +118,23 @@ export function GradingPanel({
     currentAyah?.ayah,
   ]);
 
-  const loadList = useCallback(async () => {
-    try {
+  const listQuery = useQuery({
+    queryKey: recitationKeys.list({ session: sessionId }),
+    queryFn: async ({ signal }) => {
       const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
+        signal,
         params: { session_id: sessionId, limit: 50 },
       });
-      setList(data.items);
-    } catch {
-      setList([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
+      return data.items;
+    },
+  });
+  const list = listQuery.data ?? [];
+  const loading = listQuery.isPending;
 
-  useEffect(() => {
-    void loadList();
-  }, [loadList]);
+  const loadList = useCallback(async () => {
+    await listQuery.refetch();
+  }, [listQuery]);
+  void loadList;
 
   const surahSelectOptions = useMemo(
     () =>
@@ -151,64 +153,60 @@ export function GradingPanel({
 
   const isCompletePlan = gradingMode === "completePlan" && planToComplete != null;
 
-  const submitGrade = async (grade: RecitationGrade) => {
-    if (isCompletePlan) {
-      if (!planToComplete) return;
-      setSubmitting(true);
-      setError(null);
-      try {
-        const { data } = await api.post<RecitationPublic>(`recitations/${planToComplete.id}/complete`, {
+  type CompletePlanInput = {
+    planId: string;
+    grade: RecitationGrade;
+    notes: string;
+  };
+
+  type CreateAndGradeInput = {
+    student_id: string;
+    room_id: string;
+    session_id: string;
+    surah: number;
+    ayah_start: number;
+    ayah_end: number;
+    grade: RecitationGrade;
+    teacher_notes: string | undefined;
+    riwaya: Riwaya;
+  };
+
+  const completePlanMutation = useApiMutation<RecitationPublic, CompletePlanInput>({
+    mutationFn: async ({ planId, grade, notes }) => {
+      const { data } = await api.request<RecitationPublic>({
+        method: "post",
+        url: `recitations/${planId}/complete`,
+        data: {
           grade,
           teacher_notes: notes.trim() || undefined,
-        });
-        setList((prev) => {
+        },
+      });
+      return data;
+    },
+    onSuccess: async (data) => {
+      queryClient.setQueryData<RecitationPublic[]>(
+        recitationKeys.list({ session: sessionId }),
+        (prev = []) => {
           const rest = prev.filter((r) => r.id !== data.id);
           return [data, ...rest];
-        });
-        setNotes("");
-        setOkFlash(true);
-        window.setTimeout(() => setOkFlash(false), 1800);
-        onPlanCompleted?.(data);
-        const sid = planToComplete.student_id ?? activeReciter?.userId;
-        if (sid) onGradeSubmitted(sid, grade, notes.trim() || undefined);
-        const sync = await waitForQfSyncStatus(data.id);
-        if (sync?.synced_at) {
-          setQfSyncToast({ kind: "success" });
-        } else if (sync?.error && sync.error !== "not_linked") {
-          setQfSyncToast({
-            kind: "error",
-            relinkNeeded: sync.error === "insufficient_scope",
-          });
-        }
-      } catch (e: unknown) {
-        setError(userFacingApiError(e));
-      } finally {
-        setSubmitting(false);
+        },
+      );
+      if (data.student_id) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: userKeys.studentRecitations(data.student_id),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: userKeys.studentProgress(data.student_id),
+          }),
+        ]);
       }
-      return;
-    }
-
-    if (!activeReciter) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const { data } = await api.post<RecitationPublic>("recitations", {
-        student_id: activeReciter.userId,
-        room_id: roomId,
-        session_id: sessionId,
-        surah,
-        ayah_start: ayahStart,
-        ayah_end: Math.max(ayahStart, ayahEnd),
-        grade,
-        teacher_notes: notes.trim() || undefined,
-        riwaya,
-      });
-      setList((prev) => [data, ...prev]);
       setNotes("");
       setOkFlash(true);
       window.setTimeout(() => setOkFlash(false), 1800);
-      onRecitationCreated?.(data);
-      onGradeSubmitted(activeReciter.userId, grade, notes.trim() || undefined);
+      onPlanCompleted?.(data);
+      const sid = planToComplete?.student_id ?? activeReciter?.userId;
+      if (sid) onGradeSubmitted(sid, data.grade ?? "good", notes.trim() || undefined);
       const sync = await waitForQfSyncStatus(data.id);
       if (sync?.synced_at) {
         setQfSyncToast({ kind: "success" });
@@ -218,11 +216,81 @@ export function GradingPanel({
           relinkNeeded: sync.error === "insufficient_scope",
         });
       }
-    } catch (e: unknown) {
-      setError(userFacingApiError(e));
-    } finally {
-      setSubmitting(false);
+    },
+    onError: (message) => setError(message),
+  });
+
+  const createAndGradeMutation = useApiMutation<RecitationPublic, CreateAndGradeInput>({
+    mutationFn: async (input) => {
+      const { data } = await api.request<RecitationPublic>({
+        method: "post",
+        url: "recitations",
+        data: input,
+      });
+      return data;
+    },
+    onSuccess: async (data) => {
+      queryClient.setQueryData<RecitationPublic[]>(
+        recitationKeys.list({ session: sessionId }),
+        (prev = []) => [data, ...prev],
+      );
+      if (data.student_id) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: userKeys.studentRecitations(data.student_id),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: userKeys.studentProgress(data.student_id),
+          }),
+        ]);
+      }
+      setNotes("");
+      setOkFlash(true);
+      window.setTimeout(() => setOkFlash(false), 1800);
+      onRecitationCreated?.(data);
+      if (data.student_id) {
+        onGradeSubmitted(data.student_id, data.grade ?? "good", notes.trim() || undefined);
+      }
+      const sync = await waitForQfSyncStatus(data.id);
+      if (sync?.synced_at) {
+        setQfSyncToast({ kind: "success" });
+      } else if (sync?.error && sync.error !== "not_linked") {
+        setQfSyncToast({
+          kind: "error",
+          relinkNeeded: sync.error === "insufficient_scope",
+        });
+      }
+    },
+    onError: (message) => setError(message),
+  });
+
+  const submitting = completePlanMutation.isPending || createAndGradeMutation.isPending;
+
+  const submitGrade = (grade: RecitationGrade) => {
+    if (isCompletePlan) {
+      if (!planToComplete) return;
+      setError(null);
+      completePlanMutation.mutate({
+        planId: planToComplete.id,
+        grade,
+        notes,
+      });
+      return;
     }
+
+    if (!activeReciter) return;
+    setError(null);
+    createAndGradeMutation.mutate({
+      student_id: activeReciter.userId,
+      room_id: roomId,
+      session_id: sessionId,
+      surah,
+      ayah_start: ayahStart,
+      ayah_end: Math.max(ayahStart, ayahEnd),
+      grade,
+      teacher_notes: notes.trim() || undefined,
+      riwaya: riwayaTyped,
+    });
   };
 
   const disabled = isCompletePlan ? !planToComplete : !activeReciter;
