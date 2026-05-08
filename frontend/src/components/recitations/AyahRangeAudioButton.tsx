@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Pause, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useChapterAudio } from "../../hooks/useChapterAudio";
+import { useChapterAudio } from "../../data/quran";
 
 interface Props {
   surah: number;

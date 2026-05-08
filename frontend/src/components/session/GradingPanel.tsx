@@ -2,12 +2,9 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import type { Paginated, RecitationGrade, RecitationPublic } from "../../types";
+import type { RecitationGrade, RecitationPublic } from "../../types";
 import type { SessionParticipant } from "../../hooks/useSessionState";
 import {
   getAllSurahs,
@@ -20,7 +17,11 @@ import { FormSelect } from "@/components/ui/select";
 import { GradeBadge } from "../recitations/GradeBadge";
 import { waitForQfSyncStatus } from "../../lib/qfSync";
 import { QfSyncToast } from "../recitations/QfSyncToast";
-import { recitationKeys, userKeys } from "../../lib/queryKeys";
+import {
+  useCompletePlanRecitation,
+  useCreateAndGradeRecitation,
+  useRecitationsFeed,
+} from "../../data/recitations";
 
 const GRADE_ORDER: RecitationGrade[] = ["excellent", "good", "needs_work", "weak"];
 const GRADE_COLORS: Record<RecitationGrade, string> = {
@@ -67,7 +68,6 @@ export function GradingPanel({
   className,
 }: GradingPanelProps) {
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const isRtl = i18n.language === "ar";
   const riwayaTyped = riwaya as Riwaya;
   const [surah, setSurah] = useState(() => {
@@ -118,16 +118,7 @@ export function GradingPanel({
     currentAyah?.ayah,
   ]);
 
-  const listQuery = useQuery({
-    queryKey: recitationKeys.list({ session: sessionId }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params: { session_id: sessionId, limit: 50 },
-      });
-      return data.items;
-    },
-  });
+  const listQuery = useRecitationsFeed("grading-panel", { sessionId, limit: 50, enabled: true });
   const list = listQuery.data ?? [];
   const loading = listQuery.isPending;
 
@@ -153,54 +144,9 @@ export function GradingPanel({
 
   const isCompletePlan = gradingMode === "completePlan" && planToComplete != null;
 
-  type CompletePlanInput = {
-    planId: string;
-    grade: RecitationGrade;
-    notes: string;
-  };
-
-  type CreateAndGradeInput = {
-    student_id: string;
-    room_id: string;
-    session_id: string;
-    surah: number;
-    ayah_start: number;
-    ayah_end: number;
-    grade: RecitationGrade;
-    teacher_notes: string | undefined;
-    riwaya: Riwaya;
-  };
-
-  const completePlanMutation = useApiMutation<RecitationPublic, CompletePlanInput>({
-    mutationFn: async ({ planId, grade, notes }) => {
-      const { data } = await api.request<RecitationPublic>({
-        method: "post",
-        url: `recitations/${planId}/complete`,
-        data: {
-          grade,
-          teacher_notes: notes.trim() || undefined,
-        },
-      });
-      return data;
-    },
-    onSuccess: async (data) => {
-      queryClient.setQueryData<RecitationPublic[]>(
-        recitationKeys.list({ session: sessionId }),
-        (prev = []) => {
-          const rest = prev.filter((r) => r.id !== data.id);
-          return [data, ...rest];
-        },
-      );
-      if (data.student_id) {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentRecitations(data.student_id),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentProgress(data.student_id),
-          }),
-        ]);
-      }
+  const completePlanMutation = useCompletePlanRecitation(
+    sessionId,
+    async (data) => {
       setNotes("");
       setOkFlash(true);
       window.setTimeout(() => setOkFlash(false), 1800);
@@ -217,33 +163,12 @@ export function GradingPanel({
         });
       }
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
-  const createAndGradeMutation = useApiMutation<RecitationPublic, CreateAndGradeInput>({
-    mutationFn: async (input) => {
-      const { data } = await api.request<RecitationPublic>({
-        method: "post",
-        url: "recitations",
-        data: input,
-      });
-      return data;
-    },
-    onSuccess: async (data) => {
-      queryClient.setQueryData<RecitationPublic[]>(
-        recitationKeys.list({ session: sessionId }),
-        (prev = []) => [data, ...prev],
-      );
-      if (data.student_id) {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentRecitations(data.student_id),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentProgress(data.student_id),
-          }),
-        ]);
-      }
+  const createAndGradeMutation = useCreateAndGradeRecitation(
+    sessionId,
+    async (data) => {
       setNotes("");
       setOkFlash(true);
       window.setTimeout(() => setOkFlash(false), 1800);
@@ -261,8 +186,8 @@ export function GradingPanel({
         });
       }
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const submitting = completePlanMutation.isPending || createAndGradeMutation.isPending;
 

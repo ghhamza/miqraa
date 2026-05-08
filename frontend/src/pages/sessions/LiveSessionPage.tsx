@@ -4,21 +4,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
+import { userFacingApiError } from "../../lib/api";
 import type { PlanStatusChangedMessage } from "../../hooks/useSessionWebSocket";
-import { useSessionPlans } from "../../hooks/useSessionPlans";
 import type {
   ErrorAnnotation,
   ErrorCategory,
   ErrorSeverity,
-  Paginated,
-  RecitationPublic,
-  Room,
-  SessionDetail,
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { useMushafInteraction, type MushafWordClickData } from "../../hooks/useMushafInteraction";
-import { useAnnotations } from "../../hooks/useAnnotations";
 import { useSessionState, type SessionParticipant } from "../../hooks/useSessionState";
 import { MushafCanvas } from "../../components/mushaf/MushafCanvas";
 import { MushafNavigatorSheet } from "../../components/mushaf/MushafNavigatorSheet";
@@ -76,9 +70,15 @@ import { StudentAnnotationPopover } from "../../components/session/StudentAnnota
 import { AyahRangeAudioButton } from "../../components/recitations/AyahRangeAudioButton";
 import { cn } from "@/lib/utils";
 import { useLivekitConnection } from "@/hooks/useLivekitConnection";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, roomKeys, sessionKeys } from "../../lib/queryKeys";
+import { useRoom } from "../../data/rooms";
+import {
+  useCreateRecitation,
+  usePatchSessionRecitationsCache,
+  usePlanTransitions,
+  useSessionRecitations,
+} from "../../data/recitations";
+import { usePatchSessionStatus, useSessionDetail } from "../../data/sessions";
+import { useAnnotations } from "../../data/annotations";
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -136,7 +136,7 @@ function LiveSessionPageInner() {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
-  const queryClient = useQueryClient();
+  const patchSessionRecitations = usePatchSessionRecitationsCache(id);
   const [teacherPage, setTeacherPage] = useState(1);
   const [studentBrowsePage, setStudentBrowsePage] = useState(1);
   const [autoFollow, setAutoFollow] = useState(true);
@@ -268,17 +268,7 @@ function LiveSessionPageInner() {
    * WebSocket events (`plan_added`, `plan_status_changed`, `plan_reordered`)
    * reconcile through query cache updates on this key.
    */
-  const sessionPlansQuery = useQuery({
-    queryKey: recitationKeys.list({ session: id }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params: { session_id: id, limit: 100 },
-      });
-      return data.items;
-    },
-    enabled: !!id,
-  });
+  const sessionPlansQuery = useSessionRecitations(id, 100, !!id);
   const sessionPlans = sessionPlansQuery.data ?? [];
 
   const refetchPlans = useCallback(async () => {
@@ -287,19 +277,19 @@ function LiveSessionPageInner() {
 
   const handlePlanStatusChanged = useCallback(
     (evt: PlanStatusChangedMessage) => {
-      const key = recitationKeys.list({ session: id });
-      const current = queryClient.getQueryData<RecitationPublic[]>(key) ?? [];
-      const idx = current.findIndex((p) => p.id === evt.recitation_id);
-      if (idx === -1) {
-        void refetchPlans();
-        return;
-      }
-      const next = [...current];
-      const row = next[idx]!;
-      next[idx] = { ...row, plan_status: evt.plan_status };
-      queryClient.setQueryData<RecitationPublic[]>(key, next);
+      let found = false;
+      patchSessionRecitations((prev = []) => {
+        const idx = prev.findIndex((p) => p.id === evt.recitation_id);
+        if (idx === -1) return prev;
+        found = true;
+        const next = [...prev];
+        const row = next[idx]!;
+        next[idx] = { ...row, plan_status: evt.plan_status };
+        return next;
+      });
+      if (!found) void refetchPlans();
     },
-    [id, queryClient, refetchPlans],
+    [patchSessionRecitations, refetchPlans],
   );
 
   const onGradeNotification = useCallback(
@@ -318,36 +308,13 @@ function LiveSessionPageInner() {
    * WebSocket events that mutate session state (`session_status_changed`,
    * `reciter_changed`) reconcile through this same cache key.
    */
-  const sessionDetailQuery = useQuery({
-    queryKey: sessionKeys.detail(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionDetail>(`sessions/${id}`, { signal });
-      return data;
-    },
-    enabled: !!id,
-    retry: (failureCount, err) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 403) return false;
-      return failureCount < 2;
-    },
-  });
+  const sessionDetailQuery = useSessionDetail(id, !!id);
 
   /**
    * Room detail. Depends on the session's `room_id`. Doesn't change during a
    * session, so a long staleTime is appropriate.
    */
-  const roomQuery = useQuery({
-    queryKey: roomKeys.detail(sessionDetailQuery.data?.room_id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Room>(
-        `rooms/${sessionDetailQuery.data!.room_id}`,
-        { signal },
-      );
-      return data;
-    },
-    enabled: !!sessionDetailQuery.data?.room_id,
-    staleTime: 5 * 60_000,
-  });
+  const roomQuery = useRoom(sessionDetailQuery.data?.room_id);
 
   const sessionDetail = sessionDetailQuery.data ?? null;
   const room = roomQuery.data ?? null;
@@ -436,7 +403,7 @@ function LiveSessionPageInner() {
 
   isTeacherRef.current = sessionState.isTeacher;
 
-  const planOps = useSessionPlans({ sessionId: id ?? "" });
+  const planOps = usePlanTransitions(id ?? "");
 
   const browserSupported = typeof RTCPeerConnection !== "undefined";
   const blocker = useBlocker(
@@ -796,38 +763,11 @@ function LiveSessionPageInner() {
     return out;
   }, [sessionDetail?.attendance, sessionDetail?.teacher_id, sessionState.state.participants, sessionPlans]);
 
-  type EnsureRecitationInput = {
-    student_id: string;
-    room_id: string;
-    session_id: string;
-    surah: number;
-    ayah_start: number;
-    ayah_end: number;
-    riwaya: Riwaya;
-  };
-
-  const ensureRecitationMutation = useApiMutation<
-    { data: RecitationPublic },
-    EnsureRecitationInput
-  >({
-    mutationFn: async (input) => {
-      const { data } = await api.request<RecitationPublic>({
-        method: "post",
-        url: "recitations",
-        data: input,
-      });
-      return { data };
-    },
-    onSuccess: ({ data }) => {
-      queryClient.setQueryData<RecitationPublic[]>(
-        recitationKeys.list({ session: id }),
-        (prev = []) => [data, ...prev],
-      );
-    },
-    onError: () => {
-      setAnnounce(t("annotation.creationFailed"));
-    },
-  });
+  const ensureRecitationMutation = useCreateRecitation(
+    id ?? "",
+    () => {},
+    () => setAnnounce(t("annotation.creationFailed")),
+  );
 
   const ensureRecitation = useCallback(async (): Promise<string | null> => {
     if (currentRecitationId) return currentRecitationId;
@@ -858,7 +798,7 @@ function LiveSessionPageInner() {
           ayah_start = a;
           ayah_end = a;
         }
-        const { data } = await ensureRecitationMutation.mutateAsync({
+        const data = await ensureRecitationMutation.mutateAsync({
           student_id: activeReciterParticipant.userId,
           room_id: sessionDetail.room_id,
           session_id: id!,
@@ -1009,17 +949,11 @@ function LiveSessionPageInner() {
    * `plan_status_changed`, `plan_reordered`) currently mutate the mirrored
    * `sessionPlans` state; Prompt 11 will move those writes to query cache.
    */
-  const sessionRecitationsForActiveQuery = useQuery({
-    queryKey: recitationKeys.list({ session: id }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params: { session_id: id, limit: 50 },
-      });
-      return data.items;
-    },
-    enabled: !!id && !!activeReciterParticipant?.userId,
-  });
+  const sessionRecitationsForActiveQuery = useSessionRecitations(
+    id,
+    50,
+    !!id && !!activeReciterParticipant?.userId,
+  );
 
   useEffect(() => {
     if (!activeReciterParticipant?.userId) {
@@ -1075,15 +1009,10 @@ function LiveSessionPageInner() {
     navigate(`/sessions/${id}`, { replace: true });
   }, [disconnectWebrtc, sessionState, navigate, id]);
 
-  const endSessionMutation = useApiMutation<unknown, void>({
-    mutationFn: () => api.put(`sessions/${id}`, { status: "completed" }),
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.live(user?.id ?? null),
-      sessionKeys.detail(id ?? ""),
-    ],
-    onSuccess: () => {
+  const endSessionMutation = usePatchSessionStatus(
+    id ?? "",
+    user?.id ?? null,
+    () => {
       disconnectWebrtc();
       sessionState.disconnect();
       setEndSessionOpen(false);
@@ -1092,15 +1021,15 @@ function LiveSessionPageInner() {
         state: { sessionEndedMessage: t("liveSession.sessionEndedMessage") },
       });
     },
-    onError: (message) => setEndError(message),
-  });
+    (message) => setEndError(message),
+  );
 
   const endingSession = endSessionMutation.isPending;
 
   const confirmEndSession = useCallback(() => {
     if (!id) return;
     setEndError(null);
-    endSessionMutation.mutate();
+    endSessionMutation.mutate("completed");
   }, [id, endSessionMutation]);
 
   /** Current ayah for teacher nav (keyboard N/P); UI strip removed until product decides. */
@@ -1335,10 +1264,7 @@ function LiveSessionPageInner() {
         sessionId={id}
         plans={sessionPlans}
         onPlansChange={(next) => {
-          queryClient.setQueryData<RecitationPublic[]>(
-            recitationKeys.list({ session: id }),
-            next,
-          );
+          patchSessionRecitations(() => next);
         }}
         onStartPlan={planOps.start}
         onPausePlan={planOps.pause}
@@ -1363,15 +1289,12 @@ function LiveSessionPageInner() {
           roomId={sessionDetail.room_id}
           riwaya={room.riwaya}
           onSuccess={(rec) => {
-            queryClient.setQueryData<RecitationPublic[]>(
-              recitationKeys.list({ session: id }),
-              (prev = []) => {
+            patchSessionRecitations((prev = []) => {
               if (prev.some((p) => p.id === rec.id)) {
                 return prev.map((p) => (p.id === rec.id ? rec : p));
               }
               return [rec, ...prev];
-              },
-            );
+            });
             recitationFetchEpochRef.current++;
           }}
           onErrorMessage={(msg) => setAnnounce(msg)}
@@ -1421,10 +1344,7 @@ function LiveSessionPageInner() {
                 gradingMode="completePlan"
                 planToComplete={planEndGradePlan}
                 onPlanCompleted={(rec) => {
-                  queryClient.setQueryData<RecitationPublic[]>(
-                    recitationKeys.list({ session: id }),
-                    (prev = []) => prev.map((p) => (p.id === rec.id ? rec : p)),
-                  );
+                  patchSessionRecitations((prev = []) => prev.map((p) => (p.id === rec.id ? rec : p)));
                   setPlanEndGradeDialogOpen(false);
                   setPlanEndGradePlanId(null);
                   recitationFetchEpochRef.current++;

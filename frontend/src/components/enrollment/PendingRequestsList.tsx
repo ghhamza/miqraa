@@ -3,13 +3,14 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { api, userFacingApiError } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
-import type { EnrollmentWithStatus } from "../../types";
+import { userFacingApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import {
+  useApprovePendingEnrollment,
+  useRejectPendingEnrollment,
+  useRoomPendingRequests,
+} from "../../data/rooms";
 
 interface PendingRequestsListProps {
   roomId: string;
@@ -22,16 +23,7 @@ export function PendingRequestsList({ roomId, onChanged }: PendingRequestsListPr
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const pendingQuery = useQuery({
-    queryKey: roomKeys.pending(roomId),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<EnrollmentWithStatus[]>(
-        `rooms/${roomId}/enrollments/pending`,
-        { signal },
-      );
-      return data;
-    },
-  });
+  const pendingQuery = useRoomPendingRequests(roomId);
 
   const items = pendingQuery.data ?? [];
   const loading = pendingQuery.isPending;
@@ -42,29 +34,17 @@ export function PendingRequestsList({ roomId, onChanged }: PendingRequestsListPr
     }
   }, [pendingQuery.error]);
 
-  const approveMutation = useApiMutation<unknown, string>({
-    mutationFn: (enrollmentId) =>
-      api.put(`rooms/${roomId}/enrollments/${enrollmentId}/approve`),
-    invalidates: [
-      roomKeys.pending(roomId),
-      roomKeys.enrollments(roomId),
-      roomKeys.detail(roomId),
-    ],
-    onSuccess: () => onChanged(),
-    onError: (message) => setError(message),
-  });
+  const approveMutation = useApprovePendingEnrollment(
+    roomId,
+    () => onChanged(),
+    (message) => setError(message),
+  );
 
-  const rejectMutation = useApiMutation<unknown, string>({
-    mutationFn: (enrollmentId) =>
-      api.put(`rooms/${roomId}/enrollments/${enrollmentId}/reject`),
-    invalidates: [
-      roomKeys.pending(roomId),
-      roomKeys.enrollments(roomId),
-      roomKeys.detail(roomId),
-    ],
-    onSuccess: () => onChanged(),
-    onError: (message) => setError(message),
-  });
+  const rejectMutation = useRejectPendingEnrollment(
+    roomId,
+    () => onChanged(),
+    (message) => setError(message),
+  );
 
   function approve(id: string) {
     setActionId(id);

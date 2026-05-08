@@ -2,18 +2,21 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { scheduleKeys, sessionKeys } from "../../lib/queryKeys";
+import { userFacingApiError } from "../../lib/api";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import type { GenerateResult, Schedule } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import {
+  useDeleteSchedule,
+  useGenerateSessionsFromSchedules,
+  useSaveScheduleSlot,
+  useScheduleList,
+} from "../../data/sessions";
 
 const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
@@ -65,13 +68,7 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
   const [genWeeks, setGenWeeks] = useState(4);
   const [genResult, setGenResult] = useState<GenerateResult | null>(null);
 
-  const schedulesQuery = useQuery({
-    queryKey: scheduleKeys.list(roomId),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Schedule[]>(`rooms/${roomId}/schedules`, { signal });
-      return data;
-    },
-  });
+  const schedulesQuery = useScheduleList(roomId);
 
   const schedules = schedulesQuery.data ?? [];
   const loading = schedulesQuery.isPending;
@@ -118,64 +115,13 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
     setSlotActive(s.is_active);
   }
 
-  type SaveSlotInput = {
-    mode: "edit" | "single" | "batch";
-    editingId: string | null;
-    days: number[];
-    title: string | null;
-    mins: number;
-    duration: number;
-    isActive: boolean;
-  };
-
-  const saveSlotMutation = useApiMutation<unknown, SaveSlotInput>({
-    mutationFn: async (input) => {
-      if (input.mode === "edit" && input.editingId) {
-        return api.request({
-          method: "put",
-          url: `schedules/${input.editingId}`,
-          data: {
-            title: input.title,
-            day_of_week: input.days[0] ?? 0,
-            start_time_minutes: input.mins,
-            duration_minutes: input.duration,
-            is_active: input.isActive,
-          },
-        });
-      }
-      if (input.mode === "single") {
-        return api.request({
-          method: "post",
-          url: "schedules",
-          data: {
-            room_id: roomId,
-            title: input.title,
-            day_of_week: input.days[0] ?? 0,
-            start_time_minutes: input.mins,
-            duration_minutes: input.duration,
-          },
-        });
-      }
-      return api.request({
-        method: "post",
-        url: "schedules/batch",
-        data: {
-          room_id: roomId,
-          title: input.title,
-          slots: input.days.map((day_of_week) => ({
-            day_of_week,
-            start_time_minutes: input.mins,
-            duration_minutes: input.duration,
-          })),
-        },
-      });
-    },
-    invalidates: [scheduleKeys.list(roomId)],
-    onSuccess: () => {
+  const saveSlotMutation = useSaveScheduleSlot(
+    roomId,
+    () => {
       setSlotModal(null);
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const saving = saveSlotMutation.isPending;
 
@@ -205,12 +151,11 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
     });
   }
 
-  const deleteMutation = useApiMutation<unknown, string>({
-    mutationFn: (id) => api.request({ method: "delete", url: `schedules/${id}` }),
-    invalidates: [scheduleKeys.list(roomId)],
-    onSuccess: () => setDeleteId(null),
-    onError: (message) => setError(message),
-  });
+  const deleteMutation = useDeleteSchedule(
+    roomId,
+    () => setDeleteId(null),
+    (message) => setError(message),
+  );
 
   const deleting = deleteMutation.isPending;
 
@@ -220,33 +165,13 @@ export function ScheduleManager({ roomId, canManage }: ScheduleManagerProps) {
     deleteMutation.mutate(deleteId);
   }
 
-  const generateMutation = useApiMutation<
-    GenerateResult,
-    { roomId: string; weeks: number }
-  >({
-    mutationFn: async (input) => {
-      const tz_offset_minutes = -new Date().getTimezoneOffset();
-      const { data } = await api.request<GenerateResult>({
-        method: "post",
-        url: "schedules/generate",
-        data: {
-          room_id: input.roomId,
-          weeks: input.weeks,
-          tz_offset_minutes,
-        },
-      });
-      return data;
-    },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-    ],
-    onSuccess: (data) => {
+  const generateMutation = useGenerateSessionsFromSchedules(
+    (data) => {
       setGenResult(data);
       setGenOpen(false);
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const genLoading = generateMutation.isPending;
 

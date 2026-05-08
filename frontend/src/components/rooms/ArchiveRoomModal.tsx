@@ -3,11 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useArchiveRoom } from "../../data/rooms";
 
 interface ArchiveRoomModalProps {
   open: boolean;
@@ -22,19 +20,13 @@ export function ArchiveRoomModal({ open, roomId, roomName, onClose, onArchived }
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
-  const archiveMutation = useApiMutation<unknown, string>({
-    mutationFn: (id) => api.delete(`rooms/${id}`),
-    invalidates: [
-      roomKeys.lists(),
-      roomKeys.archived(),
-      roomKeys.stats(),
-    ],
-    onSuccess: () => {
+  const archiveMutation = useArchiveRoom(
+    () => {
       onArchived();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = archiveMutation.isPending;
 

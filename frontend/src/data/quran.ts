@@ -7,7 +7,6 @@ import { quranKeys } from "../lib/queryKeys";
 import { api } from "../lib/api";
 
 export interface ChapterAudio {
-  /** verse_key ("1:1") -> full audio URL */
   audioFiles: Record<string, string>;
   recitationId: number;
 }

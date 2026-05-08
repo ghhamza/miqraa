@@ -3,19 +3,16 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { Archive, RotateCcw } from "lucide-react";
 import { BackLink } from "../../components/navigation/BackLink";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
-import type { Paginated, Room } from "../../types";
+import { userFacingApiError } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { useArchivedRooms, useUnarchiveRoom } from "../../data/rooms";
 
 export function ArchivedRoomsPage() {
   const { t } = useTranslation();
@@ -23,26 +20,13 @@ export function ArchivedRoomsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
-  const archivedQuery = useQuery({
-    queryKey: roomKeys.archived(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", {
-        signal,
-        params: { active: false },
-      });
-      return data.items;
-    },
-  });
+  const archivedQuery = useArchivedRooms();
 
   const rooms = archivedQuery.data ?? [];
   const loading = archivedQuery.isPending;
   const error = errorMessage ?? (archivedQuery.error ? userFacingApiError(archivedQuery.error) : null);
 
-  const restoreMutation = useApiMutation<unknown, string>({
-    mutationFn: (id) => api.put(`rooms/${id}`, { is_active: true }),
-    invalidates: [roomKeys.archived(), roomKeys.lists(), roomKeys.stats()],
-    onError: (message) => setErrorMessage(message),
-  });
+  const restoreMutation = useUnarchiveRoom(undefined, (message) => setErrorMessage(message));
 
   function restore(id: string) {
     setErrorMessage(null);

@@ -3,11 +3,9 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { userKeys } from "../../lib/queryKeys";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useDeleteUser } from "../../data/users";
 
 interface DeleteConfirmModalProps {
   open: boolean;
@@ -27,15 +25,13 @@ export function DeleteConfirmModal({
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
-  const deleteMutation = useApiMutation<unknown, string>({
-    mutationFn: (id) => api.delete(`users/${id}`),
-    invalidates: [userKeys.lists(), userKeys.stats()],
-    onSuccess: () => {
+  const deleteMutation = useDeleteUser(
+    () => {
       onDeleted();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = deleteMutation.isPending;
 

@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -17,10 +16,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { api } from "../../lib/api";
-import { roomKeys } from "../../lib/queryKeys";
 import { useAuthStore } from "../../stores/authStore";
-import type { RoomStats } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
@@ -50,6 +46,7 @@ import {
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { LiveSessionBanner } from "./LiveSessionBanner";
 import { LiveSessionsErrorToast } from "./LiveSessionsErrorToast";
+import { useRoomsStats } from "../../data/rooms";
 
 /** Up to two letters: first + last word, or first two chars of a single name. */
 function nameToInitials(name: string): string {
@@ -115,16 +112,7 @@ export function AppLayout() {
   const isMushafRoute = location.pathname.startsWith("/mushaf");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const roomStatsQuery = useQuery({
-    queryKey: roomKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RoomStats>("rooms/stats", { signal });
-      return data;
-    },
-    enabled: !!user,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const roomStatsQuery = useRoomsStats(!!user);
 
   const roomCount = roomStatsQuery.data?.total ?? null;
   const pendingTotal = roomStatsQuery.data?.pending_count_total ?? null;
@@ -153,7 +141,6 @@ export function AppLayout() {
   }, [location.pathname]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer on route change (incl. back/forward)
     setMobileNavOpen(false);
   }, [location.pathname]);
 

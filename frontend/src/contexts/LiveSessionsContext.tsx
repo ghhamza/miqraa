@@ -2,13 +2,9 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { sessionKeys } from "../lib/queryKeys";
-import { api } from "../lib/api";
 import { useAuthStore } from "../stores/authStore";
-import type { Paginated, SessionPublic } from "../types";
-
-const POLL_MS = 30_000;
+import type { SessionPublic } from "../types";
+import { useLiveSessionsPolling } from "../data/sessions";
 
 export interface LiveSessionsContextValue {
   sessions: SessionPublic[];
@@ -24,25 +20,9 @@ export interface LiveSessionsContextValue {
 
 const LiveSessionsContext = createContext<LiveSessionsContextValue | null>(null);
 
-async function fetchLiveSessions(signal: AbortSignal): Promise<SessionPublic[]> {
-  const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
-    params: { status: "in_progress", limit: 100 },
-    signal,
-  });
-  return data.items;
-}
-
 export function LiveSessionsProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
-
-  const query = useQuery({
-    queryKey: sessionKeys.live(user?.id ?? null),
-    queryFn: ({ signal }) => fetchLiveSessions(signal),
-    enabled: !!user,
-    refetchInterval: POLL_MS,
-    refetchOnWindowFocus: true,
-    staleTime: POLL_MS / 2,
-  });
+  const query = useLiveSessionsPolling(user?.id ?? null, !!user);
 
   const sessions = query.data ?? [];
 

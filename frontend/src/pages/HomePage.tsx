@@ -2,29 +2,13 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, Plus } from "lucide-react";
-import { api } from "../lib/api";
-import {
-  recitationKeys,
-  roomKeys,
-  sessionKeys,
-  userKeys,
-} from "../lib/queryKeys";
 import { useAuthStore } from "../stores/authStore";
 import type {
-  Paginated,
-  RecitationPublic,
-  RecitationStats,
-  Room,
-  RoomStats,
   SessionPublic,
-  SessionStats,
-  StudentProgress,
   User,
-  UserStats,
 } from "../types";
 import { Button } from "../components/ui/Button";
 import { UpcomingSessionsWidget, sessionCountdownLabel } from "../components/sessions/UpcomingSessionsWidget";
@@ -45,7 +29,11 @@ import { StudentEmptyHero } from "../components/home/StudentEmptyHero";
 import { TeacherEmptyHero } from "../components/home/TeacherEmptyHero";
 import { RoomFormModal } from "../components/rooms/RoomFormModal";
 import { sessionNavigatePath } from "../lib/sessionNav";
-import { useQfStreak } from "../hooks/useQfStreak";
+import { useQfStreak } from "../data/qf";
+import { useStudentProgress, useStudentRecitations, useUsersStats } from "../data/users";
+import { useRecitationsFeed, useRecitationsStats } from "../data/recitations";
+import { useRoomsList, useRoomsStats } from "../data/rooms";
+import { useSessionStats, useUpcomingSessions } from "../data/sessions";
 
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
@@ -103,14 +91,7 @@ export function HomePage() {
 
 function AdminDashboard({ homeGreeting }: { homeGreeting: string }) {
   const { t } = useTranslation();
-  const statsQuery = useQuery({
-    queryKey: userKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<UserStats>("users/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const statsQuery = useUsersStats();
 
   const stats = statsQuery.data ?? null;
   const loading = statsQuery.isPending;
@@ -166,65 +147,21 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const { mediumTime } = useLocaleDate();
 
   const [roomFormOpen, setRoomFormOpen] = useState(false);
-  const queryClient = useQueryClient();
 
-  const roomsQuery = useQuery({
-    queryKey: roomKeys.list({ search: "", active: "all", role: "teacher-home" }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-      return data.items;
-    },
+  const roomsQuery = useRoomsList("teacher-home", undefined, {
     select: (items) => items.filter((r) => r.teacher_id === user.id),
     staleTime: 60_000,
   });
 
-  const roomStatsQuery = useQuery({
-    queryKey: roomKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RoomStats>("rooms/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const roomStatsQuery = useRoomsStats(true);
 
-  const recStatsQuery = useQuery({
-    queryKey: recitationKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RecitationStats>("recitations/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const recStatsQuery = useRecitationsStats();
 
-  const recentRecsQuery = useQuery({
-    queryKey: recitationKeys.list({}),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        params: { limit: 5 },
-        signal,
-      });
-      return data.items;
-    },
-    staleTime: 30_000,
-  });
+  const recentRecsQuery = useRecitationsFeed("teacher-home-recent", { limit: 5, staleTime: 30_000 });
 
-  const upcomingQuery = useQuery({
-    queryKey: sessionKeys.upcoming(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-      return data;
-    },
-    staleTime: 30_000,
-  });
+  const upcomingQuery = useUpcomingSessions(true);
 
-  const sessionStatsQuery = useQuery({
-    queryKey: sessionKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionStats>("sessions/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const sessionStatsQuery = useSessionStats(true);
 
   const rooms = roomsQuery.data ?? [];
   const roomStats = roomStatsQuery.data ?? null;
@@ -263,8 +200,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
       isAdmin={false}
       onClose={() => setRoomFormOpen(false)}
       onSaved={() => {
-        void queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
-        void queryClient.invalidateQueries({ queryKey: roomKeys.stats() });
         setRoomFormOpen(false);
       }}
     />
@@ -441,66 +376,25 @@ function StudentDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
   const dateLine = useTodayDateLine();
   const { mediumTime } = useLocaleDate();
 
-  const progressQuery = useQuery({
-    queryKey: userKeys.studentProgress(user?.id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<StudentProgress>(`students/${user.id}/progress`, { signal });
-      return data;
-    },
+  const progressQuery = useStudentProgress(user?.id, !!user?.id);
+
+  const enrolledRoomsQuery = useRoomsList("student-home-enrolled", undefined, {
     enabled: !!user?.id,
     staleTime: 60_000,
   });
 
-  const enrolledRoomsQuery = useQuery({
-    queryKey: roomKeys.list({ search: "", active: "all", role: "student-home-enrolled" }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-      return data.items;
-    },
-    enabled: !!user?.id,
-    staleTime: 60_000,
-  });
+  const recentRecsQuery = useStudentRecitations(user?.id, { enabled: !!user?.id, limit: 3 });
 
-  const recentRecsQuery = useQuery({
-    queryKey: userKeys.studentRecitations(user?.id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        params: { limit: 3 },
-        signal,
-      });
-      return data.items;
-    },
-    enabled: !!user?.id,
-    staleTime: 30_000,
-  });
+  const upcomingQuery = useUpcomingSessions(!!user?.id);
 
-  const upcomingQuery = useQuery({
-    queryKey: sessionKeys.upcoming(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-      return data;
+  const publicRoomsQuery = useRoomsList(
+    "student-home-public-discovery",
+    { is_public: true, my_status: "none", limit: 4 },
+    {
+      enabled: !!user?.id,
+      staleTime: 5 * 60_000,
     },
-    enabled: !!user?.id,
-    staleTime: 30_000,
-  });
-
-  const publicRoomsQuery = useQuery({
-    queryKey: roomKeys.list({
-      search: "",
-      active: "all",
-      role: "student-home-public-discovery",
-      myStatus: "",
-    }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", {
-        params: { is_public: true, my_status: "none", limit: 4 },
-        signal,
-      });
-      return data.items;
-    },
-    enabled: !!user?.id,
-    staleTime: 5 * 60_000,
-  });
+  );
 
   const progress = progressQuery.data ?? null;
   const rooms = enrolledRoomsQuery.data ?? [];

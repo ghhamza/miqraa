@@ -2,24 +2,16 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, roomKeys, userKeys } from "../../lib/queryKeys";
 import {
   getAvailableRiwayat,
   getSurahAyahCount,
   isValidAyahRange,
 } from "../../lib/quranService";
 import type {
-  Paginated,
   QuranRiwaya,
   RecitationGrade,
   RecitationPublic,
-  Room,
-  SessionPublic,
-  StudentOption,
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
@@ -28,6 +20,8 @@ import { FormSelect } from "../ui/select";
 import { SurahPicker } from "./SurahPicker";
 import { AyahRangeAudioButton } from "./AyahRangeAudioButton";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { useRoomSessionsList, useRoomsList, useTeacherScopedStudents } from "../../data/rooms";
+import { useCreateRecitationFromForm, useUpdateRecitationFromForm } from "../../data/recitations";
 
 interface RecitationFormModalProps {
   open: boolean;
@@ -75,7 +69,6 @@ export function RecitationFormModal({
   const [notes, setNotes] = useState("");
   const [riwaya, setRiwaya] = useState<QuranRiwaya>("hafs");
   const [error, setError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   const maxAyah = getSurahAyahCount(surah, riwaya);
 
@@ -124,19 +117,9 @@ export function RecitationFormModal({
     setAyahEnd((e) => Math.max(ayahStart, Math.min(e, maxAyah)));
   }, [ayahStart, maxAyah]);
 
-  const roomsQuery = useQuery({
-    queryKey: [
-      ...roomKeys.lists(),
-      { scope: user?.role === "admin" ? "admin-all" : `teacher:${user?.id ?? ""}` },
-    ] as const,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-      const items = data.items;
-      return user?.role === "admin"
-        ? items
-        : items.filter((r) => r.teacher_id === user?.id);
-    },
+  const roomsQuery = useRoomsList(user?.role === "admin" ? "admin-all" : `teacher:${user?.id ?? ""}`, undefined, {
     enabled: open && !!user,
+    select: (items) => (user?.role === "admin" ? items : items.filter((r) => r.teacher_id === user?.id)),
   });
 
   const rooms = roomsQuery.data ?? [];
@@ -147,129 +130,35 @@ export function RecitationFormModal({
     if (r) setRiwaya(r.riwaya);
   }, [roomId, rooms]);
 
-  const studentsQuery = useQuery({
-    queryKey: [
-      ...roomKeys.studentsList(),
-      { scope: user?.role === "admin" ? "all" : `teacher:${user?.id ?? ""}` },
-    ] as const,
-    queryFn: async ({ signal }) => {
-      if (!user) return [] as StudentOption[];
-      if (user.role === "admin") {
-        const { data } = await api.get<StudentOption[]>("students", { signal });
-        return data;
-      }
-      const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
-      const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
-      const map = new Map<string, StudentOption>();
-      for (const r of mine) {
-        try {
-          const { data: ens } = await api.get<
-            { student_id: string; student_name: string; student_email: string }[]
-          >(`rooms/${r.id}/enrollments`, { signal });
-          for (const e of ens) {
-            if (!map.has(e.student_id)) {
-              map.set(e.student_id, {
-                id: e.student_id,
-                name: e.student_name,
-                email: e.student_email,
-              });
-            }
-          }
-        } catch (err) {
-          if ((err as { name?: string })?.name === "CanceledError") throw err;
-        }
-      }
-      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    },
-    enabled: open && !!user && user.role !== "student",
-    staleTime: 60_000,
-  });
+  const studentsQuery = useTeacherScopedStudents(user, open);
 
   const students = studentsQuery.data ?? [];
 
-  const sessionsQuery = useQuery({
-    queryKey: roomKeys.sessions(roomId || ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionPublic[]>(`rooms/${roomId}/sessions`, {
-        signal,
-      });
-      return data;
-    },
-    enabled: open && !!roomId,
-    select: (data) =>
-      data.filter(
-        (s) =>
-          s.status === "scheduled" ||
-          s.status === "in_progress" ||
-          s.status === "completed" ||
-          (defaultSessionId != null && s.id === defaultSessionId),
-      ),
-  });
+  const sessionsQuery = useRoomSessionsList(roomId || "", open && !!roomId);
 
-  const sessions = sessionsQuery.data ?? [];
+  const sessions = (sessionsQuery.data ?? []).filter(
+    (s) =>
+      s.status === "scheduled" ||
+      s.status === "in_progress" ||
+      s.status === "completed" ||
+      (defaultSessionId != null && s.id === defaultSessionId),
+  );
 
-  type CreateInput = {
-    student_id: string;
-    room_id: string | null;
-    session_id: string | null;
-    surah: number;
-    ayah_start: number;
-    ayah_end: number;
-    grade: null;
-    teacher_notes: null;
-    riwaya: QuranRiwaya;
-  };
-
-  type UpdateInput = {
-    id: string;
-    surah: number;
-    ayah_start: number;
-    ayah_end: number;
-    grade: RecitationGrade | null;
-    teacher_notes: string | null;
-  };
-
-  const createMutation = useApiMutation<RecitationPublic, CreateInput>({
-    mutationFn: async (input) => {
-      const { data } = await api.request<RecitationPublic>({
-        method: "post",
-        url: "recitations",
-        data: input,
-      });
-      return data;
-    },
-    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
-    onSuccess: async (_rec, vars) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(vars.student_id) }),
-        queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(vars.student_id) }),
-      ]);
+  const createMutation = useCreateRecitationFromForm(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
-  const updateMutation = useApiMutation<unknown, UpdateInput>({
-    mutationFn: ({ id, ...rest }) => api.put(`recitations/${id}`, rest),
-    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
-    onSuccess: async () => {
-      if (recitation?.student_id) {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentRecitations(recitation.student_id),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: userKeys.studentProgress(recitation.student_id),
-          }),
-          queryClient.invalidateQueries({ queryKey: recitationKeys.detail(recitation.id) }),
-        ]);
-      }
+  const updateMutation = useUpdateRecitationFromForm(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = createMutation.isPending || updateMutation.isPending;
 
@@ -301,6 +190,7 @@ export function RecitationFormModal({
         ayah_end: ayahEnd,
         grade: grade || null,
         teacher_notes: notes.trim() || null,
+        studentId: recitation.student_id,
       });
     }
   }

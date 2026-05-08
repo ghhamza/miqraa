@@ -110,7 +110,8 @@ export function getSurahAyahCount(number: number, riwaya: Riwaya = "hafs"): numb
   return m.getAyahCountInSurah(number as SurahN);
 }
 
-export function searchSurahs(query: string, _locale: string): SurahInfo[] {
+export function searchSurahs(query: string, locale: string): SurahInfo[] {
+  void locale;
   const q = query.trim().toLowerCase();
   if (!q) return surahs;
   return surahs.filter((s) => {

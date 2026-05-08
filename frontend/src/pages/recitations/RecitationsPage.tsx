@@ -2,19 +2,13 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BookMarked, SlidersHorizontal, TrendingUp } from "lucide-react";
-import { api } from "../../lib/api";
 import type {
-  Paginated,
   QuranRiwaya,
   RecitationGrade,
   RecitationPublic,
-  RecitationStats,
-  Room,
-  StudentOption,
 } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
@@ -33,9 +27,9 @@ import { FilterSheet } from "../../components/recitations/FilterSheet";
 import { getAvailableRiwayat, getSurahNameWithArabic } from "../../lib/quranService";
 import { riwayaBadgeClass } from "../../lib/riwayaUi";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, roomKeys, userKeys } from "../../lib/queryKeys";
 import { cn } from "@/lib/utils";
+import { useTeacherScopedStudents } from "../../data/rooms";
+import { useDeleteRecitation, useRecitationsList, useRecitationsStats } from "../../data/recitations";
 
 /** Align with SurahPicker + native date inputs (Radix trigger defaults include `sm:text-base`). */
 const FILTER_FIELD_CLASS =
@@ -105,80 +99,24 @@ export function RecitationsPage() {
     [surahFilter, gradeTab, fromDate, toDate, studentFilter, user?.role],
   );
 
-  const listQuery = useQuery({
-    queryKey: [
-      ...recitationKeys.list(filters),
-      { riwaya: riwayaFilter || null },
-    ] as const,
-    queryFn: async ({ signal }) => {
-      const params: Record<string, string> = {};
-      if (surahFilter !== "") params.surah = String(surahFilter);
-      if (gradeTab) params.grade = gradeTab;
-      if (fromDate) params.from = new Date(fromDate + "T00:00:00").toISOString();
-      if (toDate) params.to = new Date(toDate + "T23:59:59").toISOString();
-      if (studentFilter && (user?.role === "teacher" || user?.role === "admin")) {
-        params.student_id = studentFilter;
-      }
-      if (riwayaFilter) params.riwaya = riwayaFilter;
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params,
-      });
-      return data.items;
+  const listQuery = useRecitationsList(
+    {
+      ...filters,
+      from: fromDate ? new Date(fromDate + "T00:00:00").toISOString() : undefined,
+      to: toDate ? new Date(toDate + "T23:59:59").toISOString() : undefined,
+      student: studentFilter && (user?.role === "teacher" || user?.role === "admin") ? studentFilter : undefined,
+      riwaya: riwayaFilter || undefined,
     },
-    placeholderData: (prev) => prev,
-  });
+    { riwaya: riwayaFilter || null },
+  );
 
-  const statsQuery = useQuery({
-    queryKey: recitationKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RecitationStats>("recitations/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const statsQuery = useRecitationsStats();
 
   const rows = listQuery.data ?? [];
   const stats = statsQuery.data ?? null;
   const loading = listQuery.isPending && !listQuery.isPlaceholderData;
 
-  const studentsQuery = useQuery({
-    queryKey: [
-      ...roomKeys.studentsList(),
-      { scope: user?.role === "admin" ? "all" : `teacher:${user?.id ?? ""}` },
-    ] as const,
-    queryFn: async ({ signal }) => {
-      if (!user) return [] as StudentOption[];
-      if (user.role === "admin") {
-        const { data } = await api.get<StudentOption[]>("students", { signal });
-        return data;
-      }
-      const { data: roomsPage } = await api.get<Paginated<Room>>("rooms", { signal });
-      const mine = roomsPage.items.filter((r) => r.teacher_id === user.id);
-      const map = new Map<string, StudentOption>();
-      for (const r of mine) {
-        try {
-          const { data: ens } = await api.get<
-            { student_id: string; student_name: string; student_email: string }[]
-          >(`rooms/${r.id}/enrollments`, { signal });
-          for (const e of ens) {
-            if (!map.has(e.student_id)) {
-              map.set(e.student_id, {
-                id: e.student_id,
-                name: e.student_name,
-                email: e.student_email,
-              });
-            }
-          }
-        } catch (err) {
-          if ((err as { name?: string })?.name === "CanceledError") throw err;
-        }
-      }
-      return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    },
-    enabled: !!user && user.role !== "student",
-    staleTime: 60_000,
-  });
+  const studentsQuery = useTeacherScopedStudents(user, !!user && user.role !== "student");
 
   const students = studentsQuery.data ?? [];
 
@@ -302,21 +240,7 @@ export function RecitationsPage() {
     return base;
   }, [t, isStudent, loc, medium, canEditRow]);
 
-  const queryClient = useQueryClient();
-
-  const deleteMutation = useApiMutation<void, RecitationPublic>({
-    mutationFn: (rec) => api.delete(`recitations/${rec.id}`).then(() => undefined),
-    invalidates: [recitationKeys.lists(), recitationKeys.stats()],
-    onSuccess: async (_data, rec) => {
-      if (rec.student_id) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(rec.student_id) }),
-          queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(rec.student_id) }),
-        ]);
-      }
-      setDeleteRec(null);
-    },
-  });
+  const deleteMutation = useDeleteRecitation(() => setDeleteRec(null));
 
   const actionLoading = deleteMutation.isPending;
 

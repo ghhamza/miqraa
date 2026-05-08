@@ -2,11 +2,7 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, sessionKeys, userKeys } from "../../lib/queryKeys";
 import type { QuranRiwaya, RecitationPublic, TurnType } from "../../types";
 import { getSurahAyahCount } from "../../lib/quranService";
 import type { Riwaya } from "../../lib/quranService";
@@ -14,6 +10,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { SurahPicker } from "../recitations/SurahPicker";
 import { FormSelect } from "../ui/select";
+import { useCreateAndStartRecitation } from "../../data/recitations";
 
 export interface AdHocStartModalProps {
   open: boolean;
@@ -37,7 +34,6 @@ export function AdHocStartModal({
   onErrorMessage,
 }: AdHocStartModalProps) {
   const { t, i18n } = useTranslation();
-  const queryClient = useQueryClient();
   const isRtl = i18n.language === "ar";
   const riw = riwaya as Riwaya;
   const [surah, setSurah] = useState<number | null>(1);
@@ -49,55 +45,16 @@ export function AdHocStartModal({
   const surahNum = surah ?? 1;
   const maxAyah = getSurahAyahCount(surahNum, riw);
 
-  type AdHocInput = {
-    studentId: string;
-    surahNum: number;
-    ayahStart: number;
-    ayahEnd: number;
-    turnType: TurnType;
-  };
-
-  const adHocMutation = useApiMutation<RecitationPublic, AdHocInput>({
-    mutationFn: async (input) => {
-      const { data: created } = await api.request<RecitationPublic>({
-        method: "post",
-        url: "recitations",
-        data: {
-          student_id: input.studentId,
-          room_id: roomId,
-          session_id: sessionId,
-          surah: input.surahNum,
-          ayah_start: Math.min(Math.max(1, input.ayahStart), maxAyah),
-          ayah_end: Math.min(Math.max(1, input.ayahEnd, input.ayahStart), maxAyah),
-          turn_type: input.turnType,
-          riwaya,
-        },
-      });
-      const { data: started } = await api.request<RecitationPublic>({
-        method: "post",
-        url: `recitations/${created.id}/start`,
-        data: {},
-      });
-      return started;
-    },
-    invalidates: [
-      recitationKeys.lists(),
-      recitationKeys.list({ session: sessionId }),
-      sessionKeys.detail(sessionId),
-    ],
-    onSuccess: async (started, vars) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(vars.studentId) }),
-        queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(vars.studentId) }),
-      ]);
+  const adHocMutation = useCreateAndStartRecitation(
+    (started) => {
       onSuccess(started);
       onClose();
     },
-    onError: (message) => {
+    (message) => {
       setError(message);
       onErrorMessage(message);
     },
-  });
+  );
 
   const submitting = adHocMutation.isPending;
 
@@ -110,6 +67,10 @@ export function AdHocStartModal({
       ayahStart,
       ayahEnd,
       turnType,
+      maxAyah,
+      roomId,
+      sessionId,
+      riwaya,
     });
   };
 

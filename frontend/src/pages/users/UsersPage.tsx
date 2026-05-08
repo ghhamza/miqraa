@@ -4,13 +4,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
-import { api } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
-import { userKeys } from "../../lib/queryKeys";
-import type { Paginated, UserPublic, UserStats } from "../../types";
+import type { UserPublic } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -21,6 +18,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { UserFormModal } from "../../components/users/UserFormModal";
 import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { roleTranslationKey } from "../../lib/roleLabels";
+import { useUsersList, useUsersStats } from "../../data/users";
 
 type RoleFilter = "" | "student" | "teacher" | "admin";
 
@@ -45,32 +43,8 @@ export function UsersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserPublic | null>(null);
 
-  const usersQuery = useQuery({
-    queryKey: userKeys.list({
-      search: debouncedSearch.trim(),
-      role: roleFilter || undefined,
-    }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<UserPublic>>("users", {
-        signal,
-        params: {
-          ...(roleFilter ? { role: roleFilter } : {}),
-          ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-        },
-      });
-      return data.items;
-    },
-    placeholderData: (previous) => previous,
-  });
-
-  const statsQuery = useQuery({
-    queryKey: userKeys.stats(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<UserStats>("users/stats", { signal });
-      return data;
-    },
-    staleTime: 60_000,
-  });
+  const usersQuery = useUsersList(debouncedSearch, roleFilter);
+  const statsQuery = useUsersStats();
 
   const users = usersQuery.data ?? [];
   const stats = statsQuery.data ?? null;

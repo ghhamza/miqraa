@@ -4,13 +4,11 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { sessionKeys } from "../../lib/queryKeys";
 import type { SessionPublic } from "../../types";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { Badge } from "../ui/Badge";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
+import { useUpcomingSessions } from "../../data/sessions";
 
 function sessionStatusVariant(s: SessionPublic["status"]): "green" | "gray" | "blue" {
   if (s === "cancelled") return "gray";
@@ -53,14 +51,7 @@ export function UpcomingSessionsWidget({ maxItems, showViewCalendarLink, exclude
   const { t, i18n } = useTranslation();
   const { mediumTime } = useLocaleDate();
 
-  const upcomingQuery = useQuery({
-    queryKey: sessionKeys.upcoming(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-      return data;
-    },
-    staleTime: 30_000,
-  });
+  const upcomingQuery = useUpcomingSessions(true);
 
   const sessions = upcomingQuery.data ?? [];
   const loading = upcomingQuery.isPending;

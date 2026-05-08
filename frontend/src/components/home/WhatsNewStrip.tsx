@@ -2,22 +2,12 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Sparkles, X } from "lucide-react";
-import { api } from "../../lib/api";
-import { homeKeys } from "../../lib/queryKeys";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../ui/Button";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
-
-export interface WhatsNewData {
-  since: string | null;
-  new_recitations: number;
-  new_enrollments: number;
-  completed_sessions: number;
-  pending_requests: number;
-}
+import { useWhatsNew } from "../../data/home";
 
 export interface WhatsNewStripProps {
   role: "student" | "teacher" | "admin";
@@ -41,16 +31,7 @@ export function WhatsNewStrip({ role }: WhatsNewStripProps) {
     () => sessionStorage.getItem("whatsNewDismissed") === "1",
   );
 
-  const whatsNewQuery = useQuery({
-    queryKey: homeKeys.whatsNew(userId ?? "anon", null),
-    queryFn: async ({ signal }) => {
-      const { data: d } = await api.get<WhatsNewData>("me/whats-new", { signal });
-      return d;
-    },
-    enabled: !dismissed && !!userId,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
+  const whatsNewQuery = useWhatsNew(userId, dismissed);
 
   const data = whatsNewQuery.data ?? null;
   const loadError = !!whatsNewQuery.error;

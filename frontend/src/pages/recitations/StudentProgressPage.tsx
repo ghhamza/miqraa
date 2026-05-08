@@ -3,12 +3,8 @@
 
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { BookMarked, Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { userKeys } from "../../lib/queryKeys";
-import type { RecitationPublic, StudentProgress } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { PageCard } from "../../components/layout/PageCard";
@@ -18,6 +14,7 @@ import { SurahProgressGrid } from "../../components/recitations/SurahProgressGri
 import { RecentRecitationsList } from "../../components/recitations/RecentRecitationsList";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { roleTranslationKey } from "../../lib/roleLabels";
+import { useStudentProgress, useStudentRecitations } from "../../data/users";
 
 export function StudentProgressPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,24 +24,8 @@ export function StudentProgressPage() {
 
   const allowed = !!id && !!user && (user.role !== "student" || user.id === id);
 
-  const progressQuery = useQuery({
-    queryKey: userKeys.studentProgress(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<StudentProgress>(`students/${id}/progress`, { signal });
-      return data;
-    },
-    enabled: allowed,
-  });
-
-  const recentQuery = useQuery({
-    queryKey: userKeys.studentRecitations(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RecitationPublic[]>(`students/${id}/recitations`, { signal });
-      return data;
-    },
-    enabled: allowed,
-    select: (data) => data.slice(0, 10),
-  });
+  const progressQuery = useStudentProgress(id, allowed);
+  const recentQuery = useStudentRecitations(id, { enabled: allowed, selectTop: 10 });
 
   const progress = progressQuery.data ?? null;
   const recent = recentQuery.data ?? [];

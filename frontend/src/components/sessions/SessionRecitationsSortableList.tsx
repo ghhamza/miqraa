@@ -22,7 +22,6 @@ import { Check, GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
 import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys } from "../../lib/queryKeys";
 import type { RecitationPublic } from "../../types";
 import { GradeBadge } from "../recitations/GradeBadge";
 import { AyahRangeAudioButton } from "../recitations/AyahRangeAudioButton";
@@ -315,7 +314,6 @@ export function SessionRecitationsSortableList({
 }: SessionRecitationsSortableListProps) {
   const { t, i18n } = useTranslation();
   const loc = i18n.language === "ar" ? "ar" : i18n.language === "fr" ? "fr" : "en";
-  void recitationKeys;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

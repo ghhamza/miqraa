@@ -3,15 +3,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, History } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api, userFacingApiError } from "../../lib/api";
-import { sessionKeys, roomKeys, recitationKeys } from "../../lib/queryKeys";
-import type { Paginated, RecitationPublic, Room, SessionDetail, SessionPublic, TurnType } from "../../types";
+import { userFacingApiError } from "../../lib/api";
+import type { RecitationPublic, TurnType } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { PageShell } from "../../components/layout/PageShell";
 import { RecitationTurnTab } from "../../components/sessions/RecitationTurnTab";
+import { useRecitationsList } from "../../data/recitations";
+import { useRoom } from "../../data/rooms";
+import { useSessionDetail, useSessionsList } from "../../data/sessions";
 
 export function StudentRecitationPage() {
   const { sessionId, studentId } = useParams<{ sessionId: string; studentId: string }>();
@@ -21,64 +22,32 @@ export function StudentRecitationPage() {
   const [summaryOpen, setSummaryOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<TurnType>("dars");
 
-  const sessionQuery = useQuery({
-    queryKey: sessionKeys.detail(sessionId ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionDetail>(`/sessions/${sessionId}`, { signal });
-      return data;
-    },
-    enabled: !!sessionId && !!studentId,
-  });
+  const sessionQuery = useSessionDetail(sessionId, !!sessionId && !!studentId);
 
   const session = sessionQuery.data ?? null;
   const roomId = session?.room_id ?? null;
 
-  const roomQuery = useQuery({
-    queryKey: roomKeys.detail(roomId ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Room>(`/rooms/${roomId}`, { signal });
-      return data;
-    },
-    enabled: !!roomId,
-  });
+  const roomQuery = useRoom(roomId ?? undefined);
 
   const room = roomQuery.data ?? null;
 
-  const sessionRecitationsQuery = useQuery({
-    queryKey: recitationKeys.list({ student: studentId, session: sessionId }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("/recitations", {
-        signal,
-        params: { student_id: studentId, session_id: sessionId, limit: 10 },
-      });
-      return data;
-    },
-    enabled: !!sessionId && !!studentId,
-  });
+  const sessionRecitationsQuery = useRecitationsList(
+    { student: studentId, session: sessionId, from: "limit:10" },
+    undefined,
+    !!sessionId && !!studentId,
+  );
 
-  const roomSessionsQuery = useQuery({
-    queryKey: roomKeys.sessions(roomId ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<SessionPublic>>("/sessions", {
-        signal,
-        params: { room_id: roomId, status: "completed", limit: 100 },
-      });
-      return data;
-    },
-    enabled: !!roomId,
-  });
+  const roomSessionsQuery = useSessionsList(
+    "student-recitation-room-sessions",
+    { room_id: roomId ?? undefined, status: "completed", limit: 100 },
+    !!roomId,
+  );
 
-  const roomRecitationsQuery = useQuery({
-    queryKey: recitationKeys.list({ student: studentId, room: roomId ?? undefined }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("/recitations", {
-        signal,
-        params: { student_id: studentId, room_id: roomId, limit: 100 },
-      });
-      return data;
-    },
-    enabled: !!roomId && !!studentId,
-  });
+  const roomRecitationsQuery = useRecitationsList(
+    { student: studentId, room: roomId ?? undefined, from: "limit:100" },
+    undefined,
+    !!roomId && !!studentId,
+  );
 
   const studentName = useMemo(() => {
     if (!session) return "";
@@ -87,7 +56,7 @@ export function StudentRecitationPage() {
 
   const existingByType = useMemo<Record<TurnType, RecitationPublic | null>>(() => {
     const result: Record<TurnType, RecitationPublic | null> = { dars: null, tathbit: null, muraja: null };
-    const items = sessionRecitationsQuery.data?.items ?? [];
+    const items = sessionRecitationsQuery.data ?? [];
     for (const rec of items) {
       if (rec.turn_type in result) {
         result[rec.turn_type as TurnType] = rec;
@@ -100,16 +69,16 @@ export function StudentRecitationPage() {
     const recs = roomRecitationsQuery.data;
     const sessions = roomSessionsQuery.data;
     if (!recs || !sessions) return null;
-    const rated = recs.items.filter((r) => r.star_rating != null);
+    const rated = recs.filter((r) => r.star_rating != null);
     const avgRating =
       rated.length > 0
         ? rated.reduce((sum, r) => sum + (r.star_rating ?? 0), 0) / rated.length
         : 0;
     return {
-      attendanceCount: recs.items.length,
+      attendanceCount: recs.length,
       totalSessions: sessions.total,
       avgStarRating: Math.round(avgRating * 10) / 10,
-      totalRecitations: recs.total,
+      totalRecitations: recs.length,
     };
   }, [roomRecitationsQuery.data, roomSessionsQuery.data]);
 

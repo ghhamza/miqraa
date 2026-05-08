@@ -2,14 +2,10 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Archive, Pencil, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { roomKeys } from "../../lib/queryKeys";
-import { useApiMutation } from "../../lib/useApiMutation";
-import type { Enrollment, Paginated, RecitationPublic, Room, SessionPublic } from "../../types";
+import type { Enrollment, Room } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import {
@@ -39,6 +35,17 @@ import { RoomOverviewSection } from "./sections/RoomOverviewSection";
 import { RoomStudentsSection } from "./sections/RoomStudentsSection";
 import { RoomSessionsSection, type RoomSessionsViewMode } from "./sections/RoomSessionsSection";
 import { RoomRecitationsSection } from "./sections/RoomRecitationsSection";
+import {
+  useJoinRoom,
+  useInvalidateRoomRecitations,
+  useInvalidateRoomSessions,
+  useRoom,
+  useRoomEnrollments,
+  useRoomRecentRecitations,
+  useUnarchiveRoom,
+  useWithdrawRoom,
+} from "../../data/rooms";
+import { useCalendarSessions } from "../../data/sessions";
 
 function canManage(user: { id: string; role: string } | null, room: Room): boolean {
   if (!user) return false;
@@ -72,35 +79,17 @@ export function RoomDetailPage() {
   const [sessionPresetMorning, setSessionPresetMorning] = useState(false);
   const [recitationFormOpen, setRecitationFormOpen] = useState(false);
   const [studentConfirm, setStudentConfirm] = useState<"leave" | "cancel" | null>(null);
-  const queryClient = useQueryClient();
+  const invalidateRoomSessions = useInvalidateRoomSessions(id ?? "");
+  const invalidateRoomRecitations = useInvalidateRoomRecitations(id ?? "");
 
-  const roomQuery = useQuery({
-    queryKey: roomKeys.detail(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Room>(`rooms/${id}`, { signal });
-      return data;
-    },
-    enabled: !!id,
-    retry: (failureCount, error) => {
-      const status = (error as { response?: { status?: number } })?.response?.status;
-      if (status === 403) return false;
-      return failureCount < 2;
-    },
-  });
+  const roomQuery = useRoom(id);
 
   const room = roomQuery.data ?? null;
   const forbidden =
     (roomQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
   const canManageRoom = !!room && !!user && canManage(user, room);
 
-  const enrollmentsQuery = useQuery({
-    queryKey: roomKeys.enrollments(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Enrollment[]>(`rooms/${id}/enrollments`, { signal });
-      return data;
-    },
-    enabled: !!id && canManageRoom,
-  });
+  const enrollmentsQuery = useRoomEnrollments(id, canManageRoom);
 
   const enrollments = enrollmentsQuery.data ?? [];
 
@@ -117,96 +106,50 @@ export function RoomDetailPage() {
     };
   }, [sessionsViewMode, calendarCursor, listMonthCursor]);
 
-  const sessionsQuery = useQuery({
-    queryKey: roomKeys.sessions(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
-        signal,
-        params: {
-          room_id: id,
-          from: sessionsRange.from,
-          to: sessionsRange.to,
-          limit: "500",
-        },
-      });
-      if (sessionsViewMode === "list") {
-        return [...data.items].sort(
-          (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
-        );
-      }
-      return data.items;
-    },
-    enabled: !!id && !!room,
-  });
+  const sessionsQuery = useCalendarSessions(
+    sessionsRange.from,
+    sessionsRange.to,
+    id ?? "",
+    !!id && !!room,
+  );
 
   useEffect(() => {
     if (!id || !room) return;
-    void queryClient.invalidateQueries({ queryKey: roomKeys.sessions(id) });
-  }, [id, room, sessionsRange.from, sessionsRange.to, queryClient]);
+    void invalidateRoomSessions();
+  }, [id, room, sessionsRange.from, sessionsRange.to, invalidateRoomSessions]);
 
-  const sessions = sessionsQuery.data ?? [];
+  const sessions = useMemo(() => {
+    const items = sessionsQuery.data ?? [];
+    if (sessionsViewMode === "list") {
+      return [...items].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+    }
+    return items;
+  }, [sessionsQuery.data, sessionsViewMode]);
   const sessionsLoading = sessionsQuery.isFetching;
 
-  const recitationsQuery = useQuery({
-    queryKey: roomKeys.recitations(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params: { room_id: id },
-      });
-      return data.items.slice(0, 15);
-    },
-    enabled: !!id && !!room,
-  });
+  const recitationsQuery = useRoomRecentRecitations(id, !!room);
 
   const roomRecitations = recitationsQuery.data ?? [];
   const recitationsLoading = recitationsQuery.isPending;
   const loading = roomQuery.isPending;
 
-  const restoreMutation = useApiMutation({
-    mutationFn: () => api.put(`rooms/${room?.id}`, { is_active: true }),
-    invalidates: [
-      roomKeys.detail(id ?? ""),
-      roomKeys.lists(),
-      roomKeys.archived(),
-      roomKeys.stats(),
-    ],
-  });
+  const restoreMutation = useUnarchiveRoom();
 
-  const joinMutation = useApiMutation({
-    mutationFn: () => api.post(`rooms/${room?.id}/join`),
-    invalidates: [
-      roomKeys.detail(id ?? ""),
-      roomKeys.enrollments(id ?? ""),
-      roomKeys.lists(),
-      roomKeys.stats(),
-    ],
-    onError: (message) => window.alert(message),
-  });
+  const joinMutation = useJoinRoom(undefined, (message) => window.alert(message));
 
-  const withdrawMutation = useApiMutation({
-    mutationFn: () => api.delete(`rooms/${room?.id}/my-enrollment`),
-    invalidates: [
-      roomKeys.detail(id ?? ""),
-      roomKeys.enrollments(id ?? ""),
-      roomKeys.lists(),
-      roomKeys.stats(),
-    ],
-    onSuccess: () => setStudentConfirm(null),
-    onError: (message) => window.alert(message),
-  });
+  const withdrawMutation = useWithdrawRoom(id ?? "", () => setStudentConfirm(null), (message) => window.alert(message));
 
   const restoreLoading = restoreMutation.isPending;
   const studentActionLoading = joinMutation.isPending || withdrawMutation.isPending;
 
   function handleRestore() {
     if (!room || restoreLoading) return;
-    restoreMutation.mutate();
+    restoreMutation.mutate(room.id);
   }
 
   function handleStudentJoin() {
     if (!room || !id || studentActionLoading) return;
-    joinMutation.mutate();
+    joinMutation.mutate(room.id);
   }
 
   function confirmStudentWithdrawal() {
@@ -389,7 +332,7 @@ export function RoomDetailPage() {
           setSessionPresetMorning(false);
         }}
         onSaved={() => {
-          void queryClient.invalidateQueries({ queryKey: roomKeys.sessions(id ?? "") });
+          void invalidateRoomSessions();
         }}
       />
 
@@ -401,7 +344,7 @@ export function RoomDetailPage() {
         defaultRoomName={room.name}
         onClose={() => setRecitationFormOpen(false)}
         onSaved={() => {
-          void queryClient.invalidateQueries({ queryKey: roomKeys.recitations(id ?? "") });
+          void invalidateRoomRecitations();
         }}
       />
 

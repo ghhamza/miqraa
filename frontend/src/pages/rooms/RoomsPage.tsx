@@ -4,12 +4,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, DoorOpen } from "lucide-react";
-import { api, userFacingApiError } from "../../lib/api";
-import { roomKeys } from "../../lib/queryKeys";
+import { userFacingApiError } from "../../lib/api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import type { HalaqahType, JoinResult, Paginated, Room, RoomStats } from "../../types";
+import type { HalaqahType, Room } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -21,6 +19,7 @@ import { PageShell } from "../../components/layout/PageShell";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { RoomFilters, type FilterRiwaya, type ActiveFilter } from "../../components/rooms/RoomFilters";
 import { cn } from "@/lib/utils";
+import { useJoinRoom, useRoomsWithStats, useUnarchiveRoom } from "../../data/rooms";
 
 function canManageRoom(user: { id: string; role: string } | null, room: Room): boolean {
   if (!user) return false;
@@ -35,7 +34,6 @@ function canAddRoom(user: { role: string } | null): boolean {
 
 export function RoomsPage() {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
@@ -58,33 +56,13 @@ export function RoomsPage() {
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const scrolledPendingRef = useRef(false);
 
-  const roomsQuery = useQuery({
-    queryKey: roomKeys.list({
-      search: debouncedSearch,
-      active: activeFilter === "inactive" ? "archived" : activeFilter,
-      halaqahType: halaqahFilter || undefined,
-      riwaya: riwayaFilter || undefined,
-      myStatus: myStatusFilter || undefined,
-      role: user?.role,
-    }),
-    queryFn: async ({ signal }) => {
-      const [statsRes, roomsRes] = await Promise.all([
-        api.get<RoomStats>("rooms/stats", { signal }),
-        api.get<Paginated<Room>>("rooms", {
-          signal,
-          params: {
-            ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-            ...(activeFilter === "all" ? {} : { active: activeFilter === "active" }),
-            ...(halaqahFilter ? { halaqah_type: halaqahFilter } : {}),
-            ...(riwayaFilter ? { riwaya: riwayaFilter } : {}),
-            ...(user?.role === "student" && myStatusFilter
-              ? { my_status: myStatusFilter }
-              : {}),
-          },
-        }),
-      ]);
-      return { stats: statsRes.data, rooms: roomsRes.data.items };
-    },
+  const roomsQuery = useRoomsWithStats({
+    search: debouncedSearch,
+    activeFilter,
+    halaqahFilter,
+    riwayaFilter,
+    myStatusFilter,
+    role: user?.role,
   });
 
   const stats = roomsQuery.data?.stats ?? null;
@@ -123,9 +101,9 @@ export function RoomsPage() {
     });
   }, [searchParams, loading, displayRooms.length]);
 
-  const refreshAll = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
-  }, [queryClient]);
+  const unarchiveMutation = useUnarchiveRoom();
+  const joinMutation = useJoinRoom();
+  const refreshAll = useCallback(async () => {}, []);
 
   function clearAllFilters() {
     setSearch("");
@@ -154,35 +132,25 @@ export function RoomsPage() {
   }
 
   async function restoreRoom(r: Room) {
-    try {
-      await api.request({
-        method: "put",
-        url: `rooms/${r.id}`,
-        data: { is_active: true },
-      });
-      await refreshAll();
-    } catch {
-      /* optional */
-    }
+    unarchiveMutation.mutate(r.id);
   }
 
   async function handleJoin(room: Room) {
     if (joinLoading) return;
     setJoinLoading(room.id);
     setJoinMessage(null);
-    try {
-      const { data } = await api.request<JoinResult>({
-        method: "post",
-        url: `rooms/${room.id}/join`,
-      });
-      setJoinMessage(data.status === "pending" ? t("enrollment.requestSent") : t("enrollment.joinedSuccess"));
-      await refreshAll();
-    } catch (err) {
-      setJoinMessage(userFacingApiError(err));
-    } finally {
-      setJoinLoading(null);
-      setTimeout(() => setJoinMessage(null), 4000);
-    }
+    joinMutation.mutate(room.id, {
+      onSuccess: (data) => {
+        setJoinMessage(data.status === "pending" ? t("enrollment.requestSent") : t("enrollment.joinedSuccess"));
+      },
+      onError: (err) => {
+        setJoinMessage(userFacingApiError(err));
+      },
+      onSettled: () => {
+        setJoinLoading(null);
+        setTimeout(() => setJoinMessage(null), 4000);
+      },
+    });
   }
 
   const hasRejectedInResults =

@@ -2,14 +2,10 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { sessionKeys } from "../../lib/queryKeys";
 import { useAuthStore } from "../../stores/authStore";
-import type { JoinResult, SessionLivePublicItem, SessionPublic } from "../../types";
+import type { SessionLivePublicItem, SessionPublic } from "../../types";
 import { PageShell } from "../../components/layout/PageShell";
 import { PageCard } from "../../components/layout/PageCard";
 import { Button } from "../../components/ui/Button";
@@ -17,6 +13,8 @@ import { Badge } from "../../components/ui/Badge";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { liveSessionPath, sessionNavigatePath } from "../../lib/sessionNav";
 import { cn } from "@/lib/utils";
+import { useJoinRoom } from "../../data/rooms";
+import { useLivePublicSessions, useUpcomingSessions } from "../../data/sessions";
 
 function canEnterLiveSession(
   item: SessionLivePublicItem,
@@ -39,26 +37,8 @@ export function LiveSessionsPage() {
     { roomId: string; message: string } | null
   >(null);
 
-  const liveQuery = useQuery({
-    queryKey: [...sessionKeys.live(null), { kind: "live-public" }] as const,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionLivePublicItem[]>("sessions/live-public", {
-        signal,
-      });
-      return data;
-    },
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
-  });
-
-  const upcomingQuery = useQuery({
-    queryKey: sessionKeys.upcoming(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionPublic[]>("sessions/upcoming", { signal });
-      return data;
-    },
-    staleTime: 30_000,
-  });
+  const liveQuery = useLivePublicSessions(true);
+  const upcomingQuery = useUpcomingSessions(true);
 
   const live = liveQuery.data ?? [];
   const upcoming = upcomingQuery.data ?? [];
@@ -84,30 +64,19 @@ export function LiveSessionsPage() {
 
   const showImminentCard = Boolean(myImminentSession && !imminentAlreadyLive);
 
-  const joinMutation = useApiMutation<JoinResult, SessionLivePublicItem>({
-    mutationFn: async (item) => {
-      const { data } = await api.request<JoinResult>({
-        method: "post",
-        url: `rooms/${item.room_id}/join`,
-      });
-      return data;
+  const joinMutation = useJoinRoom(
+    () => {},
+    (message) => {
+      if (joinRoomId) setJoinRoomError({ roomId: joinRoomId, message });
     },
-    invalidates: [
-      [...sessionKeys.live(null), { kind: "live-public" }] as const,
-      sessionKeys.upcoming(),
-    ],
-    onError: (message, _err, item) => {
-      setJoinRoomError({ roomId: item.room_id, message });
-    },
-    onSettled: () => {
-      setJoinRoomId(null);
-    },
-  });
+  );
 
   function handleJoinRoom(item: SessionLivePublicItem) {
     setJoinRoomId(item.room_id);
     setJoinRoomError(null);
-    joinMutation.mutate(item);
+    joinMutation.mutate(item.room_id, {
+      onSettled: () => setJoinRoomId(null),
+    });
   }
 
   function renderLiveActions(item: SessionLivePublicItem) {

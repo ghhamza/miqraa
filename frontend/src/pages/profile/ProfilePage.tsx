@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, userFacingApiError } from "../../lib/api";
+import { useUpdatePassword } from "../../data/users";
 import { useAuthStore } from "../../stores/authStore";
 import type { User } from "../../types";
 import { Button } from "../../components/ui/Button";
@@ -27,6 +28,16 @@ export function ProfilePage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const updatePasswordMutation = useUpdatePassword(
+    () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess(true);
+      window.setTimeout(() => setPasswordSuccess(false), 4000);
+    },
+    (message) => setPasswordError(message),
+  );
 
   useEffect(() => {
     if (user) {
@@ -60,7 +71,7 @@ export function ProfilePage() {
     }
   }
 
-  async function handlePassword(e: React.FormEvent) {
+  function handlePassword(e: React.FormEvent) {
     e.preventDefault();
     if (!user || passwordLoading) return;
     setPasswordError(null);
@@ -74,25 +85,13 @@ export function ProfilePage() {
       return;
     }
     setPasswordLoading(true);
-    try {
-      await api.request({
-        method: "put",
-        url: "auth/password",
-        data: {
-          current_password: currentPassword,
-          new_password: newPassword,
-        },
-      });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordSuccess(true);
-      window.setTimeout(() => setPasswordSuccess(false), 4000);
-    } catch (err) {
-      setPasswordError(userFacingApiError(err));
-    } finally {
-      setPasswordLoading(false);
-    }
+    updatePasswordMutation
+      .mutateAsync({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+      .catch(() => {})
+      .finally(() => setPasswordLoading(false));
   }
 
   if (!user) {

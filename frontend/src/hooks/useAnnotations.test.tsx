@@ -4,8 +4,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useAnnotations } from "./useAnnotations";
-import { sessionKeys } from "../lib/queryKeys";
+import { useAnnotations } from "../data/annotations";
 import { api } from "../lib/api";
 
 function withClient(qc: QueryClient) {
@@ -27,8 +26,6 @@ describe("useAnnotations optimistic flow", () => {
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const recId = "rec-1";
 
-    qc.setQueryData(sessionKeys.annotations(recId), []);
-
     vi.spyOn(api, "request").mockRejectedValue(new Error("server angry"));
 
     const { result } = renderHook(() => useAnnotations(recId), {
@@ -40,8 +37,7 @@ describe("useAnnotations optimistic flow", () => {
     });
 
     await waitFor(() => {
-      const cached = qc.getQueryData(sessionKeys.annotations(recId));
-      expect(cached).toEqual([]);
+      expect(result.current.annotations).toEqual([]);
     });
   });
 });

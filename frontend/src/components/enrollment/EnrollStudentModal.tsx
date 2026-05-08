@@ -3,14 +3,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
 import type { StudentOption } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { useAvailableStudentsForRoom, useEnrollStudent } from "../../data/rooms";
 
 interface EnrollStudentModalProps {
   open: boolean;
@@ -42,18 +39,7 @@ export function EnrollStudentModal({
     }
   }, [open]);
 
-  const studentsQuery = useQuery({
-    queryKey: roomKeys.studentsList(roomId),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<StudentOption[]>("students", {
-        params: { exclude_room_id: roomId },
-        signal,
-      });
-      return data;
-    },
-    enabled: open,
-    staleTime: 60_000,
-  });
+  const studentsQuery = useAvailableStudentsForRoom(roomId, open);
 
   const students = studentsQuery.data ?? [];
   const loading = studentsQuery.isPending && open;
@@ -66,20 +52,14 @@ export function EnrollStudentModal({
     );
   }, [students, search]);
 
-  const enrollMutation = useApiMutation<unknown, StudentOption>({
-    mutationFn: (s) => api.post(`rooms/${roomId}/enrollments`, { student_id: s.id }),
-    invalidates: [
-      roomKeys.enrollments(roomId),
-      roomKeys.detail(roomId),
-      roomKeys.lists(),
-      roomKeys.studentsList(roomId),
-    ],
-    onSuccess: () => {
+  const enrollMutation = useEnrollStudent(
+    roomId,
+    () => {
       onEnrolled();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const submitting = enrollMutation.isPending;
 

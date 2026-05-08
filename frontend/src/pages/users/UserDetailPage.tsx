@@ -3,11 +3,8 @@
 
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Pencil, Trash2 } from "lucide-react";
-import { api } from "../../lib/api";
-import { userKeys } from "../../lib/queryKeys";
 import type { UserPublic } from "../../types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -16,6 +13,7 @@ import { DeleteConfirmModal } from "../../components/users/DeleteConfirmModal";
 import { BackLink } from "../../components/navigation/BackLink";
 import { roleTranslationKey } from "../../lib/roleLabels";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
+import { useUser } from "../../data/users";
 
 type RoleBadge = "green" | "blue" | "gold";
 
@@ -33,14 +31,7 @@ export function UserDetailPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const userQuery = useQuery({
-    queryKey: userKeys.detail(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<UserPublic>(`users/${id}`, { signal });
-      return data;
-    },
-    enabled: !!id,
-  });
+  const userQuery = useUser(id);
 
   const user = userQuery.data ?? null;
   const loading = userQuery.isPending;

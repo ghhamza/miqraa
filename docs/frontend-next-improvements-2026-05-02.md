@@ -126,3 +126,15 @@ All prompt files used in the previous round live in `prompts/` at the repo root:
 - `prompts/08-live-sessions-fetch-error-toast.md`
 
 When the next round of items above is ready, follow the same workflow: prompt-per-task in `prompts/`, applied via Cursor.
+
+## Update — 2026-05-08
+
+TanStack Query migration complete. All HTTP reads converted to `useQuery`,
+all writes converted to `useApiMutation`, and live-session WS handlers
+reconcile via `qc.setQueryData`. See `frontend/docs/data-fetching.md` for
+patterns.
+
+Outstanding from this doc:
+
+- Test coverage (still 0/143 unless Section 3 of Prompt 12 was applied).
+- Other items from the original list — re-evaluate against current state.

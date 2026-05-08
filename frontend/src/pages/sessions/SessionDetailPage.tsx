@@ -2,26 +2,17 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BookMarked, BookOpen, Calendar, Clock, Pencil, Repeat, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, sessionKeys } from "../../lib/queryKeys";
-import type { Paginated, RecitationPublic, SessionAttendance, SessionDetail, SessionPublic } from "../../types";
+import type { RecitationPublic, SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { SessionFormModal } from "../../components/sessions/SessionFormModal";
 import { DeleteSessionModal } from "../../components/sessions/DeleteSessionModal";
 import { RecurrenceScopeModal } from "../../components/sessions/RecurrenceScopeModal";
-import {
-  fetchSessionsInRecurrenceGroup,
-  filterDeletableScheduled,
-  filterTargetsForScope,
-} from "../../lib/recurrenceSessionTargets";
 import { AttendanceSheet, type GradeColor } from "../../components/sessions/AttendanceSheet";
 import { useLocaleDate } from "../../hooks/useLocaleDate";
 import { PageCard } from "../../components/layout/PageCard";
@@ -42,6 +33,19 @@ import { SessionCountdown } from "../../components/sessions/SessionCountdown";
 import { Modal } from "../../components/ui/Modal";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { cn } from "@/lib/utils";
+import {
+  useDeleteSession,
+  usePatchSessionDetailCache,
+  usePatchSessionStatus,
+  useSaveSessionAttendance,
+  useSessionDetail,
+  useStartSession,
+} from "../../data/sessions";
+import {
+  usePatchSessionRecitationsCache,
+  useSessionRecitations,
+  useStudentsLastGrades,
+} from "../../data/recitations";
 
 /** Localized “in 3 days” / “in 25 minutes” for the early-start confirmation. */
 function formatScheduledRelativeToNow(iso: string, intlLocale: string): string {
@@ -142,38 +146,17 @@ export function SessionDetailPage() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [earlyStartConfirmOpen, setEarlyStartConfirmOpen] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
-  const queryClient = useQueryClient();
+  const patchSessionDetail = usePatchSessionDetailCache(id ?? "");
+  const patchSessionRecitations = usePatchSessionRecitationsCache(id);
 
-  const detailQuery = useQuery({
-    queryKey: sessionKeys.detail(id ?? ""),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<SessionDetail>(`sessions/${id}`, { signal });
-      return data;
-    },
-    enabled: !!id,
-    retry: (failureCount, err) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 403) return false;
-      return failureCount < 2;
-    },
-  });
+  const detailQuery = useSessionDetail(id, !!id);
 
   const detail = detailQuery.data ?? null;
   const loading = detailQuery.isPending;
   const forbidden =
     (detailQuery.error as { response?: { status?: number } } | null)?.response?.status === 403;
 
-  const sessionRecitationsQuery = useQuery({
-    queryKey: recitationKeys.list({ session: id }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-        signal,
-        params: { session_id: id },
-      });
-      return data.items;
-    },
-    enabled: !!id,
-  });
+  const sessionRecitationsQuery = useSessionRecitations(id, undefined, !!id);
 
   const sessionRecitations = sessionRecitationsQuery.data ?? [];
 
@@ -204,34 +187,14 @@ export function SessionDetailPage() {
     return () => clearInterval(interval);
   }, [detail?.status]);
 
-  const studentGradeQueries = useQueries({
-    queries: (detail?.attendance ?? []).map((att) => ({
-      queryKey: [
-        ...recitationKeys.lists(),
-        { studentLastGrade: { studentId: att.student_id, roomId: detail?.room_id } },
-      ] as const,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
-        const { data } = await api.get<Paginated<RecitationPublic>>("recitations", {
-          signal,
-          params: { student_id: att.student_id, room_id: detail?.room_id, limit: 1 },
-        });
-        const first = data.items[0];
-        return (first?.grade as GradeColor | undefined) ?? "none";
-      },
-      enabled: !!detail?.room_id,
-      staleTime: 60_000,
-    })),
-  });
-
-  const studentGrades = useMemo(() => {
-    const result: Record<string, GradeColor> = {};
-    if (!detail) return result;
-    detail.attendance.forEach((att, i) => {
-      const q = studentGradeQueries[i];
-      result[att.student_id] = q?.data ?? "none";
-    });
-    return result;
-  }, [detail, studentGradeQueries]);
+  const attendanceStudentIds = useMemo(
+    () => (detail?.attendance ?? []).map((a) => a.student_id),
+    [detail?.attendance],
+  );
+  const studentGrades = useStudentsLastGrades(attendanceStudentIds, detail?.room_id, !!detail?.room_id) as Record<
+    string,
+    GradeColor
+  >;
 
   const manage = detail && user ? canManage(user, detail) : false;
   const canEditSession = manage && (detail?.status === "scheduled" || detail?.status === "in_progress");
@@ -271,20 +234,10 @@ export function SessionDetailPage() {
     attendance_note: string | null;
   }>;
 
-  const attendanceMutation = useApiMutation<SessionAttendance[], AttendancePayload>({
-    mutationFn: async (attendance) => {
-      const { data } = await api.request<SessionAttendance[]>({
-        method: "put",
-        url: `sessions/${id}/attendance`,
-        data: { attendance },
-      });
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData<SessionDetail | undefined>(
-        sessionKeys.detail(id ?? ""),
-        (prev) => (prev ? { ...prev, attendance: data } : prev),
-      );
+  const attendanceMutation = useSaveSessionAttendance(
+    id ?? "",
+    (data) => {
+      patchSessionDetail((prev) => (prev ? { ...prev, attendance: data } : prev));
       const next: Record<string, boolean> = {};
       const nextNotes: Record<string, string> = {};
       for (const a of data) {
@@ -294,8 +247,8 @@ export function SessionDetailPage() {
       setLocalAttendance(next);
       setLocalNotes(nextNotes);
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const savingAttendance = attendanceMutation.isPending;
 
@@ -313,28 +266,14 @@ export function SessionDetailPage() {
     attendanceMutation.mutate(attendance);
   }
 
-  const statusMutation = useApiMutation<SessionPublic, SessionPublic["status"]>({
-    mutationFn: async (status) => {
-      const { data } = await api.request<SessionPublic>({
-        method: "put",
-        url: `sessions/${id}`,
-        data: { status },
-      });
-      return data;
+  const statusMutation = usePatchSessionStatus(
+    id ?? "",
+    user?.id ?? null,
+    (data) => {
+      patchSessionDetail((prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : prev));
     },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.live(user?.id ?? null),
-    ],
-    onSuccess: (data) => {
-      queryClient.setQueryData<SessionDetail | undefined>(
-        sessionKeys.detail(id ?? ""),
-        (prev) => (prev ? { ...prev, ...data, attendance: prev.attendance } : prev),
-      );
-    },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   function patchStatus(status: SessionPublic["status"]) {
     if (!id || !detail) return;
@@ -342,26 +281,13 @@ export function SessionDetailPage() {
     statusMutation.mutate(status);
   }
 
-  const startMutation = useApiMutation<SessionPublic, void>({
-    mutationFn: async () => {
-      const { data } = await api.request<SessionPublic>({
-        method: "put",
-        url: `sessions/${id}`,
-        data: {
-          status: "in_progress",
-        },
-      });
-      return data;
-    },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.live(user?.id ?? null),
-    ],
-    onSuccess: () => {
+  const startMutation = useStartSession(
+    id ?? "",
+    user?.id ?? null,
+    () => {
       navigate(`/sessions/${id}/live`);
     },
-    onError: (message, error) => {
+    (message, error) => {
       if (axios.isAxiosError(error)) {
         const data = error.response?.data as
           | { active_session_id?: string; code?: string }
@@ -372,7 +298,7 @@ export function SessionDetailPage() {
       }
       setError(message);
     },
-  });
+  );
 
   function startSessionAndEnterLive() {
     if (!id || !detail) return;
@@ -396,58 +322,17 @@ export function SessionDetailPage() {
     void startSessionAndEnterLive();
   };
 
-  type DeleteInput = {
-    sessionId: string;
-    recurrenceGroupId: string | null;
-    roomId: string;
-    scope: "this" | "this_and_future" | "all";
-    refSession: SessionDetail;
-  };
-
-  const deleteMutation = useApiMutation<void, DeleteInput>({
-    mutationFn: async ({ sessionId, recurrenceGroupId, roomId, scope, refSession }) => {
-      if (recurrenceGroupId && scope === "all") {
-        await api.request<{ deleted: number }>({
-          method: "delete",
-          url: `sessions/group/${recurrenceGroupId}`,
-        });
-        return;
-      }
-      if (recurrenceGroupId && scope === "this_and_future") {
-        const groupSessions = await fetchSessionsInRecurrenceGroup(
-          recurrenceGroupId,
-          roomId,
-        );
-        const slice = filterTargetsForScope(groupSessions, refSession, "this_and_future");
-        const targets = filterDeletableScheduled(slice);
-        for (const s of targets) {
-          await api.request({
-            method: "delete",
-            url: `sessions/${s.id}`,
-          });
-        }
-        return;
-      }
-      await api.request({
-        method: "delete",
-        url: `sessions/${sessionId}`,
-      });
-    },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.live(user?.id ?? null),
-      sessionKeys.details(),
-    ],
-    onSuccess: () => {
+  const deleteMutation = useDeleteSession(
+    user?.id ?? null,
+    () => {
       navigate("/calendar", { replace: true });
     },
-    onSettled: () => {
+    () => {
       setDeleteOpen(false);
       setDeleteScope(null);
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   function confirmDelete() {
     if (!id || !detail) return;
@@ -783,10 +668,7 @@ export function SessionDetailPage() {
             sessionId={detail.id}
             showStudent
             onItemsChange={(items) => {
-              queryClient.setQueryData(
-                recitationKeys.list({ session: id }),
-                items,
-              );
+              patchSessionRecitations(() => items);
             }}
             onPersistFailed={() => setError(t("plan.reorderFailed"))}
             onEditItem={

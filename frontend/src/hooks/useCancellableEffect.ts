@@ -36,6 +36,5 @@ export function useCancellableEffect(
       controller.abort();
       if (typeof teardown === "function") teardown();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }

@@ -3,12 +3,10 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
 import type { Enrollment } from "../../types";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
+import { useRemoveEnrolledStudent } from "../../data/rooms";
 
 interface RemoveStudentModalProps {
   open: boolean;
@@ -28,19 +26,14 @@ export function RemoveStudentModal({
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
-  const removeMutation = useApiMutation<unknown, string>({
-    mutationFn: (enrollmentId) => api.delete(`rooms/${roomId}/enrollments/${enrollmentId}`),
-    invalidates: [
-      roomKeys.enrollments(roomId),
-      roomKeys.detail(roomId),
-      roomKeys.pending(roomId),
-    ],
-    onSuccess: () => {
+  const removeMutation = useRemoveEnrolledStudent(
+    roomId,
+    () => {
       onRemoved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = removeMutation.isPending;
 

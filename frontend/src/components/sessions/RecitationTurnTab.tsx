@@ -2,16 +2,13 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { recitationKeys, sessionKeys, userKeys } from "../../lib/queryKeys";
 import { getSurahAyahCount, getSurahNameWithArabic, isValidAyahRange } from "../../lib/quranService";
 import type { QuranRiwaya, RecitationGrade, RecitationPublic, TurnType } from "../../types";
 import { Button } from "../ui/Button";
 import { SurahPicker } from "../recitations/SurahPicker";
 import { AyahRangeAudioButton } from "../recitations/AyahRangeAudioButton";
+import { useSaveRecitationTurn } from "../../data/recitations";
 
 interface RecitationTurnTabProps {
   turnType: TurnType;
@@ -45,7 +42,6 @@ export function RecitationTurnTab({
   const [grade, setGrade] = useState<RecitationGrade | "">(existing?.grade ?? "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     setSurah(existing?.surah ?? 1);
@@ -80,62 +76,15 @@ export function RecitationTurnTab({
     if (ayahEnd < ayahStart) setAyahEnd(ayahStart);
   }, [ayahStart, ayahEnd]);
 
-  type TurnTabPayload =
-    | {
-        kind: "create";
-        body: {
-          student_id: string;
-          room_id: string;
-          session_id: string;
-          surah: number;
-          ayah_start: number;
-          ayah_end: number;
-          turn_type: TurnType;
-          pages_count: number | null;
-          star_rating: number | null;
-          grade: RecitationGrade | null;
-          teacher_notes: string | null;
-          riwaya: QuranRiwaya;
-        };
-      }
-    | {
-        kind: "update";
-        id: string;
-        body: {
-          surah: number;
-          ayah_start: number;
-          ayah_end: number;
-          turn_type: TurnType;
-          pages_count: number | null;
-          star_rating: number | null;
-          grade: RecitationGrade | null;
-          teacher_notes: string | null;
-        };
-      };
-
-  const turnTabMutation = useApiMutation<unknown, TurnTabPayload>({
-    mutationFn: async (input) => {
-      if (input.kind === "create") {
-        return api.post("/recitations", input.body);
-      }
-      return api.put(`/recitations/${input.id}`, input.body);
-    },
-    invalidates: [
-      recitationKeys.lists(),
-      recitationKeys.stats(),
-      recitationKeys.list({ session: sessionId }),
-      sessionKeys.detail(sessionId),
-    ],
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: userKeys.studentRecitations(studentId) }),
-        queryClient.invalidateQueries({ queryKey: userKeys.studentProgress(studentId) }),
-      ]);
+  const turnTabMutation = useSaveRecitationTurn(
+    sessionId,
+    studentId,
+    () => {
       setSuccess(true);
       onSaved();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const saving = turnTabMutation.isPending;
 

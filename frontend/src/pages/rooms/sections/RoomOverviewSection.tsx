@@ -3,10 +3,7 @@
 
 import { useMemo, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Calendar, CalendarClock, CheckCircle, Clock, Users, XCircle } from "lucide-react";
-import { api } from "../../../lib/api";
-import { scheduleKeys } from "../../../lib/queryKeys";
 import { intlLocaleForAppLanguage } from "../../../lib/intlLocale";
 import {
   computeEnrollmentStatus,
@@ -16,6 +13,7 @@ import { useLocaleDate } from "../../../hooks/useLocaleDate";
 import type { Room, RoomSchedule, User } from "../../../types";
 import { Button } from "../../../components/ui/Button";
 import { PageCard } from "../../../components/layout/PageCard";
+import { useRoomSchedules } from "../../../data/rooms";
 
 export interface RoomOverviewSectionProps {
   room: Room;
@@ -38,17 +36,9 @@ export function RoomOverviewSection({
 }: RoomOverviewSectionProps) {
   const { t, i18n } = useTranslation();
   const { full } = useLocaleDate();
-  const schedulesQuery = useQuery({
-    queryKey: scheduleKeys.list(room.id),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<RoomSchedule[]>(`rooms/${room.id}/schedules`, { signal });
-      return data;
-    },
-    enabled: !!room.id,
-    select: (data) => data.filter((s) => s.is_active),
-  });
+  const schedulesQuery = useRoomSchedules(room.id, !!room.id);
 
-  const schedules = schedulesQuery.data ?? [];
+  const schedules = (schedulesQuery.data ?? []).filter((s) => s.is_active);
 
   const status = useMemo(() => computeEnrollmentStatus(room), [room]);
 

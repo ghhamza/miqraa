@@ -2,18 +2,15 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys, sessionKeys } from "../../lib/queryKeys";
-import type { CreateSessionsResponse, Paginated, Room, SessionPublic } from "../../types";
+import type { SessionPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
 import { formatDatetimeLocalValue } from "../../lib/calendarUtils";
-import { fetchSessionsInRecurrenceGroup, filterTargetsForScope } from "../../lib/recurrenceSessionTargets";
+import { useRoomsList } from "../../data/rooms";
+import { useCreateSession, useUpdateSession } from "../../data/sessions";
 
 interface SessionFormModalProps {
   open: boolean;
@@ -88,16 +85,7 @@ export function SessionFormModal({
     }
   }, [open, mode, session, defaultRoomId, defaultDatetime, presetMorningStart]);
 
-  const roomsQuery = useQuery({
-    queryKey: roomKeys.list({
-      search: "",
-      active: "all",
-      role: "session-form-modal",
-    }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-      return data.items;
-    },
+  const roomsQuery = useRoomsList("session-form-modal", undefined, {
     enabled: open,
     staleTime: 5 * 60_000,
   });
@@ -124,28 +112,8 @@ export function SessionFormModal({
   }, [repeatEnabled, datetimeLocal]);
 
   type CreatePayload = Record<string, unknown>;
-  type UpdatePayload = {
-    session: SessionPublic;
-    bodyBase: { title: string | null; duration_minutes: number; notes: string | null };
-    iso: string;
-    scope: "this" | "this_and_future" | "all";
-  };
-
-  const createMutation = useApiMutation<CreateSessionsResponse, CreatePayload>({
-    mutationFn: async (payload) => {
-      const { data } = await api.request<CreateSessionsResponse>({
-        method: "post",
-        url: "sessions",
-        data: payload,
-      });
-      return data;
-    },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.details(),
-    ],
-    onSuccess: (data) => {
+  const createMutation = useCreateSession(
+    (data) => {
       if (data.count > 1) {
         setCreatedCount(data.count);
         setTimeout(() => {
@@ -158,45 +126,16 @@ export function SessionFormModal({
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
-  const updateMutation = useApiMutation<void, UpdatePayload>({
-    mutationFn: async ({ session: target, bodyBase, iso, scope }) => {
-      const gid = target.recurrence_group_id;
-      if (!gid || scope === "this") {
-        await api.request({
-          method: "put",
-          url: `sessions/${target.id}`,
-          data: { ...bodyBase, scheduled_at: iso },
-        });
-        return;
-      }
-      const groupSessions = await fetchSessionsInRecurrenceGroup(gid, target.room_id);
-      const targets = filterTargetsForScope(groupSessions, target, scope);
-      for (const s of targets) {
-        const isCurrent = s.id === target.id;
-        await api.request({
-          method: "put",
-          url: `sessions/${s.id}`,
-          data: {
-            ...bodyBase,
-            scheduled_at: isCurrent ? iso : new Date(s.scheduled_at).toISOString(),
-          },
-        });
-      }
-    },
-    invalidates: [
-      sessionKeys.calendars(),
-      sessionKeys.upcoming(),
-      sessionKeys.details(),
-    ],
-    onSuccess: () => {
+  const updateMutation = useUpdateSession(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = createMutation.isPending || updateMutation.isPending;
 

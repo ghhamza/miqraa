@@ -183,7 +183,8 @@ export function useLivekitConnection(
         // in some SDK versions).
         room.on(
           RoomEvent.TrackSubscribed,
-          (track: RemoteTrack, pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+          (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
+            void participant;
             if (pub.kind === Track.Kind.Audio) {
               const trackSid = track.sid;
               if (!trackSid) return;

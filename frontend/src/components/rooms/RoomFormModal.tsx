@@ -3,16 +3,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { roomKeys } from "../../lib/queryKeys";
-import type { HalaqahType, QuranRiwaya, Room, TeacherOption } from "../../types";
+import type { HalaqahType, QuranRiwaya, Room } from "../../types";
 import { getAvailableRiwayat } from "../../lib/quranService";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
+import { useCreateRoom, useRoomTeachers, useUpdateRoom } from "../../data/rooms";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -51,7 +48,6 @@ export function RoomFormModal({
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }, []);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!open) return;
@@ -94,15 +90,7 @@ export function RoomFormModal({
     }
   }, [open, mode, room]);
 
-  const teachersQuery = useQuery({
-    queryKey: roomKeys.teachersList(),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<TeacherOption[]>("teachers", { signal });
-      return data;
-    },
-    enabled: open && isAdmin && mode === "create",
-    staleTime: 5 * 60_000,
-  });
+  const teachersQuery = useRoomTeachers(open && isAdmin && mode === "create");
 
   const teachers = teachersQuery.data ?? [];
   const loadingTeachers = teachersQuery.isPending && teachersQuery.fetchStatus !== "idle";
@@ -113,41 +101,21 @@ export function RoomFormModal({
     setTeacherId((prev) => prev || teachers[0]?.id || "");
   }, [open, isAdmin, mode, teachers]);
 
-  type CreateInput = {
-    name: string;
-    max_students: number;
-    riwaya: QuranRiwaya;
-    halaqah_type: HalaqahType;
-    is_public: boolean;
-    enrollment_open: boolean;
-    requires_approval: boolean;
-    description: string | null;
-    enrollment_deadline_at: string | null;
-    teacher_id?: string;
-  };
-  type UpdateInput = CreateInput & { id: string; is_active: boolean };
-
-  const createMutation = useApiMutation<unknown, CreateInput>({
-    mutationFn: (input) => api.post("rooms", input),
-    invalidates: [roomKeys.lists(), roomKeys.stats()],
-    onSuccess: () => {
+  const createMutation = useCreateRoom(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
-  const updateMutation = useApiMutation<unknown, UpdateInput>({
-    mutationFn: ({ id, ...rest }) => api.put(`rooms/${id}`, rest),
-    onSuccess: async (_data, vars) => {
-      await queryClient.invalidateQueries({ queryKey: roomKeys.detail(vars.id) });
-      await queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: roomKeys.stats() });
+  const updateMutation = useUpdateRoom(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = createMutation.isPending || updateMutation.isPending;
 

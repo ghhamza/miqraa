@@ -2,13 +2,10 @@
 // Copyright (C) 2026 Hamza Ghandouri <hamza.ghandouri@gmail.com> - https://miqraa.org
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { api } from "../../lib/api";
-import { roomKeys, sessionKeys } from "../../lib/queryKeys";
-import type { Paginated, Room, SessionPublic } from "../../types";
+import type { SessionPublic } from "../../types";
 import { useAuthStore } from "../../stores/authStore";
 import { Button } from "../../components/ui/Button";
 import { FormSelect } from "../../components/ui/select";
@@ -29,6 +26,8 @@ import {
 } from "../../lib/calendarUtils";
 import { intlLocaleForAppLanguage } from "../../lib/intlLocale";
 import { sessionNavigatePath } from "../../lib/sessionNav";
+import { useRoomsList } from "../../data/rooms";
+import { useCalendarSessions } from "../../data/sessions";
 
 type ViewMode = "month" | "week" | "agenda";
 
@@ -112,42 +111,12 @@ export function CalendarPage() {
     [range.from, range.to],
   );
 
-  const sessionsQuery = useQuery({
-    queryKey: [
-      ...sessionKeys.calendars(),
-      { ...sessionsRangeISO, roomFilter: roomFilter || null },
-    ] as const,
-    queryFn: async ({ signal }) => {
-      const params: Record<string, string> = {
-        from: sessionsRangeISO.from,
-        to: sessionsRangeISO.to,
-        limit: "500",
-      };
-      if (roomFilter) params.room_id = roomFilter;
-      const { data } = await api.get<Paginated<SessionPublic>>("sessions", {
-        signal,
-        params,
-      });
-      return data.items;
-    },
-    placeholderData: (previous) => previous,
-  });
+  const sessionsQuery = useCalendarSessions(sessionsRangeISO.from, sessionsRangeISO.to, roomFilter, true);
 
   const sessions = sessionsQuery.data ?? [];
   const loading = sessionsQuery.isPending && !sessionsQuery.isPlaceholderData;
 
-  const roomsQuery = useQuery({
-    queryKey: roomKeys.list({
-      search: "",
-      active: "all",
-      role: "calendar-room-filter",
-    }),
-    queryFn: async ({ signal }) => {
-      const { data } = await api.get<Paginated<Room>>("rooms", { signal });
-      return data.items;
-    },
-    staleTime: 5 * 60_000,
-  });
+  const roomsQuery = useRoomsList("calendar-room-filter", undefined, { staleTime: 5 * 60_000 });
 
   const rooms = roomsQuery.data ?? [];
 

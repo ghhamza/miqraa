@@ -3,15 +3,12 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { useApiMutation } from "../../lib/useApiMutation";
-import { userKeys } from "../../lib/queryKeys";
 import type { UserPublic } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { FormSelect } from "../ui/select";
+import { useCreateUser, useUpdateUser } from "../../data/users";
 
 interface UserFormModalProps {
   open: boolean;
@@ -34,46 +31,21 @@ export function UserFormModal({
   const [role, setRole] = useState<"student" | "teacher" | "admin">("student");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-
-  interface CreateInput {
-    name: string;
-    email: string;
-    password: string;
-    role: "student" | "teacher" | "admin";
-  }
-  interface UpdateInput {
-    id: string;
-    name: string;
-    email: string;
-    role: "student" | "teacher" | "admin";
-  }
-
-  const createMutation = useApiMutation<unknown, CreateInput>({
-    mutationFn: (input) => api.post("users", input),
-    invalidates: [userKeys.lists(), userKeys.stats()],
-    onSuccess: () => {
+  const createMutation = useCreateUser(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
-  const updateMutation = useApiMutation<unknown, UpdateInput>({
-    mutationFn: (input) =>
-      api.put(`users/${input.id}`, {
-        name: input.name,
-        email: input.email,
-        role: input.role,
-      }),
-    invalidates: [userKeys.lists(), userKeys.stats()],
-    onSuccess: async (_data, vars) => {
-      await queryClient.invalidateQueries({ queryKey: userKeys.detail(vars.id) });
+  const updateMutation = useUpdateUser(
+    () => {
       onSaved();
       onClose();
     },
-    onError: (message) => setError(message),
-  });
+    (message) => setError(message),
+  );
 
   const loading = createMutation.isPending || updateMutation.isPending;
 
