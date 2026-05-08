@@ -100,7 +100,6 @@ export function ProfilePage() {
 
   return (
     <PageShell
-      className="mx-auto max-w-lg"
       breadcrumb={[
         { label: t("nav.home"), to: "/" },
         { label: t("profile.title") },

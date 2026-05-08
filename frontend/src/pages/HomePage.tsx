@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { BookMarked, Plus } from "lucide-react";
+import { BookMarked, Plus, TrendingUp, Users } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import type {
   SessionPublic,
@@ -248,76 +248,56 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
     >
       <WhatsNewStrip role="teacher" />
       <LiveNowDashboardCard />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <button
           type="button"
           onClick={() => void navigate("/rooms")}
           className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
         >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.myRooms")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {roomStats?.total ?? 0}
-          </p>
+          <div className="flex items-center gap-3">
+            <Users className="h-8 w-8 text-[var(--color-primary)]" />
+            <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.myHalaqat")}</p>
+          </div>
+          <div className="mt-2 flex items-end gap-2 text-sm text-[var(--color-text-muted)]">
+            <span className="text-2xl font-bold text-[var(--color-gold)]">{roomStats?.total ?? 0}</span>
+            <span>{t("home.stats.rooms")}</span>
+            <span aria-hidden>·</span>
+            <span className="text-2xl font-bold text-[var(--color-gold)]">{myStudents}</span>
+            <span>{t("home.stats.students")}</span>
+          </div>
         </button>
-        <button
-          type="button"
-          onClick={() => void navigate("/rooms")}
-          className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-        >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.myStudents")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {myStudents}
-          </p>
-        </button>
+
         <button
           type="button"
           onClick={() => void navigate("/recitations")}
           className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
         >
-          <p className="text-xs text-[var(--color-text-muted)]">{t("home.weekRecitations")}</p>
-          <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-            {recStats?.recent_count ?? 0}
+          <div className="flex items-center gap-3">
+            <TrendingUp className="h-8 w-8 text-[var(--color-gold)]" />
+            <p className="text-xs text-[var(--color-text-muted)]">{t("home.stats.thisWeek")}</p>
+          </div>
+          <div className="mt-1 flex items-end gap-2">
+            <span className="text-2xl font-bold text-[var(--color-gold)]">{recStats?.recent_count ?? 0}</span>
+            <span className="text-sm text-[var(--color-text-muted)]">{t("home.stats.recitationsLabel")}</span>
+          </div>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            {t("home.stats.completedSessions", { count: sessionStats?.completed ?? 0 })} ·{" "}
+            {t("home.stats.attendanceRate", {
+              rate: sessionStats != null ? sessionStats.avg_attendance_pct.toFixed(1) : "0.0",
+            })}
           </p>
         </button>
-      </div>
 
-      <details className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
-        <summary className="cursor-pointer text-sm font-medium text-[var(--color-text-muted)]">
-          {t("home.moreStats")}
-        </summary>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => void navigate("/recitations")}
-            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-          >
-            <p className="text-xs text-[var(--color-text-muted)]">{t("home.totalRecitations")}</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-              {recStats?.total ?? 0}
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/calendar")}
-            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-          >
-            <p className="text-xs text-[var(--color-text-muted)]">{t("home.completedSessions")}</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-              {sessionStats?.completed ?? 0}
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/calendar")}
-            className="rounded-2xl border border-gray-100 bg-[var(--color-bg)] p-4 text-start shadow-sm transition hover:border-[var(--color-primary)]/30"
-          >
-            <p className="text-xs text-[var(--color-text-muted)]">{t("home.attendanceRate")}</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: "var(--color-gold)" }}>
-              {sessionStats != null ? `${sessionStats.avg_attendance_pct.toFixed(1)}%` : "—"}
-            </p>
-          </button>
-        </div>
-      </details>
+        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-4 shadow-sm">
+          <h2 className="mb-3 text-xs text-[var(--color-text-muted)]">{t("home.gradeDistribution")}</h2>
+          <GradeDistributionBar
+            excellent={recStats?.by_grade.excellent ?? 0}
+            good={recStats?.by_grade.good ?? 0}
+            needs_work={recStats?.by_grade.needs_work ?? 0}
+            weak={recStats?.by_grade.weak ?? 0}
+          />
+        </section>
+      </div>
 
       {todaySession ? (
         <div
@@ -334,18 +314,6 @@ function TeacherDashboard({ user, homeGreeting }: { user: User; homeGreeting: st
             </Button>
           </div>
         </div>
-      ) : null}
-
-      {recStats ? (
-        <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">{t("home.gradeDistribution")}</h2>
-          <GradeDistributionBar
-            excellent={recStats.by_grade.excellent}
-            good={recStats.by_grade.good}
-            needs_work={recStats.by_grade.needs_work}
-            weak={recStats.by_grade.weak}
-          />
-        </section>
       ) : null}
 
       <section className="rounded-2xl border border-gray-100 bg-[var(--color-surface)] p-6 shadow-sm">

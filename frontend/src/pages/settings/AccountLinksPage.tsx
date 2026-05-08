@@ -53,7 +53,6 @@ export function AccountLinksPage() {
 
   return (
     <PageShell
-      className="mx-auto max-w-2xl"
       breadcrumb={[{ label: t("nav.home"), to: "/" }, { label: t("settings.qf.title") }]}
       title={t("settings.qf.title")}
       description={t("settings.qf.description")}
