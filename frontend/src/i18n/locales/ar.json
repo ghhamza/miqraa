@@ -183,6 +183,15 @@
     "myRooms": "غرفي",
     "myStudents": "طلابي",
     "weekRecitations": "تلاوات الأسبوع",
+    "stats": {
+      "myHalaqat": "حلقاتي",
+      "rooms": "حلقات",
+      "students": "طلاب",
+      "thisWeek": "هذا الأسبوع",
+      "recitationsLabel": "تلاوات",
+      "completedSessions": "{{count}} جلسات مكتملة",
+      "attendanceRate": "{{rate}}% حضور"
+    },
     "totalRecitations": "إجمالي التلاوات",
     "completedSessions": "حصص مكتملة",
     "attendanceRate": "نسبة الحضور",

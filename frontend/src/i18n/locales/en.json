@@ -183,6 +183,15 @@
     "myRooms": "My rooms",
     "myStudents": "My students",
     "weekRecitations": "This week",
+    "stats": {
+      "myHalaqat": "My halaqat",
+      "rooms": "rooms",
+      "students": "students",
+      "thisWeek": "This week",
+      "recitationsLabel": "recitations",
+      "completedSessions": "{{count}} completed sessions",
+      "attendanceRate": "{{rate}}% attendance"
+    },
     "totalRecitations": "Total recitations",
     "completedSessions": "Completed sessions",
     "attendanceRate": "Attendance rate",
