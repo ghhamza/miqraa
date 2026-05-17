@@ -1,0 +1,7 @@
+# Migrations are immutable
+
+`backend/migrations/` contains applied database migrations. These files are frozen once applied. **NEVER edit them** — including comments or whitespace.
+
+sqlx checksums each migration; any change breaks production startup.
+
+Exclude `backend/migrations/` from all project-wide find/replace, rename, and refactor operations.
